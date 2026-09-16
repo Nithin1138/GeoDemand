@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  geodemand-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: geodemand-ai
+    ports:
+      - "8000:8000"
+    environment:
+      - LIVE_MODE=true
+      - ALLOW_SYNTHETIC_FALLBACK=true
+      - SHOW_FALLBACK_WARNINGS=true
+      - WEATHER_PROVIDER=open_meteo
+      - TRAFFIC_PROVIDER=auto
+      - COMPETITION_PROVIDER=auto
+      - FUEL_PRICE_PROVIDER=manual
+      - FUEL_PRICE_INR_PER_LITRE=95.0
+      - SEARCH_RADIUS_KM=2.0
+      - TOP_N=5
+    env_file:
+      - .env
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/v1/system/ping"]
+      interval: 30s
+      timeout: 5s
+      retries: 3

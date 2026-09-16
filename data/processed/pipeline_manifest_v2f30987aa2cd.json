@@ -1,0 +1,60 @@
+{
+  "generated_at": "2026-08-18T05:32:02.681123+00:00",
+  "files": {
+    "h3_cells.parquet": {
+      "sha256_16": "b3910336cfbb2450",
+      "n_rows": 817,
+      "n_cols": 8,
+      "size_bytes": 33203
+    },
+    "static_features.parquet": {
+      "sha256_16": "07083cc75cdf261a",
+      "n_rows": 817,
+      "n_cols": 27,
+      "size_bytes": 69779
+    },
+    "weather_hourly.parquet": {
+      "sha256_16": "d24bf3e840ab5359",
+      "n_rows": 8760,
+      "n_cols": 11,
+      "size_bytes": 144199
+    },
+    "calendar.parquet": {
+      "sha256_16": "f855af901cd0b7a2",
+      "n_rows": 8760,
+      "n_cols": 11,
+      "size_bytes": 83494
+    },
+    "events.parquet": {
+      "sha256_16": "e79352d39a08a656",
+      "n_rows": 5964,
+      "n_cols": 8,
+      "size_bytes": 132026
+    },
+    "competition.parquet": {
+      "sha256_16": "1dded30d210eeb25",
+      "n_rows": 298205,
+      "n_cols": 9,
+      "size_bytes": 193464
+    },
+    "vendor_profiles.parquet": {
+      "sha256_16": "02f84da5d35d0f8b",
+      "n_rows": 150,
+      "n_cols": 17,
+      "size_bytes": 21114
+    },
+    "historical_transactions.parquet": {
+      "sha256_16": "dd99300f1cdc9377",
+      "n_rows": 711750,
+      "n_cols": 17,
+      "size_bytes": 14822428
+    },
+    "feature_store.parquet": {
+      "sha256_16": "63360aa04563dd27",
+      "n_rows": 711750,
+      "n_cols": 44,
+      "size_bytes": 5753396
+    }
+  },
+  "pipeline_version_hash": "2f30987aa2cd"
+}

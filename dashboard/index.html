@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>GeoDemand AI — Vendor Location Intelligence</title>
+  <meta name="description" content="Real-time geospatial demand forecasting for mobile vendors. Find the best locations to maximize profit using AI-powered recommendations.">
+  
+  <!-- Leaflet.js for maps -->
+  <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  
+  <!-- Google Fonts -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- HEADER -->
+  <header class="header">
+    <div class="header-brand">
+      <div class="header-logo">⬡</div>
+      <div>
+        <div class="header-title">GeoDemand AI</div>
+        <div class="header-subtitle">Vendor Location Intelligence</div>
+      </div>
+    </div>
+    <div class="header-status" id="systemStatus">
+      <span class="status-dot status-loading"></span>
+      <span id="statusText">Initializing...</span>
+    </div>
+  </header>
+
+  <main class="main-grid">
+    <!-- LEFT PANEL: Controls -->
+    <aside class="panel panel-controls">
+      
+      <!-- Location Section -->
+      <section class="section">
+        <h2 class="section-title">📍 Your Location</h2>
+        <button class="btn btn-primary btn-full" id="useLocationBtn" onclick="useCurrentLocation()">
+          <span class="btn-icon">🎯</span>
+          Use My Current Location
+        </button>
+        
+        <div class="divider"><span>or enter manually</span></div>
+        
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Latitude</label>
+            <input class="form-input" type="number" id="latInput" value="16.5062" step="0.0001" min="-90" max="90" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Longitude</label>
+            <input class="form-input" type="number" id="lngInput" value="80.6480" step="0.0001" min="-180" max="180" />
+          </div>
+        </div>
+        
+        <div id="locationInfo" class="location-badge hidden">
+          <span class="badge-icon">📡</span>
+          <div>
+            <div class="badge-label">H3 Cell</div>
+            <div class="badge-value mono" id="h3CellDisplay">—</div>
+          </div>
+        </div>
+      </section>
+
+      <!-- Vendor Profile -->
+      <section class="section">
+        <h2 class="section-title">🛺 Vendor Profile</h2>
+        <div class="form-group">
+          <label class="form-label">Category</label>
+          <select class="form-input" id="vendorCategory">
+            <option value="food">🍱 Food (Meals / Tea / Dosa)</option>
+            <option value="fruits">🍉 Fruits & Juice</option>
+            <option value="salon">💇 Salon Van</option>
+            <option value="repair">🔧 Repair Van</option>
+          </select>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Avg Order (₹)</label>
+            <input class="form-input" type="number" id="aov" value="100" min="20" max="500" />
+          </div>
+          <div class="form-group">
+            <label class="form-label">Search Radius (km)</label>
+            <input class="form-input" type="number" id="searchRadius" value="3" min="0.5" max="8" step="0.5" />
+          </div>
+        </div>
+      </section>
+
+      <!-- Get Recommendations -->
+      <section class="section">
+        <button class="btn btn-success btn-full btn-large" id="getRecsBtn" onclick="getRecommendations()">
+          <span class="btn-icon">🚀</span>
+          Get Recommendations
+        </button>
+        <div id="loadingBar" class="loading-bar hidden">
+          <div class="loading-fill" id="loadingFill"></div>
+        </div>
+        <div id="errorMsg" class="error-msg hidden"></div>
+      </section>
+
+      <!-- Current Location Baseline -->
+      <section class="section" id="currentSection" style="display:none">
+        <h2 class="section-title">📌 Current Position</h2>
+        <div class="current-stats">
+          <div class="stat-card">
+            <div class="stat-value" id="currentCustomers">—</div>
+            <div class="stat-label">Est. Customers/hr</div>
+          </div>
+          <div class="stat-card stat-card-green">
+            <div class="stat-value" id="currentProfit">—</div>
+            <div class="stat-label">Est. Hourly Profit</div>
+          </div>
+        </div>
+        <div class="weather-strip" id="weatherStrip">
+          <span id="weatherIcon">🌤</span>
+          <span id="weatherText">—</span>
+          <span class="provenance-badge badge-live" id="weatherBadge">LIVE</span>
+        </div>
+      </section>
+
+      <!-- Data Freshness -->
+      <section class="section" id="freshnessSection" style="display:none">
+        <h2 class="section-title">🔄 Data Sources</h2>
+        <div id="freshnessTable" class="freshness-table"></div>
+      </section>
+
+    </aside>
+
+    <!-- CENTER: Map -->
+    <div class="panel panel-map">
+      <div id="map"></div>
+      
+      <!-- Map Layer Switcher -->
+      <div class="map-layer-switcher">
+        <button class="layer-btn active" id="btnLayerStreets" onclick="setBaseLayer('streets')">🗺️ CARTO Voyager</button>
+        <button class="layer-btn" id="btnLayerSatellite" onclick="setBaseLayer('satellite')">🛰️ Satellite</button>
+        <button class="layer-btn" id="btnLayerDark" onclick="setBaseLayer('dark')">🌙 Dark</button>
+      </div>
+
+      <!-- Map Legend -->
+      <div class="map-legend">
+        <div class="legend-title">📍 MAP OVERLAYS</div>
+        <div class="legend-item"><span class="legend-dot dot-current"></span> Start Location</div>
+        <div class="legend-item"><span class="legend-dot dot-top1"></span> #1 Recommendation</div>
+        <div class="legend-item"><span class="legend-dot dot-candidate"></span> #2–5 Recommendations</div>
+        <div class="legend-item"><span class="legend-line"></span> Street Driving Route</div>
+        <div class="legend-item"><span class="legend-hex"></span> H3 Demand Heat Zones</div>
+      </div>
+    </div>
+
+    <!-- RIGHT PANEL: Recommendations -->
+    <aside class="panel panel-recs">
+      <div class="recs-header">
+        <h2 class="section-title">🏆 Top Recommendations</h2>
+        <div id="evalCount" class="eval-count"></div>
+      </div>
+
+      <!-- Strategic Decision Banner -->
+      <div id="decisionBanner" class="decision-banner" style="display:none"></div>
+      
+      <div id="recsPlaceholder" class="recs-placeholder">
+        <div class="placeholder-icon">⬡</div>
+        <div class="placeholder-title">No recommendations yet</div>
+        <div class="placeholder-text">Set your location and vendor profile, then click "Get Recommendations" to see the best nearby areas.</div>
+      </div>
+      
+      <div id="recsList" class="recs-list"></div>
+    </aside>
+  </main>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

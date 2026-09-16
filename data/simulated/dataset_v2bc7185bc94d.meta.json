@@ -1,0 +1,27 @@
+{
+  "version_hash": "2bc7185bc94d",
+  "generated_at": "2026-08-08T19:30:48.390577+00:00",
+  "simulation_params": {
+    "n_vendors": 150,
+    "start_date": "2025-01-01",
+    "n_days": 365,
+    "hours_per_day": [
+      8,
+      21
+    ],
+    "seed": 2026,
+    "h3_resolution": 8,
+    "center_lat": 16.5062,
+    "center_lng": 80.648,
+    "radius_km": 8.0,
+    "sim_logic_version": "1.1.0"
+  },
+  "n_rows": 711750,
+  "n_vendors": 150,
+  "n_cells_covered": 133,
+  "date_range": [
+    "2025-01-01",
+    "2025-12-31"
+  ],
+  "notes": "Synthetic target (customer_count). Contextual features (weather, calendar) are simulated but structurally realistic. Demand-generating process includes hidden variables (vendor skill, cell reputation) and feature interactions NOT exposed to downstream models, to avoid trivial formula-inversion during training. See module docstring."
+}
