@@ -43,6 +43,8 @@ from api.providers.competition import CompetitionProviderFactory
 from api.providers.traffic import TrafficProviderFactory
 from api.providers.events import EventProviderFactory
 from api.providers.fuel import FuelPriceProvider
+from api.providers.routing import RoutingProviderFactory
+from api.spatial_filter import is_water_location, is_water_cell
 from features.weather_client import OpenMeteoClient
 from config.settings import (
     STAY_THRESHOLD_INR_PER_HOUR,
@@ -222,6 +224,14 @@ async def data_health():
     }
 
 
+@app.get("/v1/routing/route")
+@app.post("/v1/routing/route")
+async def get_street_route(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float):
+    """Returns real street road navigation route coordinates [[lat, lng], ...] for map rendering."""
+    provider = RoutingProviderFactory.get_provider()
+    return provider.get_route_geometry(origin_lat, origin_lng, dest_lat, dest_lng)
+
+
 @app.post("/v1/location/context")
 async def location_context(req: LocationRequest):
     """GPS → H3 cell, timestamp, and location context."""
@@ -356,13 +366,16 @@ async def recommendations_live(req: RecommendationRequest):
     # --- Rank all candidates ---
     ranked = rank_candidates(candidate_results)
 
-    # Separate current cell baseline from recommendations (strictly exclude water & strictly enforce radius)
+    # Separate current cell baseline from recommendations (strictly exclude water & strictly enforce radius & positive profit)
     current_cell_data = next((c for c in ranked if c["is_current_cell"]), ranked[0] if ranked else {})
     recommendations = [
         c for c in ranked
         if not c.get("is_current_cell")
         and not c.get("is_water")
+        and not is_water_cell(c["h3_cell"])
+        and not is_water_location(c["latitude"], c["longitude"])
         and c.get("distance_km", 0) <= req.search_radius_km
+        and c.get("expected_profit_inr", 0) > 0
     ][:req.top_n]
 
     # Assign rank and add H3 boundary polygons for top recommendations
@@ -382,7 +395,7 @@ async def recommendations_live(req: RecommendationRequest):
 
     demand_heatmap = []
     for c in candidate_results:
-        if c.get("is_water") or (not c["is_current_cell"] and c["distance_km"] > req.search_radius_km):
+        if c.get("is_water") or is_water_cell(c["h3_cell"]) or is_water_location(c["latitude"], c["longitude"]) or (not c["is_current_cell"] and c["distance_km"] > req.search_radius_km):
             continue
         try:
             bnd = [list(pt) for pt in h3.cell_to_boundary(c["h3_cell"])]

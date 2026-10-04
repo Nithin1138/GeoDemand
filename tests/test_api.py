@@ -204,8 +204,8 @@ def test_recommendations_profit_improvement(client):
 
 
 def test_no_recommendations_in_water_body(client):
-    """Test that candidate destinations never fall into Krishna River / water bodies."""
-    from api.spatial_filter import is_water_location
+    """Test that candidate destinations never fall into Krishna River / water bodies and have positive expected profit."""
+    from api.spatial_filter import is_water_location, is_water_cell
 
     # Test point right at Prakasam Barrage / river
     r = client.post("/v1/recommendations/live", json={
@@ -222,9 +222,13 @@ def test_no_recommendations_in_water_body(client):
     assert len(recs) > 0
 
     for rec in recs:
-        in_water = is_water_location(rec["latitude"], rec["longitude"])
-        assert not in_water, f"Recommendation cell {rec['h3_cell']} at ({rec['latitude']}, {rec['longitude']}) is in water!"
+        in_water_pt = is_water_location(rec["latitude"], rec["longitude"])
+        in_water_cell_bnd = is_water_cell(rec["h3_cell"])
+        assert not in_water_pt, f"Recommendation cell {rec['h3_cell']} at ({rec['latitude']}, {rec['longitude']}) is in water point!"
+        assert not in_water_cell_bnd, f"Recommendation cell {rec['h3_cell']} overlaps water cell boundary!"
         assert not rec.get("is_water", False)
+        assert rec.get("expected_profit_inr", 0) > 0, f"Recommendation {rec['h3_cell']} has invalid non-positive profit!"
+
 
 
 def test_recommendations_strategic_decision(client):
@@ -252,6 +256,21 @@ def test_recommendations_strategic_decision(client):
         assert "decision_rationale" in rec
 
 
+def test_routing_street_navigation_endpoint(client):
+    """Test /v1/routing/route endpoint returns real road geometry coordinates."""
+    r = client.get("/v1/routing/route", params={
+        "origin_lat": 16.5062, "origin_lng": 80.6480,
+        "dest_lat": 16.5030, "dest_lng": 80.6274,
+    })
+    assert r.status_code == 200
+    body = r.json()
+    assert "coordinates" in body
+    assert len(body["coordinates"]) > 1
+    assert "distance_km" in body
+    assert "duration_min" in body
+
+
 if __name__ == "__main__":
     import subprocess, sys
     sys.exit(subprocess.run(["python3", "-m", "pytest", __file__, "-v"]).returncode)
+

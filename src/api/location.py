@@ -12,19 +12,16 @@ Responsibility:
 from __future__ import annotations
 
 import math
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
-from pathlib import Path
-from typing import List, Optional
+from typing import List
 
 import h3
 
-from api.spatial_filter import is_water_location, is_suitable_vendor_cell
+from api.spatial_filter import is_water_location, is_water_cell, is_suitable_vendor_cell
 
+H3_RESOLUTION = 8
 
-# ---------------------------------------------------------------------------
-# Dataclasses
-# ---------------------------------------------------------------------------
 
 @dataclass
 class LocationContext:
@@ -57,13 +54,6 @@ class CandidateCell:
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
-
-
-# ---------------------------------------------------------------------------
-# Core functions
-# ---------------------------------------------------------------------------
-
-H3_RESOLUTION = 8
 
 
 def gps_to_h3(lat: float, lng: float, resolution: int = H3_RESOLUTION) -> str:
@@ -106,23 +96,12 @@ def generate_candidates(
 
     Filters out water bodies (rivers, barrage pools, reservoirs) so mobile
     vendors are never recommended destinations in water.
-
-    Args:
-        origin_lat, origin_lng: Vendor's current GPS position
-        h3_cell: Current H3 cell (anchor)
-        search_radius_km: Maximum search radius (default: 3.0 km)
-        resolution: H3 resolution (default: 8)
-        avg_speed_kmh: Assumed urban travel speed for time estimate
-        exclude_water: When True, filters out cells falling into water polygons
-
-    Returns:
-        List[CandidateCell] sorted by distance ascending (current cell first)
     """
     candidates: dict[str, CandidateCell] = {}
 
     # Current cell anchor
     cur_lat, cur_lng = h3_centroid(h3_cell)
-    cur_is_water = is_water_location(cur_lat, cur_lng)
+    cur_is_water = is_water_location(cur_lat, cur_lng) or is_water_cell(h3_cell)
     candidates[h3_cell] = CandidateCell(
         h3_cell=h3_cell,
         centroid_lat=cur_lat,
@@ -148,7 +127,7 @@ def generate_candidates(
                 min_ring_dist = dist
 
             if dist <= search_radius_km and cell not in candidates:
-                cell_in_water = is_water_location(c_lat, c_lng)
+                cell_in_water = is_water_location(c_lat, c_lng) or is_water_cell(cell)
 
                 # Skip water bodies for destination recommendations
                 if exclude_water and cell_in_water:
@@ -172,19 +151,17 @@ def generate_candidates(
     # Strictly filter all destination candidates by search_radius_km
     valid_candidates = [
         c for c in candidates.values()
-        if c.is_current_cell or c.distance_km <= search_radius_km
+        if c.is_current_cell or (c.distance_km <= search_radius_km and not c.is_water)
     ]
     return sorted(valid_candidates, key=lambda c: c.distance_km)
 
 
 def get_location_context(lat: float, lng: float, resolution: int = H3_RESOLUTION) -> LocationContext:
-    """
-    Convert GPS coordinates to a full location context object.
-    This is the response payload for POST /v1/location/context.
-    """
+    """Convert GPS coordinates to a full location context object."""
     h3_cell = gps_to_h3(lat, lng, resolution)
     c_lat, c_lng = h3_centroid(h3_cell)
     now = datetime.now(timezone.utc)
+    is_water = is_water_location(c_lat, c_lng) or is_water_cell(h3_cell)
     return LocationContext(
         latitude=round(lat, 6),
         longitude=round(lng, 6),
@@ -192,15 +169,8 @@ def get_location_context(lat: float, lng: float, resolution: int = H3_RESOLUTION
         h3_resolution=resolution,
         timestamp=now.isoformat(),
         timezone_name="Asia/Kolkata",
-        is_water=is_water_location(c_lat, c_lng),
+        is_water=is_water,
         source_type="real_live",
         source_name="device_gps",
     )
 
-
-if __name__ == "__main__":
-    lat, lng = 16.5062, 80.6480
-    ctx = get_location_context(lat, lng)
-    print("Location Context:", ctx.to_dict())
-    cands = generate_candidates(lat, lng, ctx.h3_cell, search_radius_km=3.0)
-    print(f"{len(cands)} land candidates generated (water filtered)")

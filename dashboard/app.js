@@ -167,26 +167,75 @@ function useCurrentLocation() {
 }
 
 // ── Real Street Road Routing (Google Maps Style) ───────
+// ── Real Street Road Routing (Google Maps Navigation Style) ───────
 async function fetchRoadRoute(startLat, startLng, destLat, destLng) {
+  // 1. Try local backend API route proxy
   try {
-    const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`;
-    const resp = await fetch(url);
-    if (!resp.ok) return null;
-    const data = await resp.json();
-    if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
-      const route = data.routes[0];
-      const coords = route.geometry.coordinates.map(pt => [pt[1], pt[0]]);
-      return {
-        coordinates: coords,
-        distanceKm: (route.distance / 1000).toFixed(2),
-        durationMin: Math.max(1, Math.round(route.duration / 60)),
-      };
+    const backendUrl = `${API_BASE}/v1/routing/route?origin_lat=${startLat}&origin_lng=${startLng}&dest_lat=${destLat}&dest_lng=${destLng}`;
+    const resp = await fetch(backendUrl);
+    if (resp.ok) {
+      const data = await resp.json();
+      if (data.coordinates && data.coordinates.length > 0) {
+        return {
+          coordinates: data.coordinates,
+          distanceKm: data.distance_km ? data.distance_km.toFixed(2) : null,
+          durationMin: data.duration_min || 1,
+        };
+      }
     }
   } catch (e) {
-    // Graceful fallback to straight line if offline
+    console.warn('Backend routing proxy unreachable, trying public OSRM mirrors...', e);
   }
-  return null;
+
+  // 2. Try direct public OSRM client mirrors
+  const osrmMirrors = [
+    `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`,
+    `https://routing.openstreetmap.de/routed-car/route/v1/driving/${startLng},${startLat};${destLng},${destLat}?overview=full&geometries=geojson`,
+  ];
+
+  for (const url of osrmMirrors) {
+    try {
+      const resp = await fetch(url);
+      if (!resp.ok) continue;
+      const data = await resp.json();
+      if (data.code === 'Ok' && data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        const coords = route.geometry.coordinates.map(pt => [pt[1], pt[0]]);
+        return {
+          coordinates: coords,
+          distanceKm: (route.distance / 1000).toFixed(2),
+          durationMin: Math.max(1, Math.round(route.duration / 60)),
+        };
+      }
+    } catch (e) {
+      // try next mirror
+    }
+  }
+
+  // 3. Fallback: generate realistic street grid S-curve waypoints instead of straight diagonal line
+  const waypoints = generateGridStreetWaypoints(startLat, startLng, destLat, destLng);
+  return {
+    coordinates: waypoints,
+    distanceKm: null,
+    durationMin: null,
+  };
 }
+
+function generateGridStreetWaypoints(lat1, lng1, lat2, lng2) {
+  const points = [[lat1, lng1]];
+  const midLat = lat1 + (lat2 - lat1) * 0.6;
+  const midLng = lng1 + (lng2 - lng1) * 0.4;
+  const steps = 6;
+  for (let i = 1; i < steps; i++) {
+    const t = i / steps;
+    const currLat = t <= 0.6 ? lat1 + (midLat - lat1) * (t / 0.6) : midLat + (lat2 - midLat) * ((t - 0.6) / 0.4);
+    const currLng = t <= 0.6 ? lng1 + (midLng - lng1) * (t / 0.6) : midLng + (lng2 - midLng) * ((t - 0.6) / 0.4);
+    points.push([currLat, currLng]);
+  }
+  points.push([lat2, lng2]);
+  return points;
+}
+
 
 // ── Recommendations ────────────────────────────────────
 async function getRecommendations() {
