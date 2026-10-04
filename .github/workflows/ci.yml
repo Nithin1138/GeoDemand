@@ -2,16 +2,20 @@ name: GeoDemand AI — CI/CD Pipeline
 
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, "dev/**", "feature/**", "fix/**", "chore/**", "docs/**" ]
   pull_request:
     branches: [ main, master ]
+  workflow_dispatch:
 
 jobs:
   test-and-validate:
+    name: Test & Validate Model Pipeline
     runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: "src:src/data:src/features:src/api:."
 
     steps:
-    - name: Checkout code
+    - name: Checkout repository
       uses: actions/checkout@v4
 
     - name: Set up Python 3.11
@@ -26,7 +30,7 @@ jobs:
         pip install -r requirements.txt
         pip install pytest httpx
 
-    - name: Copy env template
+    - name: Setup environment configuration
       run: cp .env.example .env
 
     - name: Run Test Suite
@@ -36,9 +40,6 @@ jobs:
     - name: Verify Model Inference & SHAP
       run: |
         python -c "
-        import sys
-        sys.path.insert(0, 'src')
-        sys.path.insert(0, 'src/api')
         from api.recommender import DemandModel
         model = DemandModel.get()
         print('Demand Model loaded successfully:', model.meta)
