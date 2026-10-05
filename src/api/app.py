@@ -175,6 +175,7 @@ class RecommendationRequest(BaseModel):
     preparation_time: float = Field(5.0, gt=0)
     search_radius_km: float = Field(3.0, gt=0, le=10)
     top_n: int = Field(5, ge=1, le=10)
+    timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
 
 
 class PredictDemandRequest(BaseModel):
@@ -184,6 +185,8 @@ class PredictDemandRequest(BaseModel):
     average_order_value: float = Field(100.0, gt=0)
     variable_cost_rate: float = Field(0.38, gt=0, lt=1)
     fixed_cost_per_day: float = Field(500.0, gt=0)
+    timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
+
 
 
 class RecommendZonesRequest(BaseModel):
@@ -293,7 +296,7 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
     weather_client = _get_weather_client()
     weather_forecast = weather_client.get_hourly_forecast(req.latitude, req.longitude, target_hour_offset=1)
     comp_prov, traffic_prov, event_prov, _ = _get_providers()
-    now = datetime.now(timezone.utc)
+    now = req.timestamp or datetime.now(timezone.utc)
 
     comp = comp_prov.get_competition_score(loc_ctx.h3_cell, req.vendor_category)
     event = event_prov.get_event_importance(loc_ctx.h3_cell, now)
@@ -421,7 +424,7 @@ async def recommendations_live(req: RecommendationRequest):
             }
         )
 
-    now = datetime.now(timezone.utc)
+    now = req.timestamp or datetime.now(timezone.utc)
     competition_prov, traffic_prov, event_prov, fuel_prov = _get_providers()
     weather_client = _get_weather_client()
     assembler = _get_assembler()
