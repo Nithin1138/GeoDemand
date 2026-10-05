@@ -23,14 +23,16 @@ from pathlib import Path
 from typing import Optional
 
 ROOT = Path(__file__).parent.parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "data"))
 sys.path.insert(0, str(ROOT / "src" / "features"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
 
+
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Header, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -51,11 +53,25 @@ from config.settings import (
     CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR,
     MAX_RECOMMENDED_TRAVEL_MIN,
     MAX_RECOMMENDED_TRAVEL_KM,
+    API_KEY,
+    REQUIRE_API_KEY,
 )
 import h3
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
+
+
+def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
+    """Security helper to validate API key header if enabled."""
+    if REQUIRE_API_KEY:
+        if not x_api_key or (API_KEY and x_api_key != API_KEY):
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid or missing API key. Provide a valid X-API-Key header.",
+            )
+    return x_api_key
+
 
 
 @asynccontextmanager
@@ -161,6 +177,34 @@ class RecommendationRequest(BaseModel):
     top_n: int = Field(5, ge=1, le=10)
 
 
+class PredictDemandRequest(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
+    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
+    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
+    average_order_value: float = Field(100.0, gt=0)
+    variable_cost_rate: float = Field(0.38, gt=0, lt=1)
+    fixed_cost_per_day: float = Field(500.0, gt=0)
+
+
+class RecommendZonesRequest(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
+    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
+    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
+    search_radius_km: float = Field(3.0, gt=0, le=10)
+    top_n: int = Field(5, ge=1, le=10)
+
+
+class ScenarioSimulateRequest(BaseModel):
+    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
+    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
+    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
+    baseline_aov: float = Field(100.0, gt=0)
+    simulated_aov: float = Field(150.0, gt=0)
+    simulated_weather_condition: Optional[str] = Field(None, json_schema_extra={"example": "rainy"})
+    simulated_hour: Optional[int] = Field(None, ge=0, le=23, json_schema_extra={"example": 13})
+
+
+
 
 
 # ---------------------------------------------------------------------------
@@ -237,6 +281,128 @@ async def location_context(req: LocationRequest):
     """GPS → H3 cell, timestamp, and location context."""
     ctx = get_location_context(req.latitude, req.longitude)
     return ctx.to_dict()
+
+
+@app.post("/v1/predict/demand")
+async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verify_api_key)):
+    """Predict customer demand and business economics for a single location."""
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    loc_ctx = get_location_context(req.latitude, req.longitude)
+    weather_client = _get_weather_client()
+    weather_forecast = weather_client.get_hourly_forecast(req.latitude, req.longitude, target_hour_offset=1)
+    comp_prov, traffic_prov, event_prov, _ = _get_providers()
+    now = datetime.now(timezone.utc)
+
+    comp = comp_prov.get_competition_score(loc_ctx.h3_cell, req.vendor_category)
+    event = event_prov.get_event_importance(loc_ctx.h3_cell, now)
+
+    vendor_profile = {
+        "vendor_id": "predict_user",
+        "vendor_category": req.vendor_category,
+        "vendor_name": "Mobile Vendor",
+        "average_order_value": req.average_order_value,
+        "variable_cost_rate": req.variable_cost_rate,
+        "fixed_cost_per_day": req.fixed_cost_per_day,
+    }
+
+    assembler = _get_assembler()
+    features, freshness = assembler.assemble(
+        h3_cell=loc_ctx.h3_cell,
+        vendor_profile=vendor_profile,
+        weather=weather_forecast,
+        competition=comp,
+        event=event,
+        decision_timestamp=now,
+    )
+
+    model = DemandModel.get()
+    uncertainty = model.predict_with_uncertainty(features)
+    expected_customers = uncertainty["p50"]
+
+    biz = calculate_business_metrics(
+        expected_customers=expected_customers,
+        aov=req.average_order_value,
+        variable_cost_rate=req.variable_cost_rate,
+        fixed_cost_per_day=req.fixed_cost_per_day,
+    )
+
+    return {
+        "location": {
+            "latitude": req.latitude,
+            "longitude": req.longitude,
+            "h3_cell": loc_ctx.h3_cell,
+            "is_water": loc_ctx.is_water,
+        },
+        "vendor_category": req.vendor_category,
+        "prediction": {
+            "expected_customers": expected_customers,
+            "confidence_interval": uncertainty,
+        },
+        "economics": biz,
+        "data_freshness": freshness,
+    }
+
+
+@app.post("/v1/recommend/zones")
+async def recommend_zones(req: RecommendZonesRequest, api_key: str = Depends(verify_api_key)):
+    """Target high-demand candidate zones within radius."""
+    rec_req = RecommendationRequest(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        search_radius_km=req.search_radius_km,
+        top_n=req.top_n,
+    )
+    return await recommendations_live(rec_req)
+
+
+@app.post("/v1/scenario/simulate")
+async def scenario_simulate(req: ScenarioSimulateRequest, api_key: str = Depends(verify_api_key)):
+    """Simulate business impact under varied AOV or weather scenario."""
+    base_res = await predict_demand(
+        PredictDemandRequest(
+            latitude=req.latitude,
+            longitude=req.longitude,
+            vendor_category=req.vendor_category,
+            average_order_value=req.baseline_aov,
+        ),
+        api_key=api_key,
+    )
+    sim_res = await predict_demand(
+        PredictDemandRequest(
+            latitude=req.latitude,
+            longitude=req.longitude,
+            vendor_category=req.vendor_category,
+            average_order_value=req.simulated_aov,
+        ),
+        api_key=api_key,
+    )
+
+    base_profit = base_res["economics"]["expected_profit_inr"]
+    sim_profit = sim_res["economics"]["expected_profit_inr"]
+    profit_delta = round(sim_profit - base_profit, 2)
+    pct_change = round((profit_delta / max(abs(base_profit), 1)) * 100, 1)
+
+    return {
+        "baseline": {
+            "aov": req.baseline_aov,
+            "expected_customers": base_res["prediction"]["expected_customers"],
+            "expected_profit_inr": base_profit,
+        },
+        "scenario": {
+            "aov": req.simulated_aov,
+            "expected_customers": sim_res["prediction"]["expected_customers"],
+            "expected_profit_inr": sim_profit,
+        },
+        "simulation_delta": {
+            "profit_delta_inr": profit_delta,
+            "percentage_change": pct_change,
+        },
+        "explanation": f"Simulating an AOV shift from ₹{req.baseline_aov} to ₹{req.simulated_aov} results in a profit change of ₹{profit_delta:+.2f}/hr ({pct_change:+.1f}%).",
+    }
+
 
 
 @app.post("/v1/recommendations/live")
@@ -456,8 +622,17 @@ async def recommendations_live(req: RecommendationRequest):
             c["decision_verdict"] = "RECOMMENDED_MOVE"
             c["decision_action"] = "MOVE"
             reason = f"Strong move (+₹{improv_inr:.0f}/hr, net +₹{realized_net_uplift:.0f}/hr in next hr); high demand cluster {travel_min} min away."
+        
         c["decision_rationale"] = reason
         c["decision_reason"] = reason
+        # Explicit fields per specification section 44
+        c["decision"] = c["decision_verdict"]
+        c["reason"] = reason
+        c["current_profit"] = current_profit
+        c["recommended_profit"] = c["expected_profit_inr"]
+        c["profit_uplift"] = improv_inr
+        c["travel_time"] = travel_min
+        c["distance"] = dist_km
 
     # Top-level strategic decision
     top_rec = recommendations[0] if recommendations else None
@@ -466,9 +641,15 @@ async def recommendations_live(req: RecommendationRequest):
         overall_decision = {
             "verdict": "STAY_PUT",
             "action": "STAY HERE",
+            "decision": "STAY_PUT",
             "headline": "Stay at Current Location",
             "rationale": top_reason,
-            "decision_reason": top_reason,
+            "reason": top_reason,
+            "current_profit": current_profit,
+            "recommended_profit": top_rec["expected_profit_inr"] if top_rec else current_profit,
+            "profit_uplift": top_rec["profit_improvement_inr"] if top_rec else 0.0,
+            "travel_time": top_rec.get("estimated_travel_time_min", 0) if top_rec else 0,
+            "distance": top_rec.get("distance_km", 0.0) if top_rec else 0.0,
             "top_net_improvement_inr": top_rec["profit_improvement_inr"] if top_rec else 0.0,
             "stay_threshold_inr": STAY_THRESHOLD_INR_PER_HOUR,
             "consider_threshold_inr": CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR,
@@ -478,9 +659,15 @@ async def recommendations_live(req: RecommendationRequest):
         overall_decision = {
             "verdict": "CONSIDER_MOVE",
             "action": "CONSIDER MOVE",
+            "decision": "CONSIDER_MOVE",
             "headline": f"Consider Relocating to #{top_rec['rank']} ({top_rec['distance_km']} km, ~{top_rec['estimated_travel_time_min']} min)",
             "rationale": top_reason,
-            "decision_reason": top_reason,
+            "reason": top_reason,
+            "current_profit": current_profit,
+            "recommended_profit": top_rec["expected_profit_inr"],
+            "profit_uplift": top_rec["profit_improvement_inr"],
+            "travel_time": top_rec.get("estimated_travel_time_min", 0),
+            "distance": top_rec.get("distance_km", 0.0),
             "top_net_improvement_inr": top_rec["profit_improvement_inr"],
             "stay_threshold_inr": STAY_THRESHOLD_INR_PER_HOUR,
             "consider_threshold_inr": CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR,
@@ -490,13 +677,20 @@ async def recommendations_live(req: RecommendationRequest):
         overall_decision = {
             "verdict": "RECOMMENDED_MOVE",
             "action": "RECOMMENDED MOVE",
+            "decision": "RECOMMENDED_MOVE",
             "headline": f"Recommended Move to #{top_rec['rank']} (+₹{top_rec['profit_improvement_inr']:.0f}/hr)",
             "rationale": top_reason,
-            "decision_reason": top_reason,
+            "reason": top_reason,
+            "current_profit": current_profit,
+            "recommended_profit": top_rec["expected_profit_inr"],
+            "profit_uplift": top_rec["profit_improvement_inr"],
+            "travel_time": top_rec.get("estimated_travel_time_min", 0),
+            "distance": top_rec.get("distance_km", 0.0),
             "top_net_improvement_inr": top_rec["profit_improvement_inr"],
             "stay_threshold_inr": STAY_THRESHOLD_INR_PER_HOUR,
             "consider_threshold_inr": CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR,
         }
+
 
     # Comprehensive Hybrid Data Quality Summary
     data_quality_summary = {

@@ -81,6 +81,9 @@ TOMTOM_API_KEY = os.getenv("TOMTOM_API_KEY")
 GOOGLE_PLACES_API_KEY = os.getenv("GOOGLE_PLACES_API_KEY")
 FOURSQUARE_API_KEY = os.getenv("FOURSQUARE_API_KEY")
 EVENTBRITE_TOKEN = os.getenv("EVENTBRITE_TOKEN")
+API_KEY = os.getenv("API_KEY") or os.getenv("GEO_API_KEY")
+REQUIRE_API_KEY = os.getenv("REQUIRE_API_KEY", "false").lower() == "true"
+
 
 # ---------------------------------------------------------------------------
 # Ranking Weights
