@@ -15,11 +15,13 @@ Validates configurable business assumptions and exact mathematical transformatio
 
 import sys
 from pathlib import Path
-import pytest
 
 ROOT = Path(__file__).parent.parent
+sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
+
+import pytest
 
 from api.recommender import calculate_business_metrics
 from config.settings import (
