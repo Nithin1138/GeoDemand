@@ -70,3 +70,9 @@ tmp/
 temp/
 scratch/
 RESUME.md
+AGENTS.md
+.agents/
+data/raw/weather/
+
+colab_indetail.md
+COLAB.md
