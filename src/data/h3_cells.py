@@ -14,7 +14,12 @@ import h3
 import pandas as pd
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "simulation"))
+sys.path.insert(0, str(Path(__file__).parent.parent / "api"))
 from h3_grid import generate_city_grid, DEFAULT_H3_RESOLUTION  # noqa: E402
+try:
+    from spatial_filter import is_water_location  # noqa: E402
+except ImportError:
+    from src.api.spatial_filter import is_water_location  # noqa: E402
 
 
 def build_h3_cells(
@@ -36,10 +41,13 @@ def build_h3_cells(
     grid["boundary_area_km2"] = grid["h3_cell_id"].apply(
         lambda c: h3.cell_area(c, unit="km^2")
     )
+    grid["is_water"] = grid.apply(
+        lambda r: is_water_location(r["latitude"], r["longitude"]), axis=1
+    )
     grid["source"] = "real:spatial_indexing"
     return grid[[
         "h3_cell_id", "latitude", "longitude", "resolution",
-        "city", "state", "country", "boundary_area_km2", "source",
+        "city", "state", "country", "boundary_area_km2", "is_water", "source",
     ]]
 
 
