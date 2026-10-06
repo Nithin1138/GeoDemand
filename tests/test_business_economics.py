@@ -89,3 +89,35 @@ def test_default_configurable_assumptions():
     assert biz["expected_revenue_inr"] == expected_rev
     assert biz["expected_costs_inr"] == expected_total_cost
     assert biz["expected_profit_inr"] == expected_profit
+
+
+def test_travel_fraction_and_relocation_adjusted_realized_profit():
+    """Verify travel_fraction and relocation-adjusted realized profit calculation."""
+    # Example: 15 minutes travel time, 40 customers expected, AOV 100, var cost 0.38, fixed 500/13, fuel 20
+    travel_time_min = 15.0
+    expected_customers = 40
+    fuel_cost = 20.0
+
+    biz = calculate_business_metrics(
+        expected_customers=expected_customers,
+        aov=100.0,
+        variable_cost_rate=0.38,
+        fixed_cost_per_day=500.0,
+        hours_per_day=13.0,
+        fuel_cost=fuel_cost,
+        travel_time_minutes=travel_time_min,
+    )
+
+    # travel_fraction = max(0, (60 - 15) / 60) = 0.75
+    expected_travel_fraction = 0.75
+    assert biz["travel_fraction"] == expected_travel_fraction
+
+    # candidate_predicted_profit = 4000 - (1520 + 38.46) = 2441.54
+    predicted_profit = biz["candidate_predicted_profit_inr"]
+    assert predicted_profit == 2441.54
+
+    # relocation_adjusted_realized_profit = 2441.54 * 0.75 - 20 = 1811.16
+    expected_relocation_profit = round(predicted_profit * 0.75 - fuel_cost, 2)
+    assert biz["relocation_adjusted_realized_profit_inr"] == expected_relocation_profit
+    assert biz["realized_next_hour_profit_inr"] == expected_relocation_profit
+

@@ -500,6 +500,7 @@ async def recommendations_live(req: RecommendationRequest):
             variable_cost_rate=req.variable_cost_rate,
             fixed_cost_per_day=req.fixed_cost_per_day,
             fuel_cost=actual_fuel_cost,
+            travel_time_minutes=travel_time_min,
         )
 
         drivers, explanation = generate_explanation(
@@ -514,6 +515,7 @@ async def recommendations_live(req: RecommendationRequest):
             "longitude": cand.centroid_lng,
             "distance_km": cand.distance_km,
             "estimated_travel_time_min": travel_time_min,
+            "travel_fraction": biz["travel_fraction"],
             "is_current_cell": cand.is_current_cell,
             "is_water": getattr(cand, "is_water", False),
             "expected_customers": expected_customers,
@@ -521,6 +523,9 @@ async def recommendations_live(req: RecommendationRequest):
             "confidence_interval": uncertainty,
             "expected_revenue_inr": biz["expected_revenue_inr"],
             "expected_profit_inr": biz["expected_profit_inr"],
+            "candidate_predicted_profit_inr": biz["candidate_predicted_profit_inr"],
+            "relocation_adjusted_realized_profit_inr": biz["relocation_adjusted_realized_profit_inr"],
+            "realized_next_hour_profit_inr": biz["relocation_adjusted_realized_profit_inr"],
             "expected_operating_cost_inr": biz["expected_operating_cost_inr"],
             "fuel_cost_inr": actual_fuel_cost,
             "competition_score": round(comp["competition_score"], 3),
@@ -592,23 +597,29 @@ async def recommendations_live(req: RecommendationRequest):
     current_cell_data.pop("_features", None)
 
     # --- Calculate improvement vs staying put & Decision Classification ---
-    current_profit = current_cell_data.get("expected_profit_inr", 0)
+    current_profit = current_cell_data.get("relocation_adjusted_realized_profit_inr", current_cell_data.get("expected_profit_inr", 0))
     for c in recommendations:
-        improv_inr = round(c["expected_profit_inr"] - current_profit, 2)
-        improv_pct = round(
-            (c["expected_profit_inr"] - current_profit) / max(abs(current_profit), 1) * 100, 1
-        )
-        c["profit_improvement_inr"] = improv_inr
-        c["profit_improvement_pct"] = improv_pct
-
         travel_min = c.get("estimated_travel_time_min", 0)
         dist_km = c.get("distance_km", 0)
 
-        # In a 1-hour horizon, travel time leaves (60 - travel_min) operating minutes
-        operating_fraction = max(0.0, (60.0 - travel_min) / 60.0)
-        realized_next_hour_profit = round(c["expected_profit_inr"] * operating_fraction - c.get("fuel_cost_inr", 0), 2)
-        realized_net_uplift = round(realized_next_hour_profit - current_profit, 2)
-        c["realized_next_hour_profit_inr"] = realized_next_hour_profit
+        # travel_fraction = max(0, (60 - travel_time_minutes) / 60)
+        travel_fraction = round(max(0.0, (60.0 - travel_min) / 60.0), 4)
+
+        # relocation-adjusted realized profit approximation = candidate predicted profit * travel_fraction - fuel/travel cost
+        cand_pred_profit = c.get("candidate_predicted_profit_inr", c.get("expected_profit_inr", 0))
+        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - c.get("fuel_cost_inr", 0), 2)
+
+        c["travel_fraction"] = travel_fraction
+        c["relocation_adjusted_realized_profit_inr"] = relocation_adjusted_realized_profit
+        c["realized_next_hour_profit_inr"] = relocation_adjusted_realized_profit
+
+        improv_inr = round(relocation_adjusted_realized_profit - current_profit, 2)
+        improv_pct = round(
+            (relocation_adjusted_realized_profit - current_profit) / max(abs(current_profit), 1) * 100, 1
+        )
+        c["profit_improvement_inr"] = improv_inr
+        c["profit_improvement_pct"] = improv_pct
+        realized_net_uplift = improv_inr
         c["realized_net_uplift_inr"] = realized_net_uplift
 
         # Multi-factor strategic classification (Economics + Travel Time/Distance friction)
