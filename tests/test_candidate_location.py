@@ -14,7 +14,10 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
 
 import h3
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
 
 from api.location import (
     gps_to_h3,

@@ -21,7 +21,10 @@ sys.path.insert(0, str(ROOT))
 sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
 
-import pytest
+try:
+    import pytest
+except ImportError:
+    pytest = None
 
 from api.recommender import calculate_business_metrics
 from config.settings import (
