@@ -124,6 +124,60 @@ class OverpassClient:
         logger.info(f"Fetched real POI data for {len(df)} cells, cached to {cache_path}")
         return df
 
+    def get_poi_features_for_h3_cell(
+        self,
+        h3_cell_id: str,
+        static_features_path: str | Path | None = None,
+    ) -> dict:
+        """
+        Fast lookup of static POI features for a specific H3 cell from pre-extracted datasets.
+        Guarantees zero-network latency for live recommendation pipeline.
+        """
+        if static_features_path is None:
+            static_features_path = (
+                Path(__file__).parent.parent.parent / "data" / "processed" / "static_features.parquet"
+            )
+        static_path = Path(static_features_path)
+
+        if static_path.exists():
+            try:
+                df = pd.read_parquet(static_path)
+                match = df[df["h3_cell_id"] == h3_cell_id]
+                if not match.empty:
+                    row = match.iloc[0].to_dict()
+                    return {
+                        "h3_cell_id": h3_cell_id,
+                        "hospital_count": int(row.get("hospital_count", 0)),
+                        "school_count": int(row.get("school_count", 0)),
+                        "college_count": int(row.get("college_count", 0)),
+                        "office_count": int(row.get("office_count", 0)),
+                        "restaurant_count": int(row.get("restaurant_count", 0)),
+                        "mall_count": int(row.get("mall_count", 0)),
+                        "park_count": int(row.get("park_count", 0)),
+                        "bus_stop_count": int(row.get("bus_stop_count", 0)),
+                        "source": "real:osm-overpass-preprocessed",
+                        "source_type": "real_periodic",
+                        "source_name": "osm-overpass",
+                    }
+            except Exception as e:
+                logger.warning(f"Failed reading static features for {h3_cell_id}: {e}")
+
+        # Safe fallback
+        return {
+            "h3_cell_id": h3_cell_id,
+            "hospital_count": 0,
+            "school_count": 0,
+            "college_count": 0,
+            "office_count": 0,
+            "restaurant_count": 0,
+            "mall_count": 0,
+            "park_count": 0,
+            "bus_stop_count": 0,
+            "source": "synthetic:osm-fallback",
+            "source_type": "synthetic_fallback",
+            "source_name": "osm-synthetic",
+        }
+
 
 class GeoapifyClient:
     """

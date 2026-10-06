@@ -23,7 +23,7 @@ PREP_TIME_MIN = {
     "food": 3, "fruits": 2, "salon": 15, "repair": 20,
 }
 SHELF_LIFE_HOURS = {
-    "food": 6, "fruits": 24, "salon": None, "repair": None,  # services have no shelf life
+    "food": 6, "fruits": 24, "salon": 0, "repair": 0,  # 0 indicates services have no perishable decay
 }
 
 

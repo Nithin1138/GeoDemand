@@ -78,6 +78,7 @@ flowchart TD
 | `state` | string | State administrative boundary | `Andhra Pradesh` |
 | `country` | string | Country code / name | `India` |
 | `boundary_area_km2`| float64 | Geometric cell surface area | `0.737` km² |
+| `is_water` | bool | Water polygon exclusion flag (Krishna River, canals) | `True / False` (45 water cells) |
 | `source` | string | Data origin tag | `real:spatial_indexing` |
 
 ---
