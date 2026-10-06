@@ -121,3 +121,46 @@ def test_travel_fraction_and_relocation_adjusted_realized_profit():
     assert biz["relocation_adjusted_realized_profit_inr"] == expected_relocation_profit
     assert biz["realized_next_hour_profit_inr"] == expected_relocation_profit
 
+
+def test_candidate_ranking_vs_net_realized_uplift_decision():
+    """Verify that multi-factor candidate ranking score and net realized uplift decision are separate."""
+    from api.recommender import rank_candidates
+
+    # Candidate A: Higher demand & raw profit, but 20 min drive (higher travel friction)
+    cand_a = {
+        "h3_cell": "cell_a",
+        "expected_customers": 60,
+        "expected_profit_inr": 3000.0,
+        "distance_km": 4.5,
+        "competition_score": 0.2,
+        "relocation_adjusted_realized_profit_inr": 1800.0,  # lower realized due to travel friction
+        "is_current_cell": False,
+    }
+    # Candidate B: Slightly lower raw profit, but only 3 min drive (much higher net realized uplift)
+    cand_b = {
+        "h3_cell": "cell_b",
+        "expected_customers": 52,
+        "expected_profit_inr": 2600.0,
+        "distance_km": 0.8,
+        "competition_score": 0.2,
+        "relocation_adjusted_realized_profit_inr": 2450.0,  # higher net realized uplift
+        "is_current_cell": False,
+    }
+
+    # Step 1: Multi-factor candidate ranking score calculation
+    ranked = rank_candidates([cand_a, cand_b])
+    for c in ranked:
+        assert "recommendation_score" in c
+        assert "rank" in c
+
+    # Step 2: Final recommendation ordering primarily uses net realized uplift under travel constraints
+    current_profit = 1200.0
+    for c in ranked:
+        c["realized_net_uplift_inr"] = round(c["relocation_adjusted_realized_profit_inr"] - current_profit, 2)
+
+    final_recommendation = max(ranked, key=lambda x: x["realized_net_uplift_inr"])
+    # Candidate B offers the highest net realized uplift after travel constraints
+    assert final_recommendation["h3_cell"] == "cell_b"
+    assert final_recommendation["realized_net_uplift_inr"] == 1250.0
+
+

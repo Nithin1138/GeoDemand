@@ -540,20 +540,88 @@ async def recommendations_live(req: RecommendationRequest):
             "_features": features,
         })
 
-    # --- Rank all candidates ---
-    ranked = rank_candidates(candidate_results)
+    # --- Step 1: Candidate Ranking (Multi-Factor Scoring) ---
+    # Multi-factor score: 60% profit, 25% demand, -10% distance, -5% competition
+    ranked_candidates = rank_candidates(candidate_results)
 
-    # Separate current cell baseline from recommendations (strictly exclude water & strictly enforce radius & positive profit)
-    current_cell_data = next((c for c in ranked if c["is_current_cell"]), ranked[0] if ranked else {})
-    recommendations = [
-        c for c in ranked
-        if not c.get("is_current_cell")
-        and not c.get("is_water")
-        and not is_water_cell(c["h3_cell"])
-        and not is_water_location(c["latitude"], c["longitude"])
-        and c.get("distance_km", 0) <= req.search_radius_km
-        and c.get("expected_profit_inr", 0) > 0
-    ][:req.top_n]
+    # Establish baseline for current location cell
+    current_cell_data = next((c for c in ranked_candidates if c["is_current_cell"]), ranked_candidates[0] if ranked_candidates else {})
+    current_profit = current_cell_data.get("relocation_adjusted_realized_profit_inr", current_cell_data.get("expected_profit_inr", 0))
+
+    # --- Step 2: Compute Net Realized Uplift & Decision Metrics for Valid Destination Candidates ---
+    valid_destinations = []
+    for c in ranked_candidates:
+        if (
+            c.get("is_current_cell")
+            or c.get("is_water")
+            or is_water_cell(c["h3_cell"])
+            or is_water_location(c["latitude"], c["longitude"])
+            or c.get("distance_km", 0) > req.search_radius_km
+            or c.get("expected_profit_inr", 0) <= 0
+        ):
+            continue
+
+        travel_min = c.get("estimated_travel_time_min", 0)
+        dist_km = c.get("distance_km", 0)
+
+        # travel_fraction = max(0, (60 - travel_time_minutes) / 60)
+        travel_fraction = round(max(0.0, (60.0 - travel_min) / 60.0), 4)
+
+        # relocation-adjusted realized profit = candidate_predicted_profit * travel_fraction - fuel_cost
+        cand_pred_profit = c.get("candidate_predicted_profit_inr", c.get("expected_profit_inr", 0))
+        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - c.get("fuel_cost_inr", 0), 2)
+
+        # Net Realized Uplift vs Staying Put
+        realized_net_uplift = round(relocation_adjusted_realized_profit - current_profit, 2)
+        improv_pct = round((realized_net_uplift / max(abs(current_profit), 1)) * 100, 1)
+
+        c["travel_fraction"] = travel_fraction
+        c["relocation_adjusted_realized_profit_inr"] = relocation_adjusted_realized_profit
+        c["realized_next_hour_profit_inr"] = relocation_adjusted_realized_profit
+        c["realized_net_uplift_inr"] = realized_net_uplift
+        c["profit_improvement_inr"] = realized_net_uplift
+        c["profit_improvement_pct"] = improv_pct
+
+        # Multi-factor strategic classification (Net Realized Uplift + Travel Friction Constraints)
+        if realized_net_uplift < STAY_THRESHOLD_INR_PER_HOUR:
+            c["decision_verdict"] = "STAY_PUT"
+            c["decision_action"] = "STAY HERE"
+            reason = f"Staying put is optimal; travel time ({travel_min} min) and fuel reduce effective net gain (+₹{realized_net_uplift:.0f}/hr)."
+        elif travel_min > MAX_RECOMMENDED_TRAVEL_MIN or dist_km > MAX_RECOMMENDED_TRAVEL_KM:
+            c["decision_verdict"] = "CONSIDER_MOVE"
+            c["decision_action"] = "CONSIDER"
+            reason = f"Positive demand (+₹{realized_net_uplift:.0f}/hr net uplift), but travel friction is high ({travel_min} min / {dist_km:.1f} km)."
+        elif realized_net_uplift < CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR:
+            c["decision_verdict"] = "CONSIDER_MOVE"
+            c["decision_action"] = "CONSIDER"
+            reason = f"Moderate move (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive); evaluate spot footfall."
+        else:
+            c["decision_verdict"] = "RECOMMENDED_MOVE"
+            c["decision_action"] = "MOVE"
+            reason = f"Strong move (+₹{realized_net_uplift:.0f}/hr net realized uplift); high demand cluster {travel_min} min away."
+
+        c["decision_rationale"] = reason
+        c["decision_reason"] = reason
+        c["decision"] = c["decision_verdict"]
+        c["reason"] = reason
+        c["current_profit"] = current_profit
+        c["recommended_profit"] = relocation_adjusted_realized_profit
+        c["profit_uplift"] = realized_net_uplift
+        c["travel_time"] = travel_min
+        c["distance"] = dist_km
+
+        valid_destinations.append(c)
+
+    # --- Step 3: Final Recommendation Selection (Primarily ordered by Net Realized Uplift with Travel Constraints) ---
+    recommendations = sorted(
+        valid_destinations,
+        key=lambda x: (
+            1 if x["decision_verdict"] == "RECOMMENDED_MOVE" else 0,
+            x["realized_net_uplift_inr"],
+            x.get("recommendation_score", 0),
+        ),
+        reverse=True,
+    )[:req.top_n]
 
     # Assign rank and add H3 boundary polygons for top recommendations
     for i, c in enumerate(recommendations):
@@ -595,61 +663,6 @@ async def recommendations_live(req: RecommendationRequest):
     for c in recommendations:
         c.pop("_features", None)
     current_cell_data.pop("_features", None)
-
-    # --- Calculate improvement vs staying put & Decision Classification ---
-    current_profit = current_cell_data.get("relocation_adjusted_realized_profit_inr", current_cell_data.get("expected_profit_inr", 0))
-    for c in recommendations:
-        travel_min = c.get("estimated_travel_time_min", 0)
-        dist_km = c.get("distance_km", 0)
-
-        # travel_fraction = max(0, (60 - travel_time_minutes) / 60)
-        travel_fraction = round(max(0.0, (60.0 - travel_min) / 60.0), 4)
-
-        # relocation-adjusted realized profit approximation = candidate predicted profit * travel_fraction - fuel/travel cost
-        cand_pred_profit = c.get("candidate_predicted_profit_inr", c.get("expected_profit_inr", 0))
-        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - c.get("fuel_cost_inr", 0), 2)
-
-        c["travel_fraction"] = travel_fraction
-        c["relocation_adjusted_realized_profit_inr"] = relocation_adjusted_realized_profit
-        c["realized_next_hour_profit_inr"] = relocation_adjusted_realized_profit
-
-        improv_inr = round(relocation_adjusted_realized_profit - current_profit, 2)
-        improv_pct = round(
-            (relocation_adjusted_realized_profit - current_profit) / max(abs(current_profit), 1) * 100, 1
-        )
-        c["profit_improvement_inr"] = improv_inr
-        c["profit_improvement_pct"] = improv_pct
-        realized_net_uplift = improv_inr
-        c["realized_net_uplift_inr"] = realized_net_uplift
-
-        # Multi-factor strategic classification (Economics + Travel Time/Distance friction)
-        if realized_net_uplift < STAY_THRESHOLD_INR_PER_HOUR or improv_inr < STAY_THRESHOLD_INR_PER_HOUR:
-            c["decision_verdict"] = "STAY_PUT"
-            c["decision_action"] = "STAY HERE"
-            reason = f"Staying put is optimal; relocation time ({travel_min} min) and fuel reduce effective hourly net gain (+₹{realized_net_uplift:.0f}/hr)."
-        elif travel_min > MAX_RECOMMENDED_TRAVEL_MIN or dist_km > MAX_RECOMMENDED_TRAVEL_KM:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER"
-            reason = f"High demand (+₹{improv_inr:.0f}/hr), but travel friction is high ({travel_min} min / {dist_km:.1f} km); consumes significant operating time in the next hour."
-        elif improv_inr < CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER"
-            reason = f"Marginal move (+₹{improv_inr:.0f}/hr within {travel_min} min drive); evaluate current spot footfall."
-        else:
-            c["decision_verdict"] = "RECOMMENDED_MOVE"
-            c["decision_action"] = "MOVE"
-            reason = f"Strong move (+₹{improv_inr:.0f}/hr, net +₹{realized_net_uplift:.0f}/hr in next hr); high demand cluster {travel_min} min away."
-        
-        c["decision_rationale"] = reason
-        c["decision_reason"] = reason
-        # Explicit fields per specification section 44
-        c["decision"] = c["decision_verdict"]
-        c["reason"] = reason
-        c["current_profit"] = current_profit
-        c["recommended_profit"] = c["expected_profit_inr"]
-        c["profit_uplift"] = improv_inr
-        c["travel_time"] = travel_min
-        c["distance"] = dist_km
 
     # Top-level strategic decision
     top_rec = recommendations[0] if recommendations else None
