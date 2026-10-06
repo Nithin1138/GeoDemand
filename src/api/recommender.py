@@ -22,8 +22,17 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).parent.parent.parent
-logger = logging.getLogger(__name__)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
+from config.settings import (
+    DEFAULT_AOV_INR,
+    DEFAULT_VARIABLE_COST_RATE,
+    DEFAULT_FIXED_COST_PER_DAY_INR,
+    DEFAULT_OPERATING_HOURS_PER_DAY,
+)
+
+logger = logging.getLogger(__name__)
 MODELS_DIR = ROOT / "models"
 
 
@@ -221,26 +230,56 @@ class DemandModel:
 
 def calculate_business_metrics(
     expected_customers: int,
-    aov: float,
-    variable_cost_rate: float,
-    fixed_cost_per_day: float,
-    hours_per_day: int = 13,
+    aov: float = DEFAULT_AOV_INR,
+    variable_cost_rate: float = DEFAULT_VARIABLE_COST_RATE,
+    fixed_cost_per_day: float = DEFAULT_FIXED_COST_PER_DAY_INR,
+    hours_per_day: float = DEFAULT_OPERATING_HOURS_PER_DAY,
     fuel_cost: float = 0.0,
 ) -> dict:
-    """Derive revenue, operating costs, and net hourly profit from demand prediction."""
+    """
+    Derive expected revenue, expected operating costs, and net expected hourly profit
+    from customer predictions based on configurable business assumptions:
+
+      Expected Customers
+              ↓
+      Average Spend (AOV)
+              ↓
+      Expected Revenue = Expected Customers × Average Spend
+              ↓
+      Operating Cost = Ingredient/Variable Cost + Hourly Fixed Cost + Fuel Cost
+              ↓
+      Expected Profit = Expected Revenue - Operating Cost
+    """
+    aov = float(aov) if aov is not None else DEFAULT_AOV_INR
+    variable_cost_rate = float(variable_cost_rate) if variable_cost_rate is not None else DEFAULT_VARIABLE_COST_RATE
+    fixed_cost_per_day = float(fixed_cost_per_day) if fixed_cost_per_day is not None else DEFAULT_FIXED_COST_PER_DAY_INR
+    hours_per_day = float(hours_per_day) if hours_per_day and hours_per_day > 0 else DEFAULT_OPERATING_HOURS_PER_DAY
+
+    # Step 1: Expected Revenue = Expected Customers * Average Spend (AOV)
     revenue = round(expected_customers * aov, 2)
+
+    # Step 2: Expected Costs = Variable COGS + Hourly Fixed Cost + Fuel Cost
     ingredient_cost = round(revenue * variable_cost_rate, 2)
     hourly_fixed = round(fixed_cost_per_day / hours_per_day, 2)
     operating_cost = round(ingredient_cost + hourly_fixed + fuel_cost, 2)
+
+    # Step 3: Expected Profit = Expected Revenue - Expected Costs
     profit = round(revenue - operating_cost, 2)
+
     return {
         "expected_customers": expected_customers,
+        "average_spend_inr": aov,
+        "average_order_value_inr": aov,
         "expected_revenue_inr": revenue,
+        "expected_costs_inr": operating_cost,
         "expected_operating_cost_inr": operating_cost,
         "expected_profit_inr": profit,
         "ingredient_cost_inr": ingredient_cost,
         "fixed_cost_per_hour_inr": hourly_fixed,
         "fuel_cost_inr": fuel_cost,
+        "variable_cost_rate": variable_cost_rate,
+        "fixed_cost_per_day_inr": fixed_cost_per_day,
+        "operating_hours_per_day": hours_per_day,
     }
 
 

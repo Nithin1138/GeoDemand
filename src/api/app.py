@@ -55,6 +55,9 @@ from config.settings import (
     MAX_RECOMMENDED_TRAVEL_KM,
     API_KEY,
     REQUIRE_API_KEY,
+    DEFAULT_AOV_INR,
+    DEFAULT_VARIABLE_COST_RATE,
+    DEFAULT_FIXED_COST_PER_DAY_INR,
 )
 import h3
 
@@ -168,9 +171,9 @@ class RecommendationRequest(BaseModel):
     vendor_id: Optional[str] = Field(None, json_schema_extra={"example": "V_001"})
     vendor_category: str = Field("food", json_schema_extra={"example": "food"})
     vendor_name: Optional[str] = None
-    average_order_value: float = Field(100.0, gt=0)
-    variable_cost_rate: float = Field(0.38, gt=0, lt=1)
-    fixed_cost_per_day: float = Field(500.0, gt=0)
+    average_order_value: float = Field(DEFAULT_AOV_INR, gt=0)
+    variable_cost_rate: float = Field(DEFAULT_VARIABLE_COST_RATE, gt=0, lt=1)
+    fixed_cost_per_day: float = Field(DEFAULT_FIXED_COST_PER_DAY_INR, gt=0)
     inventory_capacity: int = Field(200, gt=0)
     preparation_time: float = Field(5.0, gt=0)
     search_radius_km: float = Field(3.0, gt=0, le=10)
@@ -182,9 +185,9 @@ class PredictDemandRequest(BaseModel):
     latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
     longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
     vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    average_order_value: float = Field(100.0, gt=0)
-    variable_cost_rate: float = Field(0.38, gt=0, lt=1)
-    fixed_cost_per_day: float = Field(500.0, gt=0)
+    average_order_value: float = Field(DEFAULT_AOV_INR, gt=0)
+    variable_cost_rate: float = Field(DEFAULT_VARIABLE_COST_RATE, gt=0, lt=1)
+    fixed_cost_per_day: float = Field(DEFAULT_FIXED_COST_PER_DAY_INR, gt=0)
     timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
 
 
@@ -201,8 +204,8 @@ class ScenarioSimulateRequest(BaseModel):
     latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
     longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
     vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    baseline_aov: float = Field(100.0, gt=0)
-    simulated_aov: float = Field(150.0, gt=0)
+    baseline_aov: float = Field(DEFAULT_AOV_INR, gt=0)
+    simulated_aov: float = Field(DEFAULT_AOV_INR * 1.5, gt=0)
     simulated_weather_condition: Optional[str] = Field(None, json_schema_extra={"example": "rainy"})
     simulated_hour: Optional[int] = Field(None, ge=0, le=23, json_schema_extra={"example": 13})
 

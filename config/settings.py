@@ -55,6 +55,7 @@ HOLIDAY_CACHE_TTL_SEC = int(os.getenv("HOLIDAY_CACHE_TTL_SEC", "604800"))
 DEFAULT_AOV_INR = float(os.getenv("DEFAULT_AOV_INR", "100.0"))
 DEFAULT_VARIABLE_COST_RATE = float(os.getenv("DEFAULT_VARIABLE_COST_RATE", "0.38"))
 DEFAULT_FIXED_COST_PER_DAY_INR = float(os.getenv("DEFAULT_FIXED_COST_PER_DAY_INR", "500.0"))
+DEFAULT_OPERATING_HOURS_PER_DAY = float(os.getenv("DEFAULT_OPERATING_HOURS_PER_DAY", "13.0"))
 
 # ---------------------------------------------------------------------------
 # Fuel & Economics
