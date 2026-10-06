@@ -28,26 +28,41 @@ except ImportError as e:
 
 
 class HolidayClient:
-    def __init__(self, country: str = "IN", years: list[int] | None = None, subdiv: str | None = None):
+    def __init__(self, country: str = "IN", years: list[int] | None = None, subdiv: str | None = "AP"):
         """
         country: ISO country code, e.g. "IN" for India.
-        subdiv: optional state/region subdivision if the library supports it
-                for finer-grained regional holidays (e.g. state-specific festivals).
+        subdiv: State subdivision (defaults to "AP" for Andhra Pradesh).
         """
         self.country = country
+        self.subdiv = subdiv
         self.calendar = holidays_lib.country_holidays(country, years=years, subdiv=subdiv)
 
+    def is_holiday(self, date_val) -> tuple[bool, str]:
+        """Check if a single date is an official holiday."""
+        d = pd.to_datetime(date_val).date()
+        name = self.calendar.get(d)
+        return (name is not None, name or "")
+
+    def is_weekend(self, date_val) -> bool:
+        """Check if a single date is a weekend (Saturday or Sunday)."""
+        dt = pd.to_datetime(date_val)
+        return bool(dt.dayofweek >= 5)
+
     def get_holiday_flags(self, dates: pd.DatetimeIndex) -> pd.DataFrame:
-        """Returns a DataFrame: date, is_holiday, holiday_name, source."""
+        """Returns a DataFrame: date, is_holiday, holiday_name, is_weekend, source, source_type."""
         rows = []
         for d in dates:
-            d_date = d.date() if hasattr(d, "date") else d
+            d_date = d.date() if hasattr(d, "date") else pd.to_datetime(d).date()
             name = self.calendar.get(d_date)
+            dt = pd.to_datetime(d)
             rows.append({
                 "date": d,
                 "is_holiday": name is not None,
                 "holiday_name": name or "",
+                "is_weekend": bool(dt.dayofweek >= 5),
                 "source": "real:holidays-lib",
+                "source_type": "real_offline",
+                "source_name": f"holidays-{self.country.lower()}-{self.subdiv.lower() if self.subdiv else 'all'}",
             })
         return pd.DataFrame(rows)
 
