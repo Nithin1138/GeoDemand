@@ -17,57 +17,69 @@ from __future__ import annotations
 import logging
 from typing import List, Tuple
 
+import h3
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
 # Water Body Exclusion Polygons (Vijayawada Region & Krishna River Corridor)
 # ---------------------------------------------------------------------------
 
-# Krishna River Corridor: Upstream (Kondapalli / Ibrahimpatnam) ->
+# Main Krishna River Corridor: Upstream (Kondapalli / Ibrahimpatnam) ->
 # Prakasam Barrage -> Downstream (Krishnalanka / Tadepalle / Yanamalakuduru)
 KRISHNA_RIVER_POLYGON: List[Tuple[float, float]] = [
-    (16.560, 80.495),
-    (16.550, 80.525),
-    (16.540, 80.555),
-    (16.530, 80.580),
-    (16.518, 80.600),
-    (16.512, 80.614),  # North bank - Durga Ghat / Kanaka Durga
-    (16.506, 80.622),  # Prakasam Barrage North / Governorpet riverbank
-    (16.495, 80.642),  # Krishnalanka bank
-    (16.485, 80.665),  # Ranigarithota bank
-    (16.475, 80.690),  # Tarakarama Nagar riverbank
-    (16.455, 80.725),  # Downstream exit North
-    (16.445, 80.715),  # Downstream exit South
-    (16.465, 80.678),  # South bank - Yanamalakuduru / Penumaka
-    (16.478, 80.648),  # South bank - Undavalli / Tadepalle
-    (16.490, 80.628),  # South bank - Seethanagaram
-    (16.502, 80.608),  # Prakasam Barrage South (Seethanagaram hill base)
-    (16.512, 80.580),  # South bank upstream (Venkatapalem)
-    (16.525, 80.545),  # South bank upstream (Mandadam / Rayapudi)
-    (16.540, 80.505),  # South bank upstream (Amaravati bank)
+    (16.570, 80.485),
+    (16.555, 80.520),
+    (16.545, 80.550),
+    (16.535, 80.575),
+    (16.520, 80.598),
+    (16.514, 80.612),  # North bank - Durga Ghat / Kanaka Durga
+    (16.508, 80.622),  # Prakasam Barrage North / Governorpet riverbank
+    (16.498, 80.642),  # Krishnalanka bank
+    (16.488, 80.665),  # Ranigarithota bank
+    (16.478, 80.690),  # Tarakarama Nagar riverbank
+    (16.455, 80.730),  # Downstream exit North
+    (16.440, 80.718),  # Downstream exit South
+    (16.460, 80.680),  # South bank - Yanamalakuduru / Penumaka
+    (16.475, 80.650),  # South bank - Undavalli / Tadepalle
+    (16.488, 80.630),  # South bank - Seethanagaram
+    (16.500, 80.608),  # Prakasam Barrage South (Seethanagaram hill base)
+    (16.510, 80.578),  # South bank upstream (Venkatapalem)
+    (16.522, 80.540),  # South bank upstream (Mandadam / Rayapudi)
+    (16.538, 80.495),  # South bank upstream (Amaravati bank)
+]
+
+# Prakasam Barrage Deep Reservoir & Seethanagaram Lock
+PRAKASAM_BARRAGE_RESERVOIR_POLYGON: List[Tuple[float, float]] = [
+    (16.512, 80.605),
+    (16.515, 80.625),
+    (16.505, 80.632),
+    (16.495, 80.625),
+    (16.498, 80.605),
 ]
 
 # Bhavani Island Backwater Lagoon / River Split
 BHAVANI_ISLAND_WATER_POLYGON: List[Tuple[float, float]] = [
-    (16.528, 80.575),
-    (16.525, 80.590),
-    (16.518, 80.592),
-    (16.515, 80.580),
-    (16.520, 80.568),
+    (16.532, 80.570),
+    (16.528, 80.595),
+    (16.515, 80.595),
+    (16.512, 80.575),
+    (16.522, 80.560),
 ]
 
-# Gundala / Eluru Canal reservoir pond & water basin
-ELURU_CANAL_BASIN: List[Tuple[float, float]] = [
-    (16.520, 80.640),
-    (16.522, 80.645),
-    (16.518, 80.648),
-    (16.515, 80.642),
+# Gundala / Eluru Canal reservoir pond & Ryves Canal junction
+CANAL_WATER_BASINS_POLYGON: List[Tuple[float, float]] = [
+    (16.524, 80.636),
+    (16.525, 80.648),
+    (16.516, 80.652),
+    (16.512, 80.638),
 ]
 
 ALL_WATER_POLYGONS = [
     KRISHNA_RIVER_POLYGON,
+    PRAKASAM_BARRAGE_RESERVOIR_POLYGON,
     BHAVANI_ISLAND_WATER_POLYGON,
-    ELURU_CANAL_BASIN,
+    CANAL_WATER_BASINS_POLYGON,
 ]
 
 
@@ -97,28 +109,54 @@ def is_water_location(lat: float, lng: float) -> bool:
     return False
 
 
+def is_water_cell(h3_cell: str) -> bool:
+    """
+    Comprehensive H3 cell water test.
+    Checks centroid AND boundary vertices to ensure no partial river/water cell passes.
+    """
+    try:
+        lat, lng = h3.cell_to_latlng(h3_cell)
+        if is_water_location(lat, lng):
+            return True
+
+        boundary = h3.cell_to_boundary(h3_cell)
+        water_vertex_count = sum(1 for b_lat, b_lng in boundary if is_water_location(b_lat, b_lng))
+        # If 2 or more vertices are in water, reject as a water cell
+        if water_vertex_count >= 2:
+            return True
+    except Exception:
+        pass
+    return False
+
+
 def is_suitable_vendor_cell(
     lat: float,
     lng: float,
+    h3_cell: str | None = None,
     static_features: dict | None = None,
 ) -> bool:
     """
     Determine if an H3 cell location is physically suitable for street vendors.
 
     Checks:
-      1. Water exclusion (rivers, reservoirs, dams, canals)
-      2. If static features provided: road density & POI access
+      1. Water exclusion (rivers, reservoirs, dams, canals) for point and cell boundary
+      2. If static features provided: road density, POI access & non-barren terrain
     """
     if is_water_location(lat, lng):
+        return False
+
+    if h3_cell and is_water_cell(h3_cell):
         return False
 
     if static_features:
         road_density = float(static_features.get("road_density", 1.0))
         pop_density = float(static_features.get("population_density", 100.0))
         building_density = float(static_features.get("building_density", 0.1))
+        total_pois = float(static_features.get("total_pois", 1.0))
 
-        # Completely unroaded / 0-building / 0-population cells are unsuitable
-        if road_density <= 0.01 and pop_density <= 10 and building_density <= 0.01:
+        # Completely unroaded / zero-POI / zero-building / zero-population cells are unsuitable for vendors
+        if road_density <= 0.02 and pop_density <= 10 and building_density <= 0.01 and total_pois <= 0:
             return False
 
     return True
+

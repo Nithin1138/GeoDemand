@@ -2,14 +2,19 @@
 Event provider abstraction layer.
 
 Provider hierarchy:
-  1. EventbriteProvider       — real live public events (when EVENTBRITE_TOKEN is set)
-  2. StochasticEventProvider   — reads from events.parquet (simulated stochastic event model)
+  1. PredictHQProvider         — real live events with attendance estimates (PREDICTHQ_API_KEY)
+  2. TicketmasterProvider      — large-scale events with venue data (TICKETMASTER_API_KEY)
+  3. EventbriteProvider        — real live public events (EVENTBRITE_TOKEN)
+  4. StochasticEventProvider   — reads from events.parquet (simulated stochastic event model)
 
 Configured via EVENT_PROVIDER in .env:
-  - "auto"       -> uses Eventbrite if key present, else stochastic
-  - "eventbrite" -> forces Eventbrite provider
-  - "simulated"  -> forces stochastic simulation provider
+  - "auto"          -> tries PredictHQ → Ticketmaster → Eventbrite → stochastic
+  - "predicthq"     -> forces PredictHQ provider
+  - "ticketmaster"  -> forces Ticketmaster provider
+  - "eventbrite"    -> forces Eventbrite provider
+  - "simulated"     -> forces stochastic simulation provider
 """
+
 
 from __future__ import annotations
 
@@ -152,12 +157,191 @@ class StochasticEventProvider(EventProvider):
         }
 
 
+# ---------------------------------------------------------------------------
+# PredictHQ Provider (Premium — best attendance estimates)
+# ---------------------------------------------------------------------------
+
+class PredictHQProvider(EventProvider):
+    """
+    PredictHQ Events API — real events with actual attendance ML forecasts.
+    The gold standard for event-driven demand signals.
+
+    Set PREDICTHQ_API_KEY env var.
+    Get free key at: https://www.predicthq.com/
+    Free tier: 1,000 events/month (Control Center plan).
+
+    Steps to get free API key:
+      1. Go to https://www.predicthq.com/
+      2. Click "Get Started Free"
+      3. Register with email
+      4. Go to API Credentials → Create Token
+      5. Set PREDICTHQ_API_KEY=<your_token>
+    """
+    source_type = "real_live"
+    source_name = "predicthq_api"
+
+    BASE_URL = "https://api.predicthq.com/v1/events/"
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.environ.get("PREDICTHQ_API_KEY")
+        if not self.api_key:
+            raise EnvironmentError("PREDICTHQ_API_KEY not set.")
+        self._cache: Dict[str, dict] = {}
+        self._cache_ttl = 900  # 15 minutes
+
+    def get_event_importance(self, h3_cell: str, timestamp: datetime) -> dict:
+        import h3 as h3lib
+        lat, lng = h3lib.cell_to_latlng(h3_cell)
+        cache_key = f"phq_{h3_cell}_{timestamp.strftime('%Y%m%d%H')}"
+        now_ts = time.time()
+
+        if cache_key in self._cache and now_ts - self._cache[cache_key]["ts"] < self._cache_ttl:
+            return {**self._cache[cache_key]["data"], "from_cache": True}
+
+        try:
+            resp = requests.get(
+                self.BASE_URL,
+                headers={"Authorization": f"Bearer {self.api_key}"},
+                params={
+                    "within": f"2km@{lat},{lng}",
+                    "active.gte": timestamp.strftime("%Y-%m-%d"),
+                    "active.lte": timestamp.strftime("%Y-%m-%d"),
+                    "sort": "rank",
+                    "limit": 5,
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            results = data.get("results", [])
+            if results:
+                top = results[0]
+                phq_rank = top.get("phq_attendance", top.get("rank", 50))
+                importance = min(1.0, phq_rank / 100.0)
+                res = {
+                    "event_active": True,
+                    "event_importance": round(importance, 3),
+                    "event_type": top.get("category", "local_event"),
+                    "event_attendance_estimate": top.get("phq_attendance"),
+                    "event_title": top.get("title"),
+                    "source_type": self.source_type,
+                    "source_name": self.source_name,
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    "note": f"PredictHQ live event: {top.get('title', '')}",
+                }
+                self._cache[cache_key] = {"data": res, "ts": now_ts}
+                return res
+        except Exception as e:
+            logger.warning(f"PredictHQ API failed: {e}. Falling back.")
+
+        return StochasticEventProvider().get_event_importance(h3_cell, timestamp)
+
+
+# ---------------------------------------------------------------------------
+# Ticketmaster Provider (Free — large venue events)
+# ---------------------------------------------------------------------------
+
+class TicketmasterProvider(EventProvider):
+    """
+    Ticketmaster Discovery API — concerts, sports, and large venue events.
+
+    Set TICKETMASTER_API_KEY env var.
+    Get free key at: https://developer.ticketmaster.com/
+    Free tier: 5,000 API calls/day — completely free.
+
+    Steps to get free API key:
+      1. Go to https://developer.ticketmaster.com/
+      2. Click "Get Your API Key"
+      3. Register / sign in with a Ticketmaster account
+      4. Create an app → copy the Consumer Key
+      5. Set TICKETMASTER_API_KEY=<consumer_key>
+    """
+    source_type = "real_live"
+    source_name = "ticketmaster_api"
+
+    BASE_URL = "https://app.ticketmaster.com/discovery/v2/events.json"
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.environ.get("TICKETMASTER_API_KEY")
+        if not self.api_key:
+            raise EnvironmentError("TICKETMASTER_API_KEY not set.")
+        self._cache: Dict[str, dict] = {}
+        self._cache_ttl = 900
+
+    def get_event_importance(self, h3_cell: str, timestamp: datetime) -> dict:
+        import h3 as h3lib
+        lat, lng = h3lib.cell_to_latlng(h3_cell)
+        cache_key = f"tm_{h3_cell}_{timestamp.strftime('%Y%m%d%H')}"
+        now_ts = time.time()
+
+        if cache_key in self._cache and now_ts - self._cache[cache_key]["ts"] < self._cache_ttl:
+            return {**self._cache[cache_key]["data"], "from_cache": True}
+
+        try:
+            resp = requests.get(
+                self.BASE_URL,
+                params={
+                    "apikey": self.api_key,
+                    "latlong": f"{lat},{lng}",
+                    "radius": "2",
+                    "unit": "km",
+                    "startDateTime": timestamp.strftime("%Y-%m-%dT%H:%M:%SZ"),
+                    "size": 5,
+                    "sort": "relevance,desc",
+                },
+                timeout=10,
+            )
+            resp.raise_for_status()
+            data = resp.json()
+            events = data.get("_embedded", {}).get("events", [])
+            if events:
+                ev = events[0]
+                venue = ev.get("_embedded", {}).get("venues", [{}])[0]
+                capacity = venue.get("generalInfo", {}).get("generalRule")
+                res = {
+                    "event_active": True,
+                    "event_importance": 0.80,
+                    "event_type": ev.get("classifications", [{}])[0].get("segment", {}).get("name", "entertainment"),
+                    "event_attendance_estimate": None,  # Ticketmaster doesn't expose capacity directly
+                    "event_title": ev.get("name"),
+                    "event_venue": venue.get("name"),
+                    "source_type": self.source_type,
+                    "source_name": self.source_name,
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    "note": f"Ticketmaster event: {ev.get('name', '')}",
+                }
+                self._cache[cache_key] = {"data": res, "ts": now_ts}
+                return res
+        except Exception as e:
+            logger.warning(f"Ticketmaster API failed: {e}. Falling back.")
+
+        return StochasticEventProvider().get_event_importance(h3_cell, timestamp)
+
+
+# ---------------------------------------------------------------------------
+# Factory
+# ---------------------------------------------------------------------------
+
 class EventProviderFactory:
-    """Selects event provider according to EVENT_PROVIDER configuration."""
+    """Selects event provider according to EVENT_PROVIDER configuration.
+    Auto priority: PredictHQ → Ticketmaster → Eventbrite → Stochastic
+    """
 
     @staticmethod
     def get_provider(preferred: str = "auto") -> EventProvider:
         pref = preferred.lower() if preferred != "auto" else os.getenv("EVENT_PROVIDER", "auto").lower()
+
+        if pref == "predicthq" or (pref == "auto" and os.getenv("PREDICTHQ_API_KEY")):
+            try:
+                return PredictHQProvider()
+            except Exception as e:
+                logger.info(f"PredictHQ provider unavailable ({e}).")
+
+        if pref == "ticketmaster" or (pref == "auto" and os.getenv("TICKETMASTER_API_KEY")):
+            try:
+                return TicketmasterProvider()
+            except Exception as e:
+                logger.info(f"Ticketmaster provider unavailable ({e}).")
 
         if pref in ("eventbrite", "real", "live") or (pref == "auto" and os.getenv("EVENTBRITE_TOKEN")):
             try:
@@ -168,3 +352,4 @@ class EventProviderFactory:
         return StochasticEventProvider()
 
     create = get_provider
+
