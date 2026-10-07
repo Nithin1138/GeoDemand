@@ -22,8 +22,17 @@ import numpy as np
 import pandas as pd
 
 ROOT = Path(__file__).parent.parent.parent
-logger = logging.getLogger(__name__)
+if str(ROOT) not in sys.path:
+    sys.path.insert(0, str(ROOT))
 
+from config.settings import (
+    DEFAULT_AOV_INR,
+    DEFAULT_VARIABLE_COST_RATE,
+    DEFAULT_FIXED_COST_PER_DAY_INR,
+    DEFAULT_OPERATING_HOURS_PER_DAY,
+)
+
+logger = logging.getLogger(__name__)
 MODELS_DIR = ROOT / "models"
 
 
@@ -232,26 +241,65 @@ class DemandModel:
 
 def calculate_business_metrics(
     expected_customers: int,
-    aov: float,
-    variable_cost_rate: float,
-    fixed_cost_per_day: float,
-    hours_per_day: int = 13,
+    aov: float = DEFAULT_AOV_INR,
+    variable_cost_rate: float = DEFAULT_VARIABLE_COST_RATE,
+    fixed_cost_per_day: float = DEFAULT_FIXED_COST_PER_DAY_INR,
+    hours_per_day: float = DEFAULT_OPERATING_HOURS_PER_DAY,
     fuel_cost: float = 0.0,
+    travel_time_minutes: float = 0.0,
 ) -> dict:
-    """Derive revenue, operating costs, and net hourly profit from demand prediction."""
+    """
+    Derive expected revenue, expected operating costs, and net expected hourly profit
+    from customer predictions based on configurable business assumptions.
+
+    Includes travel time operating window reduction & relocation-adjusted realized profit calculation:
+      travel_fraction = max(0.0, (60.0 - travel_time_minutes) / 60.0)
+      relocation_adjusted_realized_profit = candidate_predicted_profit * travel_fraction - fuel_cost
+    """
+    aov = float(aov) if aov is not None else DEFAULT_AOV_INR
+    variable_cost_rate = float(variable_cost_rate) if variable_cost_rate is not None else DEFAULT_VARIABLE_COST_RATE
+    fixed_cost_per_day = float(fixed_cost_per_day) if fixed_cost_per_day is not None else DEFAULT_FIXED_COST_PER_DAY_INR
+    hours_per_day = float(hours_per_day) if hours_per_day and hours_per_day > 0 else DEFAULT_OPERATING_HOURS_PER_DAY
+    travel_time_minutes = max(0.0, float(travel_time_minutes)) if travel_time_minutes is not None else 0.0
+    fuel_cost = max(0.0, float(fuel_cost)) if fuel_cost is not None else 0.0
+
+    # Step 1: Expected Revenue = Expected Customers * Average Spend (AOV)
     revenue = round(expected_customers * aov, 2)
+
+    # Step 2: Expected Base Operating Costs = Variable COGS + Hourly Fixed Overhead
     ingredient_cost = round(revenue * variable_cost_rate, 2)
     hourly_fixed = round(fixed_cost_per_day / hours_per_day, 2)
-    operating_cost = round(ingredient_cost + hourly_fixed + fuel_cost, 2)
-    profit = round(revenue - operating_cost, 2)
+    base_operating_cost = round(ingredient_cost + hourly_fixed, 2)
+    total_operating_cost = round(base_operating_cost + fuel_cost, 2)
+
+    # Step 3: Candidate Predicted Profit = Expected Revenue - Base Operating Cost
+    candidate_predicted_profit = round(revenue - base_operating_cost, 2)
+    net_predicted_profit = round(revenue - total_operating_cost, 2)
+
+    # Step 4: Travel Fraction & Relocation-Adjusted Realized Profit Approximation
+    travel_fraction = round(max(0.0, (60.0 - travel_time_minutes) / 60.0), 4)
+    relocation_adjusted_realized_profit = round(candidate_predicted_profit * travel_fraction - fuel_cost, 2)
+
     return {
         "expected_customers": expected_customers,
+        "average_spend_inr": aov,
+        "average_order_value_inr": aov,
         "expected_revenue_inr": revenue,
-        "expected_operating_cost_inr": operating_cost,
-        "expected_profit_inr": profit,
+        "expected_costs_inr": total_operating_cost,
+        "expected_operating_cost_inr": total_operating_cost,
+        "base_operating_cost_inr": base_operating_cost,
+        "expected_profit_inr": net_predicted_profit,
+        "candidate_predicted_profit_inr": candidate_predicted_profit,
         "ingredient_cost_inr": ingredient_cost,
         "fixed_cost_per_hour_inr": hourly_fixed,
         "fuel_cost_inr": fuel_cost,
+        "travel_time_minutes": travel_time_minutes,
+        "travel_fraction": travel_fraction,
+        "relocation_adjusted_realized_profit_inr": relocation_adjusted_realized_profit,
+        "realized_next_hour_profit_inr": relocation_adjusted_realized_profit,
+        "variable_cost_rate": variable_cost_rate,
+        "fixed_cost_per_day_inr": fixed_cost_per_day,
+        "operating_hours_per_day": hours_per_day,
     }
 
 
@@ -272,7 +320,10 @@ def rank_candidates(candidates: list[dict]) -> list[dict]:
     """
     Score = 0.60 × profit_norm + 0.25 × demand_norm - 0.10 × distance_norm - 0.05 × competition_norm
     """
-    profits = [c["expected_profit_inr"] for c in candidates]
+    profits = [
+        c.get("relocation_adjusted_realized_profit_inr", c.get("realized_next_hour_profit_inr", c.get("expected_profit_inr", 0)))
+        for c in candidates
+    ]
     demands = [c["expected_customers"] for c in candidates]
     distances = [c["distance_km"] for c in candidates]
     comp_scores = [c.get("competition_score", 0.3) for c in candidates]
