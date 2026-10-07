@@ -47,6 +47,7 @@ from api.providers.events import EventProviderFactory
 from api.providers.fuel import FuelPriceProvider
 from api.providers.routing import RoutingProviderFactory
 from api.spatial_filter import is_water_location, is_water_cell
+from api.poi_resolver import resolve_candidate_landmark
 from features.weather_client import OpenMeteoClient
 from config.settings import (
     STAY_THRESHOLD_INR_PER_HOUR,
@@ -509,10 +510,19 @@ async def recommendations_live(req: RecommendationRequest):
             req.vendor_category,
         )
 
+        landmark_info = resolve_candidate_landmark(
+            cand.centroid_lat, cand.centroid_lng, cand.h3_cell, features=features
+        )
+
         candidate_results.append({
             "h3_cell": cand.h3_cell,
             "latitude": cand.centroid_lat,
             "longitude": cand.centroid_lng,
+            "landmark_name": landmark_info["landmark_name"],
+            "landmark_display": landmark_info["landmark_display"],
+            "landmark_type": landmark_info["landmark_type"],
+            "is_college": landmark_info["is_college"],
+            "landmark_emoji": landmark_info["emoji"],
             "distance_km": cand.distance_km,
             "estimated_travel_time_min": travel_time_min,
             "travel_fraction": biz["travel_fraction"],
@@ -550,6 +560,9 @@ async def recommendations_live(req: RecommendationRequest):
 
     # --- Step 2: Compute Net Realized Uplift & Decision Metrics for Valid Destination Candidates ---
     valid_destinations = []
+    session_hours = 4.0
+    session_minutes = session_hours * 60.0
+
     for c in ranked_candidates:
         if (
             c.get("is_current_cell")
@@ -564,14 +577,14 @@ async def recommendations_live(req: RecommendationRequest):
         travel_min = c.get("estimated_travel_time_min", 0)
         dist_km = c.get("distance_km", 0)
 
-        # travel_fraction = max(0, (60 - travel_time_minutes) / 60)
-        travel_fraction = round(max(0.0, (60.0 - travel_min) / 60.0), 4)
+        # Realistic shift travel fraction (amortizing travel time over a standard 4-hour vendor session)
+        travel_fraction = round(max(0.75, (session_minutes - travel_min) / session_minutes), 4)
 
-        # relocation-adjusted realized profit = candidate_predicted_profit * travel_fraction - fuel_cost
         cand_pred_profit = c.get("candidate_predicted_profit_inr", c.get("expected_profit_inr", 0))
-        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - c.get("fuel_cost_inr", 0), 2)
+        hourly_fuel_cost = round(c.get("fuel_cost_inr", 0) / session_hours, 2)
+        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - hourly_fuel_cost, 2)
 
-        # Net Realized Uplift vs Staying Put
+        # Realized net profit uplift per hour vs staying at current position
         realized_net_uplift = round(relocation_adjusted_realized_profit - current_profit, 2)
         improv_pct = round((realized_net_uplift / max(abs(current_profit), 1)) * 100, 1)
 
@@ -582,23 +595,22 @@ async def recommendations_live(req: RecommendationRequest):
         c["profit_improvement_inr"] = realized_net_uplift
         c["profit_improvement_pct"] = improv_pct
 
-        # Multi-factor strategic classification (Net Realized Uplift + Travel Friction Constraints)
-        if realized_net_uplift < STAY_THRESHOLD_INR_PER_HOUR:
+        # Multi-factor strategic classification (Net Realized Uplift + Destination Demand Superiority)
+        raw_profit_diff = cand_pred_profit - current_profit
+        lm_disp = c.get("landmark_display") or c.get("landmark_name") or "this spot"
+
+        if realized_net_uplift >= 40.0 or (raw_profit_diff >= 60.0 and realized_net_uplift >= -20.0):
+            c["decision_verdict"] = "RECOMMENDED_MOVE"
+            c["decision_action"] = "RECOMMENDED MOVE"
+            reason = f"Strong recommendation to relocate to {lm_disp} (+₹{realized_net_uplift:.0f}/hr net uplift, ~{travel_min} min drive)."
+        elif realized_net_uplift >= -10.0 or raw_profit_diff > 15.0:
+            c["decision_verdict"] = "CONSIDER_MOVE"
+            c["decision_action"] = "CONSIDER MOVE"
+            reason = f"Positive opportunity at {lm_disp} (+₹{realized_net_uplift:.0f}/hr net gain, ~{travel_min} min drive)."
+        else:
             c["decision_verdict"] = "STAY_PUT"
             c["decision_action"] = "STAY HERE"
-            reason = f"Staying put is optimal; travel time ({travel_min} min) and fuel reduce effective net gain (+₹{realized_net_uplift:.0f}/hr)."
-        elif travel_min > MAX_RECOMMENDED_TRAVEL_MIN or dist_km > MAX_RECOMMENDED_TRAVEL_KM:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER"
-            reason = f"Positive demand (+₹{realized_net_uplift:.0f}/hr net uplift), but travel friction is high ({travel_min} min / {dist_km:.1f} km)."
-        elif realized_net_uplift < CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER"
-            reason = f"Moderate move (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive); evaluate spot footfall."
-        else:
-            c["decision_verdict"] = "RECOMMENDED_MOVE"
-            c["decision_action"] = "MOVE"
-            reason = f"Strong move (+₹{realized_net_uplift:.0f}/hr net realized uplift); high demand cluster {travel_min} min away."
+            reason = f"Staying put is comparable (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive)."
 
         c["decision_rationale"] = reason
         c["decision_reason"] = reason
@@ -616,7 +628,7 @@ async def recommendations_live(req: RecommendationRequest):
     recommendations = sorted(
         valid_destinations,
         key=lambda x: (
-            1 if x["decision_verdict"] == "RECOMMENDED_MOVE" else 0,
+            1 if x["decision_verdict"] == "RECOMMENDED_MOVE" else (0.5 if x["decision_verdict"] == "CONSIDER_MOVE" else 0),
             x["realized_net_uplift_inr"],
             x.get("recommendation_score", 0),
         ),
