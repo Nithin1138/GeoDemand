@@ -512,6 +512,22 @@ async function renderResults(data) {
       .bindPopup(buildPopup(rec, travelTimeMin, roadDistKm))
       .addTo(recommendationLayer);
 
+    // Floating Landmark Label on top of map pin for top 5 recommendations
+    const landmarkText = rec.landmark_display || rec.landmark_name || `Location #${rec.rank}`;
+    const isCollege = rec.is_college || rec.landmark_type === 'College';
+    const landmarkBadgeIcon = L.divIcon({
+      className: '',
+      html: `
+        <div class="map-landmark-badge ${isCollege ? 'college-badge' : ''}">
+          <span class="map-landmark-rank">#${rec.rank}</span>
+          <span class="map-landmark-text">${landmarkText}</span>
+        </div>
+      `,
+      iconSize: [200, 30],
+      iconAnchor: [100, 48],
+    });
+    L.marker([rec.latitude, rec.longitude], { icon: landmarkBadgeIcon, zIndexOffset: 1200 - idx }).addTo(recommendationLayer);
+
     // Build recommendation card
     const card = buildRecCard(rec, curProfit, travelTimeMin, roadDistKm);
     list.appendChild(card);
@@ -533,9 +549,11 @@ async function renderResults(data) {
 }
 
 function buildPopup(rec, travelTimeMin, roadDistKm) {
+  const landmarkTitle = rec.landmark_display || rec.landmark_name || `Recommendation #${rec.rank}`;
   return `
-    <div style="min-width:180px;padding:4px;">
-      <div style="font-weight:700;color:#10b981;margin-bottom:4px;">🏆 Recommendation #${rec.rank}</div>
+    <div style="min-width:200px;padding:4px;">
+      <div style="font-weight:700;color:#10b981;margin-bottom:2px;">🏆 Recommendation #${rec.rank}</div>
+      <div style="font-weight:800;color:#f8fafc;font-size:13px;margin-bottom:6px;">${landmarkTitle}</div>
       <div style="color:#94a3b8;font-size:11px;margin-bottom:8px;">H3: ${rec.h3_cell}</div>
       <div style="background:#0f1620;border-radius:6px;padding:6px 8px;margin-bottom:8px;font-size:11px;color:#38bdf8;">
         🚗 <b>${travelTimeMin} min drive</b> (${roadDistKm} km via road)
@@ -555,6 +573,9 @@ function buildRecCard(rec, curProfit, travelTimeMin, roadDistKm) {
   const card = document.createElement('div');
   card.className = `rec-card${rec.rank === 1 ? ' rank-1' : ''}`;
 
+  const landmarkTitle = rec.landmark_display || rec.landmark_name || `Recommendation #${rec.rank}`;
+  const isCollege = rec.is_college || rec.landmark_type === 'College';
+
   const improvPct = rec.profit_improvement_pct;
   const improvInr = rec.profit_improvement_inr;
   const hasImprove = improvPct != null;
@@ -569,9 +590,14 @@ function buildRecCard(rec, curProfit, travelTimeMin, roadDistKm) {
   const verdictCls = rec.decision_verdict === 'STAY_PUT' ? 'chip-verdict-stay' : rec.decision_verdict === 'CONSIDER_MOVE' ? 'chip-verdict-consider' : 'chip-verdict-move';
   const verdictEmoji = rec.decision_verdict === 'STAY_PUT' ? '🔵' : rec.decision_verdict === 'CONSIDER_MOVE' ? '🟡' : '🟢';
 
-    const uncLevel = (interval.uncertainty_level || interval.certainty_level || 'MODERATE').toUpperCase();
+  const uncLevel = (interval.uncertainty_level || interval.certainty_level || 'MODERATE').toUpperCase();
 
-    card.innerHTML = `
+  card.innerHTML = `
+    <div class="rec-landmark-header ${isCollege ? 'college-header' : ''}">
+      <div class="landmark-name-title">${landmarkTitle}</div>
+      ${isCollege ? '<span class="college-tag-pill">🎓 COLLEGE CAMPUS</span>' : `<span class="landmark-type-tag">${rec.landmark_type || 'Landmark Area'}</span>`}
+    </div>
+
     <div class="rec-header">
       <div class="rec-rank ${rankBadgeClass}">#${rec.rank}</div>
       <div class="rec-cell-id">${rec.h3_cell.substring(0, 10)}…</div>

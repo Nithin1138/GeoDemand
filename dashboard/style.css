@@ -904,3 +904,100 @@ html, body {
 }
 .leaflet-popup-tip { background: var(--bg-card) !important; }
 .leaflet-popup-content { font-family: var(--font-sans) !important; font-size: 13px !important; }
+
+/* ── MAP LANDMARK BADGES ── */
+.map-landmark-badge {
+  background: rgba(15, 23, 42, 0.92);
+  border: 1.5px solid var(--accent-blue);
+  border-radius: 8px;
+  padding: 4px 8px;
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  backdrop-filter: blur(8px);
+}
+
+.map-landmark-badge.college-badge {
+  border-color: #f59e0b;
+  background: rgba(30, 20, 5, 0.94);
+}
+
+.map-landmark-rank {
+  background: var(--accent-blue);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 5px;
+  border-radius: 4px;
+}
+
+.map-landmark-badge.college-badge .map-landmark-rank {
+  background: #f59e0b;
+  color: #000;
+}
+
+.map-landmark-text {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── RECOMMENDATION CARD LANDMARK HEADER ── */
+.rec-landmark-header {
+  background: linear-gradient(135deg, rgba(30, 41, 59, 0.9), rgba(15, 23, 42, 0.9));
+  border: 1px solid var(--border-lit);
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  margin-bottom: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.rec-landmark-header.college-header {
+  background: linear-gradient(135deg, rgba(69, 44, 8, 0.7), rgba(30, 20, 5, 0.85));
+  border-color: rgba(245, 158, 11, 0.45);
+}
+
+.landmark-name-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: #38bdf8;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.college-header .landmark-name-title {
+  color: #fbbf24;
+}
+
+.landmark-type-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(59, 130, 246, 0.2);
+  color: #60a5fa;
+  border: 1px solid rgba(59, 130, 246, 0.3);
+  text-transform: uppercase;
+}
+
+.college-tag-pill {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 2px 8px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.25);
+  color: #fef08a;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  letter-spacing: 0.5px;
+}
+
