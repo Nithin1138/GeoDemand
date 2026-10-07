@@ -71,8 +71,14 @@ temp/
 scratch/
 RESUME.md
 AGENTS.md
+agents.md
+agent1.md
 .agents/
 data/raw/weather/
 
 colab_indetail.md
 COLAB.md
+
+# MLOps & Tracking
+mlruns/
+mlflow.db

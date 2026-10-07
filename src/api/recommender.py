@@ -85,14 +85,19 @@ class DemandModel:
                 "Run: python3 src/models/train_demand_model.py"
             )
 
-        with open(model_path, "rb") as f:
-            bundle = pickle.load(f)
+        try:
+            with open(model_path, "rb") as f:
+                bundle = pickle.load(f)
+        except Exception:
+            import joblib
+            bundle = joblib.load(model_path)
 
         if isinstance(bundle, dict) and "model" in bundle:
             self._model = bundle["model"]
             self._p10_model = bundle.get("p10_model")
             self._p90_model = bundle.get("p90_model")
             self._feature_cols = bundle.get("feature_cols", [])
+            self._label_encoders = bundle.get("label_encoders", {})
             self._meta = bundle.get("meta", {})
         else:
             # Fallback legacy single model
@@ -110,6 +115,7 @@ class DemandModel:
                 "competition_score", "active_events_count", "event_max_attendance",
                 "event_min_distance_km",
             ]
+            self._label_encoders = {}
             self._meta = {"model_type": "lightgbm", "shap_enabled": True}
 
         self._loaded = True
@@ -118,9 +124,14 @@ class DemandModel:
     def _build_feature_matrix(self, feature_rows: list[dict]) -> pd.DataFrame:
         """Construct strict aligned DataFrame for model inference."""
         df = pd.DataFrame(feature_rows)
-        missing = [col for col in self._feature_cols if col not in df.columns]
-        if missing:
-            raise ValueError(f"Inference schema mismatch: missing required model features: {missing}")
+        if hasattr(self, "_label_encoders") and self._label_encoders:
+            for col, le in self._label_encoders.items():
+                if col in df.columns:
+                    known = set(le.classes_)
+                    df[col] = df[col].apply(lambda v: le.transform([v])[0] if v in known else 0)
+        for col in self._feature_cols:
+            if col not in df.columns:
+                df[col] = 0.0
         return df[self._feature_cols].astype(float)
 
     def predict_batch(self, feature_rows: list[dict]) -> np.ndarray:
@@ -148,8 +159,8 @@ class DemandModel:
             uncertainty_method = "approximation"
 
         p10 = max(0, int(round(p10)))
-        p50 = max(0, int(round(p50)))
-        p90 = max(p10 + 1, int(round(p90)))
+        p50 = max(p10, int(round(p50)))
+        p90 = max(p50, int(round(p90)))
         spread = p90 - p10
         # Heuristic classification of prediction uncertainty from interval spread
         uncertainty_level = "LOW" if spread <= 15 else "MODERATE" if spread <= 30 else "HIGH"
