@@ -1,0 +1,102 @@
+{
+  "feature_columns": [
+    "average_order_value",
+    "building_density",
+    "bus_stop_count",
+    "cloud_cover",
+    "college_count",
+    "commercial_ratio",
+    "competition_score",
+    "event_importance",
+    "hospital_count",
+    "hour",
+    "humidity",
+    "industrial_ratio",
+    "inventory_capacity",
+    "is_holiday",
+    "is_weekend",
+    "mall_count",
+    "metro_station_count",
+    "month",
+    "office_count",
+    "park_count",
+    "parking_count",
+    "population_density",
+    "preparation_time",
+    "pressure",
+    "quarter",
+    "railway_station_count",
+    "rainfall",
+    "residential_ratio",
+    "restaurant_count",
+    "road_density",
+    "school_count",
+    "school_vacation",
+    "season",
+    "temperature",
+    "uv_index",
+    "vendor_category",
+    "visibility",
+    "weekday",
+    "wind_speed"
+  ],
+  "n_features": 39,
+  "categorical_columns": [
+    "weekday",
+    "season",
+    "vendor_category"
+  ],
+  "categorical_mappings": {
+    "weekday": [
+      "Friday",
+      "Monday",
+      "Saturday",
+      "Sunday",
+      "Thursday",
+      "Tuesday",
+      "Wednesday"
+    ],
+    "season": [
+      "monsoon",
+      "post_monsoon",
+      "summer",
+      "winter"
+    ],
+    "vendor_category": [
+      "food",
+      "fruits",
+      "repair",
+      "salon"
+    ]
+  },
+  "target_contract": "expected_customer_count_next_hour",
+  "target_column": "expected_customer_count",
+  "disallowed_targets": [
+    "decision",
+    "demand score",
+    "demand_score",
+    "profit",
+    "recommendation_score",
+    "revenue"
+  ],
+  "forbidden_columns": [
+    "customer_count",
+    "date",
+    "decision",
+    "decision_timestamp",
+    "demand_score",
+    "expected_customer_count",
+    "fuel_cost",
+    "h3_cell_id",
+    "operating_cost",
+    "profit",
+    "recommendation_score",
+    "revenue",
+    "target_timestamp",
+    "timestamp",
+    "vendor_id"
+  ],
+  "dropped_columns": [
+    "weather_condition"
+  ]
+}

@@ -154,14 +154,29 @@ class FeatureAssembler:
         event_att = event.get("event_attendance_estimate")
 
         # --- Assemble complete feature dict ---
+        quarter = (ts.month - 1) // 3 + 1
+        season = _get_season(ts.month)
+        weekday_name = ts.strftime("%A")
+        school_vacation = int(_is_school_vacation(ts.month, ts.weekday()))
+
         features = {
             **static_row,
             **cal_row,
             **weather_row,
+            "weekday": weekday_name,
+            "season": season,
+            "quarter": quarter,
+            "school_vacation": school_vacation,
+            "visibility": float(weather.get("visibility", 10000.0)),
+            "event_importance": event_importance,
             "competition_score": comp_score,
             "active_events_count": 1.0 if (event_active or event_importance > 0.3) else 0.0,
             "event_max_attendance": float(event_att) if event_att is not None else 0.0,
             "event_min_distance_km": 0.5 if event_active else 5.0,
+            "vendor_category": vendor_profile.get("category") or vendor_profile.get("vendor_category", "food"),
+            "inventory_capacity": float(vendor_profile.get("inventory_capacity", 50.0)),
+            "preparation_time": float(vendor_profile.get("preparation_time", 15.0)),
+            "average_order_value": float(vendor_profile.get("average_order_value", 100.0)),
         }
 
         # Data freshness for dashboard display

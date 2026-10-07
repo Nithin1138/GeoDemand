@@ -1,0 +1,61 @@
+"""
+GeoDemand AI — ML Model Test Suite (Member 3)
+
+Dispatches to tests/unit/test_ml_model.py
+"""
+
+from tests.unit.test_ml_model import (
+    TestArtifactReload,
+    TestDeterministicInference,
+    TestFeatureSchema,
+    TestMetricGeneration,
+    TestModelLoad,
+    TestModelMetadata,
+    TestPredictionNonnegative,
+    TestPredictionShape,
+    TestQuantileOrder,
+    TestTemporalSplit,
+    bundle,
+    feature_schema,
+    feature_store,
+    metadata,
+    sample_X,
+    test_artifact_reload,
+    test_deterministic_inference,
+    test_feature_schema,
+    test_metric_generation,
+    test_model_load,
+    test_model_metadata,
+    test_prediction_nonnegative,
+    test_prediction_shape,
+    test_quantile_order,
+    test_temporal_split,
+)
+
+__all__ = [
+    "bundle",
+    "metadata",
+    "feature_schema",
+    "feature_store",
+    "sample_X",
+    "test_model_load",
+    "test_feature_schema",
+    "test_prediction_shape",
+    "test_prediction_nonnegative",
+    "test_quantile_order",
+    "test_deterministic_inference",
+    "test_model_metadata",
+    "test_artifact_reload",
+    "test_temporal_split",
+    "test_metric_generation",
+    "TestModelLoad",
+    "TestFeatureSchema",
+    "TestPredictionShape",
+    "TestPredictionNonnegative",
+    "TestQuantileOrder",
+    "TestDeterministicInference",
+    "TestModelMetadata",
+    "TestArtifactReload",
+    "TestTemporalSplit",
+    "TestMetricGeneration",
+]
