@@ -30,6 +30,10 @@ from tests.unit.test_ml_model import (
     test_prediction_shape,
     test_quantile_order,
     test_temporal_split,
+    test_feature_vectors_training_inference_match,
+    test_unknown_categorical_handling,
+    test_quantile_coverage_and_noncrossing,
+    test_temporal_boundary_independence,
 )
 
 __all__ = [
@@ -48,6 +52,10 @@ __all__ = [
     "test_artifact_reload",
     "test_temporal_split",
     "test_metric_generation",
+    "test_feature_vectors_training_inference_match",
+    "test_unknown_categorical_handling",
+    "test_quantile_coverage_and_noncrossing",
+    "test_temporal_boundary_independence",
     "TestModelLoad",
     "TestFeatureSchema",
     "TestPredictionShape",
