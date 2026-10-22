@@ -1,0 +1,97 @@
+name: GeoDemand AI — Automated ML Pipeline & Quality CI
+
+on:
+  push:
+    branches: [ main, master, "dev/**", "feature/**", "fix/**", "chore/**" ]
+    paths:
+      - "src/geodemand/**"
+      - "src/models/**"
+      - "models/**"
+      - "scripts/**"
+      - "tests/unit/test_ml*"
+      - "tests/test_ml*"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ml-ci.yml"
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - "src/geodemand/**"
+      - "src/models/**"
+      - "models/**"
+      - "scripts/**"
+      - "tests/unit/test_ml*"
+      - "tests/test_ml*"
+      - "requirements.txt"
+      - "pyproject.toml"
+      - "uv.lock"
+      - ".github/workflows/ml-ci.yml"
+  workflow_dispatch:
+    inputs:
+      run_full_validation:
+        description: 'Execute full validation run'
+        required: false
+        default: 'false'
+
+jobs:
+  ml-pipeline-ci:
+    name: ML Quality & Automated Workflow Gate
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: "src:src/data:src/features:src/api:."
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+
+    - name: Install dependencies with uv and lockfile
+      run: |
+        python -m pip install --upgrade pip
+        pip install uv
+        if [ -f "uv.lock" ]; then
+          echo "Installing dependencies using uv lockfile..."
+          uv pip install --system -r requirements.txt
+        else
+          pip install -r requirements.txt
+        fi
+        pip install pytest httpx
+
+    - name: Setup environment configuration
+      run: cp .env.example .env
+
+    - name: Step 1 — Feature Schema & Contract Validation
+      run: |
+        python -c "import json; schema = json.load(open('models/lgbm_v1/feature_schema.json')); assert len(schema['feature_columns']) >= 40, 'Schema feature count check failed'; assert schema['target_column'] == 'expected_customer_count', 'Invalid target contract'; print('[OK] Feature schema contract verified:', len(schema['feature_columns']), 'features')"
+
+    - name: Step 2 — Model Artifact Integrity Verification
+      run: |
+        python -c "import joblib; bundle = joblib.load('models/demand_model.pkl'); assert 'model' in bundle and bundle['model'] is not None, 'Missing champion model'; assert 'p10_model' in bundle and 'p90_model' in bundle, 'Missing quantile models'; print('[OK] Production model bundle integrity verified')"
+
+    - name: Step 3 — Core ML Model Unit Tests
+      run: |
+        python -m pytest tests/unit/test_ml_model.py -v --tb=short
+
+    - name: Step 4 — Monitoring & Drift Detection Unit Tests
+      run: |
+        python -m pytest tests/unit/test_ml_monitoring.py -v --tb=short
+
+    - name: Step 5 — Promotion Gate & Rollback Unit Tests
+      run: |
+        python -m pytest tests/unit/test_ml_promotion.py -v --tb=short
+
+    - name: Step 6 — Automated ML Workflow Smoke Test
+      run: |
+        python scripts/run_ml_workflow.py --smoke
+
+    - name: Step 7 — End-to-End Monitoring & Quality Verification
+      run: |
+        python scripts/verify_ml_monitoring.py

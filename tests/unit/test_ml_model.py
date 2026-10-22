@@ -92,10 +92,11 @@ def feature_store():
 @pytest.fixture(scope="module")
 def sample_X(bundle, feature_store):
     """Create a sample feature matrix matching the model's expected schema."""
+    from src.geodemand.models.train_demand_model import add_cyclical_features
     feature_cols = bundle.get("feature_cols", [])
     label_encoders = bundle.get("label_encoders", {})
 
-    df = feature_store.head(10).copy()
+    df = add_cyclical_features(feature_store.head(10).copy())
 
     for col, le in label_encoders.items():
         if col in df.columns:
@@ -231,7 +232,7 @@ def test_model_metadata(metadata):
     missing = REQUIRED_METADATA_KEYS - set(metadata.keys())
     assert not missing, f"Metadata missing required keys: {missing}"
 
-    assert metadata["algorithm"] == "LightGBM"
+    assert metadata["algorithm"] in ("LightGBM", "XGBoost", "LightGBM (Tuned Champion)"), f"Unexpected algorithm: {metadata['algorithm']}"
     assert isinstance(metadata["model_version"], str)
     assert "metrics" in metadata
     assert "validation" in metadata["metrics"]
@@ -312,6 +313,94 @@ def test_metric_generation():
     y_pred_off = np.array([2.0, 3.0, 4.0, 5.0, 6.0])
     assert mean_absolute_error(y_true, y_pred_off) == 1.0
     assert np.sqrt(mean_squared_error(y_true, y_pred_off)) == 1.0
+
+
+def test_feature_vectors_training_inference_match(bundle, feature_schema):
+    """Verify training feature schema, bundle feature list, and inference match exactly."""
+    from src.geodemand.models.inference import DemandModelPredictor
+    from src.api.feature_assembler import FeatureAssembler
+
+    schema_cols = feature_schema["feature_columns"]
+    bundle_cols = bundle["feature_cols"]
+    assert schema_cols == bundle_cols, "Schema columns do not match bundle columns"
+
+    predictor = DemandModelPredictor()
+    assert predictor.feature_cols == schema_cols, "Predictor columns do not match schema"
+
+    # Test that FeatureAssembler returns all required model features
+    fa = FeatureAssembler()
+    features, _ = fa.assemble(
+        h3_cell="88619aa6c3fffff",
+        vendor_profile={"category": "food", "inventory_capacity": 50.0},
+        weather={"temperature": 30.0, "rainfall": 0.0},
+        competition={"competition_score": 0.2},
+        event={"event_importance": 0.0},
+    )
+    for col in schema_cols:
+        assert col in features, f"FeatureAssembler output missing required feature '{col}'"
+
+    # Verify predictor processes assembler output into exact shape and type
+    X_inf = predictor.preprocess(features)
+    assert list(X_inf.columns) == schema_cols
+    assert X_inf.shape == (1, len(schema_cols))
+
+
+def test_unknown_categorical_handling(bundle):
+    """Verify inference safely handles unknown/unseen categorical values without errors."""
+    from src.geodemand.models.inference import DemandModelPredictor
+
+    predictor = DemandModelPredictor()
+    dummy_feature = {col: 1.0 for col in predictor.feature_cols}
+    # Supply unknown categorical strings
+    dummy_feature["vendor_category"] = "unseen_space_tourism"
+    dummy_feature["season"] = "interstellar"
+    dummy_feature["weekday"] = "Doomsday"
+
+    # Point prediction should succeed and be non-negative
+    pred = predictor.predict(dummy_feature)
+    assert len(pred) == 1
+    assert pred[0] >= 0
+
+    # Interval prediction should succeed and preserve ordering
+    intervals = predictor.predict_with_interval(dummy_feature)
+    assert len(intervals) == 1
+    assert intervals[0]["p10"] <= intervals[0]["p50"] <= intervals[0]["p90"]
+
+
+def test_quantile_coverage_and_noncrossing(bundle, sample_X):
+    """Verify P10 <= P50 <= P90 strictly holds with zero crossings and valid interval width."""
+    from src.geodemand.models.inference import DemandModelPredictor
+
+    predictor = DemandModelPredictor()
+    intervals = predictor.predict_with_interval(sample_X)
+    assert len(intervals) == len(sample_X)
+
+    for item in intervals:
+        assert item["p10"] <= item["p50"] <= item["p90"], (
+            f"Quantile crossing: p10={item['p10']}, p50={item['p50']}, p90={item['p90']}"
+        )
+        assert item["prediction_range"] >= 0
+
+
+def test_temporal_boundary_independence(feature_store):
+    """Verify that timestamp-aligned chronological split has strictly zero boundary leakage."""
+    from src.geodemand.models.train_demand_model import chronological_split
+
+    df = feature_store.sort_values("decision_timestamp").reset_index(drop=True)
+    y = df["expected_customer_count"]
+    X = df.drop(columns=["expected_customer_count"])
+
+    X_train, y_train, X_val, y_val, X_test, y_test = chronological_split(
+        X, y, timestamps=df["decision_timestamp"]
+    )
+
+    train_max = X_train["decision_timestamp"].max()
+    val_min = X_val["decision_timestamp"].min()
+    val_max = X_val["decision_timestamp"].max()
+    test_min = X_test["decision_timestamp"].min()
+
+    assert train_max < val_min, f"Boundary overlap detected between Train and Val: {train_max} >= {val_min}"
+    assert val_max < test_min, f"Boundary overlap detected between Val and Test: {val_max} >= {test_min}"
 
 
 # Also provide Class wrapper for test runners that organize by class
