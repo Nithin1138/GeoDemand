@@ -5,17 +5,17 @@ Member 3 — Machine Learning & MLOps
 
 Phases:
   - Benchmark: Multi-Model Benchmark with chronological split
-    (Linear Regression, Random Forest, XGBoost, LightGBM L1, LightGBM Huber, LightGBM Tuned)
-    evaluated on MAE, RMSE, R² using validation set for dynamic champion selection.
-  - Quantile Regression: Rigorous calibrated prediction intervals (P10 <= P50 <= P90).
+    (Linear Regression, Random Forest, XGBoost, LightGBM, CatBoost)
+    evaluated on MAE, RMSE, R² using validation set for selection, holdout test for final eval.
+  - Quantile Regression: Rigorous prediction intervals (P10, P50, P90).
   - TreeSHAP: Native TreeSHAP explainability for local positive & negative drivers.
-  - MLflow: Comprehensive experiment tracking and artifact logging with SQLite backend.
+  - MLflow: Comprehensive experiment tracking and artifact logging.
 
 Data contract:
   - Source: data/processed/feature_store.parquet (canonical v2.1 training dataset)
   - Target: expected_customer_count (representing next-hour customer count)
   - Temporal contract: features at decision_timestamp (t) → predict target at t+1h
-  - Split: chronological 70% train / 15% validation / 15% test (strictly timestamp-aligned, no shuffle)
+  - Split: chronological 70% train / 15% validation / 15% test (strictly no shuffle)
 
 NOTE: All results are based on SIMULATED data from the GeoDemand market simulator.
 Do not interpret metrics as real-world accuracy guarantees.
@@ -48,7 +48,7 @@ except ImportError:
     HAS_XGBOOST = False
 
 try:
-    from catboost import CatBoostRegressor  
+    from catboost import CatBoostRegressor
     HAS_CATBOOST = True
 except ImportError:
     HAS_CATBOOST = False
@@ -82,6 +82,7 @@ ARTIFACT_DIR = MODELS_DIR / "lgbm_v1"
 # ---------------------------------------------------------------------------
 # Contract constants (Section 24: ML Target)
 # ---------------------------------------------------------------------------
+# Primary target contract: expected_customer_count_next_hour
 PRIMARY_TARGET_CONTRACT = "expected_customer_count_next_hour"
 TARGET_COL = "expected_customer_count"
 RANDOM_SEED = 42
@@ -116,16 +117,11 @@ FORBIDDEN_COLUMNS = {
     "fuel_cost",
 }
 
-# Categorical columns that need native categorical handling / label encoding
+# Categorical columns that need label encoding for tree models
 CATEGORICAL_COLUMNS = ["weekday", "season", "vendor_category"]
 
 # Zero-variance columns to drop (weather_condition has only 'clear')
 DROP_COLUMNS = {"weather_condition"}
-
-WEEKDAY_MAP = {
-    "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3,
-    "Friday": 4, "Saturday": 5, "Sunday": 6,
-}
 
 
 def _file_hash(path: Path) -> str:
@@ -134,34 +130,6 @@ def _file_hash(path: Path) -> str:
     with open(path, "rb") as f:
         h.update(f.read(1_048_576))
     return h.hexdigest()[:12]
-
-
-def add_cyclical_features(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Derive deterministic cyclical calendar features matching feature_assembler.py:
-    hour_sin, hour_cos, day_sin, day_cos, month_sin, month_cos.
-    """
-    df = df.copy()
-    if "hour" in df.columns:
-        hour_val = df["hour"].astype(float)
-        df["hour_sin"] = np.sin(2 * np.pi * hour_val / 24.0)
-        df["hour_cos"] = np.cos(2 * np.pi * hour_val / 24.0)
-
-    if "weekday" in df.columns:
-        day_num = df["weekday"].map(WEEKDAY_MAP).fillna(0).astype(float)
-        df["day_sin"] = np.sin(2 * np.pi * day_num / 7.0)
-        df["day_cos"] = np.cos(2 * np.pi * day_num / 7.0)
-    elif "day_of_week" in df.columns:
-        day_num = df["day_of_week"].astype(float)
-        df["day_sin"] = np.sin(2 * np.pi * day_num / 7.0)
-        df["day_cos"] = np.cos(2 * np.pi * day_num / 7.0)
-
-    if "month" in df.columns:
-        month_val = df["month"].astype(float)
-        df["month_sin"] = np.sin(2 * np.pi * month_val / 12.0)
-        df["month_cos"] = np.cos(2 * np.pi * month_val / 12.0)
-
-    return df
 
 
 # ---------------------------------------------------------------------------
@@ -238,44 +206,34 @@ def load_and_validate() -> pd.DataFrame:
 
 def prepare_features(
     df: pd.DataFrame,
-    train_mask: Optional[pd.Series] = None,
-    fitted_encoders: Optional[Dict[str, LabelEncoder]] = None,
 ) -> Tuple[pd.DataFrame, pd.Series, List[str], Dict[str, LabelEncoder]]:
     """
     Prepare feature matrix X and target y from the feature store.
 
-    - Adds cyclical temporal features (hour_sin/cos, day_sin/cos, month_sin/cos)
-    - Drops forbidden columns and zero-variance columns
-    - Fits LabelEncoder strictly on training split (if train_mask provided and no fitted_encoders)
-    - Safely maps unseen categories to 0
+    - Drops forbidden columns (identity, timestamps, target)
+    - Drops zero-variance columns
+    - Label-encodes categorical string columns for model compatibility
     - Converts booleans to int
     - Returns (X, y, feature_columns, label_encoders)
     """
-    df = add_cyclical_features(df)
+    df = df.copy()
 
     # Extract target
     y = df[TARGET_COL].astype(float)
 
-    # Determine trainable columns
+    # Determine trainable columns: everything except forbidden and zero-variance
     trainable = [
         c for c in df.columns if c not in FORBIDDEN_COLUMNS and c not in DROP_COLUMNS
     ]
 
-    # Label-encode categoricals strictly on training data with fast vectorized mapping
+    # Label-encode categoricals
     label_encoders: Dict[str, LabelEncoder] = {}
     for col in CATEGORICAL_COLUMNS:
-        if col in trainable:
-            if fitted_encoders and col in fitted_encoders:
-                le = fitted_encoders[col]
-            else:
-                le = LabelEncoder()
-                fit_data = df.loc[train_mask, col] if train_mask is not None else df[col]
-                le.fit(fit_data.astype(str))
-
-            mapping = {cls_name: int(idx) for idx, cls_name in enumerate(le.classes_)}
-            df[col] = df[col].astype(str).map(mapping).fillna(0).astype(int)
+        if col in trainable and (df[col].dtype == object or not pd.api.types.is_numeric_dtype(df[col])):
+            le = LabelEncoder()
+            df[col] = le.fit_transform(df[col].astype(str))
             label_encoders[col] = le
-            logger.info(f"Categorical '{col}' encoded with {len(le.classes_)} classes: {list(le.classes_)}")
+            logger.info(f"Label-encoded '{col}': {list(le.classes_)}")
 
     # Convert booleans to int
     for col in trainable:
@@ -284,13 +242,7 @@ def prepare_features(
 
     # Build X
     feature_cols = sorted(trainable)
-    X = df[feature_cols].copy()
-    for col in feature_cols:
-        if col in label_encoders:
-            X[col] = X[col].astype(int)
-        else:
-            X[col] = X[col].astype(float)
-
+    X = df[feature_cols].astype(float)
     logger.info(f"Feature matrix: {X.shape[0]:,} rows × {X.shape[1]} features")
     logger.info(f"Feature columns: {feature_cols}")
 
@@ -302,43 +254,19 @@ def prepare_features(
 # ---------------------------------------------------------------------------
 
 def chronological_split(
-    X: pd.DataFrame,
-    y: pd.Series,
-    timestamps: Optional[pd.Series] = None,
+    X: pd.DataFrame, y: pd.Series
 ) -> Tuple[pd.DataFrame, pd.Series, pd.DataFrame, pd.Series, pd.DataFrame, pd.Series]:
     """
-    Chronological 70/15/15 split.
-    If timestamps series is provided, aligns strictly on decision_timestamp boundaries
-    to prevent temporal leakage across splits (all observations for each hour stay together).
+    Chronological 70/15/15 split (data must already be sorted by time).
+    Strictly prevents future leakage backward. Never shuffles.
     """
     n = len(X)
-    if timestamps is not None:
-        train_idx_raw = int(n * 0.70)
-        val_idx_raw = int(n * 0.85)
+    train_end = int(n * 0.70)
+    val_end = int(n * 0.85)
 
-        train_cutoff_ts = timestamps.iloc[train_idx_raw]
-        val_cutoff_ts = timestamps.iloc[val_idx_raw]
-
-        train_mask = timestamps < train_cutoff_ts
-        val_mask = (timestamps >= train_cutoff_ts) & (timestamps < val_cutoff_ts)
-        test_mask = timestamps >= val_cutoff_ts
-
-        X_train, y_train = X[train_mask], y[train_mask]
-        X_val, y_val = X[val_mask], y[val_mask]
-        X_test, y_test = X[test_mask], y[test_mask]
-
-        logger.info(
-            f"Boundary timestamps: Train max ({timestamps[train_mask].max()}) < "
-            f"Val min ({timestamps[val_mask].min()}) <= Val max ({timestamps[val_mask].max()}) < "
-            f"Test min ({timestamps[test_mask].min()})"
-        )
-    else:
-        train_end = int(n * 0.70)
-        val_end = int(n * 0.85)
-
-        X_train, y_train = X.iloc[:train_end], y.iloc[:train_end]
-        X_val, y_val = X.iloc[train_end:val_end], y.iloc[train_end:val_end]
-        X_test, y_test = X.iloc[val_end:], y.iloc[val_end:]
+    X_train, y_train = X.iloc[:train_end], y.iloc[:train_end]
+    X_val, y_val = X.iloc[train_end:val_end], y.iloc[train_end:val_end]
+    X_test, y_test = X.iloc[val_end:], y.iloc[val_end:]
 
     logger.info(
         f"Chronological split: Train={len(X_train):,} ({len(X_train)/n:.1%}) | "
@@ -375,7 +303,7 @@ def evaluate(
         "n_samples": len(y),
     }
     logger.info(
-        f"  {name:30s} [{split_name:10s}] → MAE: {result['mae']:.4f}  "
+        f"  {name:25s} [{split_name:10s}] → MAE: {result['mae']:.4f}  "
         f"RMSE: {result['rmse']:.4f}  R²: {result['r2']:.4f}  "
         f"({result['latency_ms']:.1f}ms)"
     )
@@ -385,19 +313,6 @@ def evaluate(
 # ---------------------------------------------------------------------------
 # MLflow Experiment Logging (Section 32)
 # ---------------------------------------------------------------------------
-
-def _configure_mlflow() -> None:
-    """Configure MLflow SQLite tracking URI."""
-    if not HAS_MLFLOW:
-        return
-    db_path = ROOT / "mlflow.db"
-    tracking_uri = f"sqlite:///{db_path.resolve()}".replace("\\", "/")
-    try:
-        mlflow.set_tracking_uri(tracking_uri)
-        logger.info(f"MLflow tracking URI configured: {tracking_uri}")
-    except Exception as e:
-        logger.warning(f"Could not set MLflow tracking URI: {e}")
-
 
 def _log_to_mlflow(
     experiment_name: str,
@@ -412,7 +327,6 @@ def _log_to_mlflow(
         logger.info("MLflow not installed — skipping experiment tracking.")
         return
 
-    _configure_mlflow()
     try:
         mlflow.set_experiment(experiment_name)
         with mlflow.start_run(run_name=run_name):
@@ -458,27 +372,19 @@ def train_pipeline() -> Dict[str, Any]:
     logger.info("=" * 70)
 
     # ------------------------------------------------------------------
-    # 1. Load, validate, and chronological split
+    # 1. Load & validate
     # ------------------------------------------------------------------
     df = load_and_validate()
     dataset_hash = _file_hash(FEATURE_STORE_PATH)
 
-    n_total = len(df)
-    train_idx_raw = int(n_total * 0.70)
-    train_cutoff_ts = df["decision_timestamp"].iloc[train_idx_raw]
-    train_mask = df["decision_timestamp"] < train_cutoff_ts
-
-    # Prepare features: fit label encoders strictly on training rows
-    X, y, feature_cols, label_encoders = prepare_features(df, train_mask=train_mask)
-    X_train, y_train, X_val, y_val, X_test, y_test = chronological_split(
-        X, y, timestamps=df["decision_timestamp"]
-    )
+    X, y, feature_cols, label_encoders = prepare_features(df)
+    X_train, y_train, X_val, y_val, X_test, y_test = chronological_split(X, y)
 
     # ------------------------------------------------------------------
-    # 2. Benchmark — Multi-Model Benchmark & Loss Alignment
+    # 2. Benchmark — Multi-Model Benchmark (Section 26)
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
-    logger.info("Multi-Model Benchmark (Linear, RF, XGBoost, LightGBM Objectives)")
+    logger.info("Multi-Model Benchmark (Linear, RF, XGBoost, LightGBM)")
     logger.info("=" * 70)
 
     benchmark_models: Dict[str, Any] = {
@@ -495,57 +401,35 @@ def train_pipeline() -> Dict[str, Any]:
 
     if HAS_XGBOOST:
         benchmark_models["XGBoost"] = xgb.XGBRegressor(
-            n_estimators=400,
+            n_estimators=300,
             learning_rate=0.05,
-            max_depth=7,
-            subsample=0.8,
-            colsample_bytree=0.8,
+            max_depth=6,
             random_state=RANDOM_SEED,
             n_jobs=-1,
             tree_method="hist",
-            early_stopping_rounds=30,
         )
     else:
         logger.info("XGBoost not installed; skipping in benchmark.")
 
-    # Phase 3: Benchmark LightGBM Loss Objectives (L2, L1, Huber)
-    benchmark_models["LightGBM (regression_l1)"] = lgb.LGBMRegressor(
-        objective="regression_l1",
-        n_estimators=400,
-        learning_rate=0.05,
-        num_leaves=63,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        min_child_samples=20,
-        random_state=RANDOM_SEED,
-        verbose=-1,
-        n_jobs=-1,
-    )
+    if HAS_CATBOOST:
+        benchmark_models["CatBoost"] = CatBoostRegressor(
+            iterations=300,
+            learning_rate=0.05,
+            depth=6,
+            random_seed=RANDOM_SEED,
+            verbose=0,
+        )
+    else:
+        logger.info("CatBoost not installed; skipping in benchmark.")
 
-    benchmark_models["LightGBM (huber)"] = lgb.LGBMRegressor(
-        objective="huber",
-        n_estimators=400,
-        learning_rate=0.05,
-        num_leaves=63,
-        subsample=0.8,
-        colsample_bytree=0.8,
-        min_child_samples=20,
-        random_state=RANDOM_SEED,
-        verbose=-1,
-        n_jobs=-1,
-    )
-
-    # Phase 4: Tuned Champion Candidate (Optimal leaves, child samples, and regularizers)
-    benchmark_models["LightGBM (Tuned Champion)"] = lgb.LGBMRegressor(
-        objective="regression",
+    # LightGBM (Primary candidate)
+    benchmark_models["LightGBM"] = lgb.LGBMRegressor(
         n_estimators=500,
         learning_rate=0.05,
-        num_leaves=127,
-        min_child_samples=30,
-        colsample_bytree=0.8,
+        num_leaves=63,
         subsample=0.8,
-        reg_alpha=0.1,
-        reg_lambda=0.1,
+        colsample_bytree=0.8,
+        min_child_samples=20,
         random_state=RANDOM_SEED,
         verbose=-1,
         n_jobs=-1,
@@ -558,11 +442,10 @@ def train_pipeline() -> Dict[str, Any]:
         logger.info(f"\nTraining {name}...")
         t0 = time.perf_counter()
 
-        if "LightGBM" in name:
+        if name == "LightGBM":
             model.fit(
                 X_train,
                 y_train,
-                categorical_feature=CATEGORICAL_COLUMNS,
                 eval_set=[(X_val, y_val)],
                 callbacks=[
                     lgb.early_stopping(stopping_rounds=30, verbose=False),
@@ -587,11 +470,11 @@ def train_pipeline() -> Dict[str, Any]:
         val_results.append(metrics)
         trained_models[name] = model
 
-        # Log individual benchmark model to MLflow
+        # Log individual benchmark models to MLflow
         if HAS_MLFLOW:
             _log_to_mlflow(
                 experiment_name="GeoDemand",
-                run_name=f"benchmark_{name.lower().replace(' ', '_').replace('(', '').replace(')', '')}",
+                run_name=f"benchmark_{name.lower().replace(' ', '_')}",
                 params={
                     "algorithm": name,
                     "n_features": len(feature_cols),
@@ -607,91 +490,33 @@ def train_pipeline() -> Dict[str, Any]:
                 model=model,
             )
 
-    # ------------------------------------------------------------------
-    # 3. Dynamic Model Selection with Pre-Flight Verification Gate (Phase 7)
-    # ------------------------------------------------------------------
+    # Select best model by validation MAE (Section 26)
     val_results_sorted = sorted(val_results, key=lambda x: x["mae"])
+    best_name = val_results_sorted[0]["model_name"]
+    logger.info(
+        f"\n>>> Best model by validation MAE: {best_name} "
+        f"(MAE={val_results_sorted[0]['mae']:.4f})"
+    )
 
+    # Log validation benchmark summary
     logger.info("\n--- Benchmark Summary (Validation) ---")
     for r in val_results_sorted:
         logger.info(
-            f"  {r['model_name']:35s}  MAE={r['mae']:.4f}  "
+            f"  {r['model_name']:25s}  MAE={r['mae']:.4f}  "
             f"RMSE={r['rmse']:.4f}  R²={r['r2']:.4f}"
         )
 
-    # Phase 7 Pre-flight Promotion Gate:
-    # Verify: validation performance, inference compatibility, feature schema consistency,
-    # serialization/deserialization, and TreeSHAP attribution.
-    champion_name = None
-    champion_model = None
-
-    for r in val_results_sorted:
-        cand_name = r["model_name"]
-        cand_model = trained_models[cand_name]
-        logger.info(f"\nEvaluating candidate for champion promotion: '{cand_name}' (Val MAE={r['mae']:.4f})...")
-
-        is_eligible = True
-        # 1. Inference shape & finite output check
-        try:
-            sample_X = X_val.iloc[:20]
-            preds = cand_model.predict(sample_X)
-            if len(preds) != len(sample_X) or not np.all(np.isfinite(preds)):
-                logger.warning(f"  [GATE FAIL] Inference shape or non-finite output check failed for {cand_name}")
-                is_eligible = False
-        except Exception as e:
-            logger.warning(f"  [GATE FAIL] Prediction failed for {cand_name}: {e}")
-            is_eligible = False
-
-        # 2. Artifact serialization roundtrip check
-        if is_eligible:
-            try:
-                import tempfile
-                with tempfile.NamedTemporaryFile(suffix=".joblib", delete=False) as tmp:
-                    tmp_file = Path(tmp.name)
-                joblib.dump(cand_model, tmp_file)
-                loaded = joblib.load(tmp_file)
-                np.testing.assert_allclose(cand_model.predict(sample_X), loaded.predict(sample_X), rtol=1e-5)
-                if tmp_file.exists():
-                    tmp_file.unlink()
-            except Exception as e:
-                logger.warning(f"  [GATE FAIL] Artifact roundtrip serialization failed for {cand_name}: {e}")
-                is_eligible = False
-
-        # 3. TreeSHAP attribution compatibility check
-        if is_eligible:
-            try:
-                if hasattr(cand_model, "predict"):
-                    try:
-                        _ = cand_model.predict(sample_X.iloc[:2], pred_contrib=True)
-                    except (TypeError, ValueError):
-                        if hasattr(cand_model, "get_booster") and HAS_XGBOOST:
-                            _ = cand_model.get_booster().predict(xgb.DMatrix(sample_X.iloc[:2]), pred_contribs=True)
-                        elif HAS_SHAP:
-                            _ = shap.TreeExplainer(cand_model).shap_values(sample_X.iloc[:2])
-            except Exception as e:
-                logger.warning(f"  [GATE FAIL] TreeSHAP check failed for {cand_name}: {e}")
-                is_eligible = False
-
-        if is_eligible:
-            champion_name = cand_name
-            champion_model = cand_model
-            logger.info(f"✓ PROMOTED CHAMPION: '{champion_name}' passed all MLOps verification checks!")
-            break
-
-    if champion_model is None:
-        logger.warning("No candidate passed all checks. Falling back to top validation model.")
-        champion_name = val_results_sorted[0]["model_name"]
-        champion_model = trained_models[champion_name]
-
     # ------------------------------------------------------------------
-    # 4. Final model evaluation on holdout test set (Section 28)
+    # 3. Final model evaluation on holdout test set (Section 28)
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
-    logger.info(f"Champion Model Evaluation on Holdout Test Set ({champion_name})")
+    logger.info("Champion Model Evaluation on Holdout Test Set")
     logger.info("=" * 70)
 
+    # Primary candidate is LightGBM
+    champion_model = trained_models["LightGBM"]
     test_metrics = evaluate(
-        f"{champion_name} (Holdout)", champion_model, X_test, y_test, split_name="test"
+        "LightGBM (Champion)", champion_model, X_test, y_test, split_name="test"
     )
 
     test_results = []
@@ -700,14 +525,15 @@ def train_pipeline() -> Dict[str, Any]:
         test_results.append(m)
 
     logger.info(
-        f"\nAchieved Champion Holdout Performance:"
+        f"\nBaseline Verification (Section 28):"
         f"\n  Achieved Test MAE:  {test_metrics['mae']:.4f}"
         f"\n  Achieved Test RMSE: {test_metrics['rmse']:.4f}"
         f"\n  Achieved Test R²:   {test_metrics['r2']:.4f}"
+        f"\n  (Reference baseline on simulated data: MAE ~6.38, RMSE ~7.47, R² ~0.438)"
     )
 
     # ------------------------------------------------------------------
-    # 5. Quantile Regression (Section 29 & Phase 6: P10, P50, P90)
+    # 4. Quantile Regression (Section 29: P10, P50, P90)
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
     logger.info("Quantile Regression — Prediction Intervals (P10, P50, P90)")
@@ -721,12 +547,12 @@ def train_pipeline() -> Dict[str, Any]:
         qmodel = lgb.LGBMRegressor(
             objective="quantile",
             alpha=alpha,
-            n_estimators=400,
-            learning_rate=0.04,
-            num_leaves=63,
-            min_child_samples=30,
+            n_estimators=300,
+            learning_rate=0.05,
+            num_leaves=45,
             subsample=0.8,
             colsample_bytree=0.8,
+            min_child_samples=20,
             random_state=RANDOM_SEED,
             verbose=-1,
             n_jobs=-1,
@@ -734,7 +560,6 @@ def train_pipeline() -> Dict[str, Any]:
         qmodel.fit(
             X_train,
             y_train,
-            categorical_feature=CATEGORICAL_COLUMNS,
             eval_set=[(X_val, y_val)],
             callbacks=[
                 lgb.early_stopping(stopping_rounds=25, verbose=False),
@@ -743,34 +568,31 @@ def train_pipeline() -> Dict[str, Any]:
         )
         quantile_models[qname] = qmodel
 
-    # Monotonic quantile rearrangement: P10 <= P50 <= P90
-    raw_p10 = quantile_models["p10"].predict(X_test)
-    raw_p50 = quantile_models["p50"].predict(X_test)
-    raw_p90 = quantile_models["p90"].predict(X_test)
+    # Validate quantile ordering on test set: assert P10 <= P50 <= P90
+    q_preds = {}
+    for qname, qmodel in quantile_models.items():
+        raw = qmodel.predict(X_test)
+        q_preds[qname] = np.clip(raw, 0, None)
 
-    mono_p10 = np.clip(np.minimum(raw_p10, raw_p50), 0, None)
-    mono_p50 = np.clip(raw_p50, 0, None)
-    mono_p90 = np.clip(np.maximum(raw_p50, raw_p90), 0, None)
+    violations_10_50 = (q_preds["p10"] > q_preds["p50"]).sum()
+    violations_50_90 = (q_preds["p50"] > q_preds["p90"]).sum()
+    total_test = len(X_test)
 
-    q_preds = {"p10": mono_p10, "p50": mono_p50, "p90": mono_p90}
-
-    # Verify monotonicity (0 violations)
-    violations_10_50 = int((q_preds["p10"] > q_preds["p50"]).sum())
-    violations_50_90 = int((q_preds["p50"] > q_preds["p90"]).sum())
-    assert violations_10_50 == 0 and violations_50_90 == 0, "Quantile ordering violated after rearrangement!"
-
-    # Empirical coverage and spread
-    empirical_coverage = float(((y_test >= q_preds["p10"]) & (y_test <= q_preds["p90"])).mean())
-    avg_interval_width = float((q_preds["p90"] - q_preds["p10"]).mean())
-
-    logger.info(f"✓ Quantile ordering P10 <= P50 <= P90 strictly satisfied across all {len(X_test):,} samples.")
-    logger.info(f"✓ Empirical [P10, P90] Coverage: {empirical_coverage:.2%} (Nominal: 80.0%)")
-    logger.info(f"✓ Average Prediction Interval Width: {avg_interval_width:.2f}")
+    if violations_10_50 > 0 or violations_50_90 > 0:
+        logger.warning(
+            f"Quantile ordering violations: P10>P50={violations_10_50}, P50>P90={violations_50_90}"
+        )
+        # Enforce monotonicity: P10 = min(P10, P50), P90 = max(P50, P90)
+        q_preds["p10"] = np.minimum(q_preds["p10"], q_preds["p50"])
+        q_preds["p90"] = np.maximum(q_preds["p50"], q_preds["p90"])
+        logger.info("Quantile ordering enforced post-hoc.")
+    else:
+        logger.info(f"✓ Quantile ordering P10 <= P50 <= P90 valid on all {total_test:,} test samples.")
 
     # Non-negativity check
     for qn, qp in q_preds.items():
         assert (qp >= 0).all(), f"Negative predictions in {qn}!"
-    logger.info("✓ All quantile predictions are strictly non-negative.")
+    logger.info("✓ All quantile predictions are non-negative.")
 
     logger.info("\n--- Prediction Interval Examples (first 5 test samples) ---")
     for i in range(min(5, len(X_test))):
@@ -780,11 +602,11 @@ def train_pipeline() -> Dict[str, Any]:
             f"P10={q_preds['p10'][i]:.1f} | "
             f"P50={q_preds['p50'][i]:.1f} | "
             f"P90={q_preds['p90'][i]:.1f} | "
-            f"Width={q_preds['p90'][i] - q_preds['p10'][i]:.1f}"
+            f"Interval Width={q_preds['p90'][i] - q_preds['p10'][i]:.1f}"
         )
 
     # ------------------------------------------------------------------
-    # 6. TreeSHAP Explainability (Section 31)
+    # 5. TreeSHAP Explainability (Section 31)
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
     logger.info("TreeSHAP Local Explainability")
@@ -793,19 +615,8 @@ def train_pipeline() -> Dict[str, Any]:
     n_shap_samples = min(5, len(X_test))
     shap_sample = X_test.iloc[:n_shap_samples]
 
-    try:
-        shap_matrix = champion_model.predict(shap_sample, pred_contrib=True)
-    except (TypeError, ValueError):
-        if hasattr(champion_model, "get_booster") and HAS_XGBOOST:
-            dmat = xgb.DMatrix(shap_sample)
-            shap_matrix = champion_model.get_booster().predict(dmat, pred_contribs=True)
-        elif HAS_SHAP:
-            explainer = shap.TreeExplainer(champion_model)
-            raw = explainer.shap_values(shap_sample)
-            bias = np.full((len(shap_sample), 1), explainer.expected_value)
-            shap_matrix = np.hstack([raw, bias])
-        else:
-            shap_matrix = np.zeros((len(shap_sample), len(feature_cols) + 1))
+    # TreeSHAP via LightGBM native pred_contrib: shape (n_samples, n_features + 1)
+    shap_matrix = champion_model.predict(shap_sample, pred_contrib=True)
     logger.info(f"TreeSHAP contribution matrix shape: {shap_matrix.shape}")
 
     shap_examples = []
@@ -851,7 +662,7 @@ def train_pipeline() -> Dict[str, Any]:
         logger.info(formatted_explanation)
 
     # ------------------------------------------------------------------
-    # 7. Save Model Artifacts (Section 30)
+    # 6. Save Model Artifacts (Section 30)
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
     logger.info("Saving Model Artifacts")
@@ -881,7 +692,6 @@ def train_pipeline() -> Dict[str, Any]:
         "categorical_mappings": {
             col: list(le.classes_) for col, le in label_encoders.items()
         },
-        "cyclical_features": [c for c in feature_cols if c.endswith("_sin") or c.endswith("_cos")],
         "target_contract": PRIMARY_TARGET_CONTRACT,
         "target_column": TARGET_COL,
         "disallowed_targets": sorted(DISALLOWED_TARGETS),
@@ -892,13 +702,14 @@ def train_pipeline() -> Dict[str, Any]:
         json.dump(feature_schema, f, indent=2)
     logger.info(f"  Saved: {ARTIFACT_DIR / 'feature_schema.json'}")
 
-    # Metadata
+    # Metadata (Section 30: model_version, training_dataset_version, feature_version,
+    # training_timestamp, metrics, feature_columns, algorithm)
     metadata = {
-        "model_version": "v2.0.0",
+        "model_version": "v1.0.0",
         "training_dataset_version": f"feature_store_{dataset_hash}",
-        "feature_version": "v2.2-next-hour-forecast-cyclical",
+        "feature_version": "v2.1-next-hour-forecast",
         "training_timestamp": training_timestamp,
-        "algorithm": champion_name,
+        "algorithm": "LightGBM",
         "target_contract": PRIMARY_TARGET_CONTRACT,
         "target_column": TARGET_COL,
         "contract_principle": "Predict expected customer count, never profit/revenue/decision/demand score directly.",
@@ -918,15 +729,13 @@ def train_pipeline() -> Dict[str, Any]:
         "benchmark_results": val_results_sorted,
         "test_results": test_results,
         "quantiles": list(quantile_alphas.keys()),
-        "quantile_ordering_valid": True,
-        "empirical_coverage_80": round(empirical_coverage, 4),
-        "average_interval_width": round(avg_interval_width, 4),
+        "quantile_ordering_valid": violations_10_50 == 0 and violations_50_90 == 0,
         "random_seed": RANDOM_SEED,
         "n_train_rows": len(X_train),
         "n_val_rows": len(X_val),
         "n_test_rows": len(X_test),
         "shap_enabled": True,
-        "shap_method": "lightgbm_native_pred_contrib" if "lightgbm" in champion_name.lower() else "tree_shap",
+        "shap_method": "lightgbm_native_pred_contrib",
         "shap_examples": shap_examples,
         "data_note": "SIMULATED — do not interpret as real-world accuracy",
     }
@@ -934,6 +743,7 @@ def train_pipeline() -> Dict[str, Any]:
         json.dump(metadata, f, indent=2, default=str)
     logger.info(f"  Saved: {ARTIFACT_DIR / 'metadata.json'}")
 
+    # Also save model_metadata.json (Section 30 naming)
     with open(ARTIFACT_DIR / "model_metadata.json", "w") as f:
         json.dump(metadata, f, indent=2, default=str)
     logger.info(f"  Saved: {ARTIFACT_DIR / 'model_metadata.json'}")
@@ -943,15 +753,13 @@ def train_pipeline() -> Dict[str, Any]:
         "model": champion_model,
         "p10_model": quantile_models["p10"],
         "p90_model": quantile_models["p90"],
-        "p50_model": quantile_models["p50"],
         "feature_cols": feature_cols,
         "label_encoders": label_encoders,
         "benchmark_metrics": val_results_sorted,
         "metrics": test_metrics,
         "meta": {
-            "model_type": f"{champion_name.lower().replace(' ', '_')}_quantile_bundle",
-            "model_version": "v2.0.0",
-            "algorithm": champion_name,
+            "model_type": "lightgbm_quantile_bundle",
+            "model_version": "v1.0.0",
             "n_features": len(feature_cols),
             "target": TARGET_COL,
             "trained_at": training_timestamp,
@@ -960,8 +768,6 @@ def train_pipeline() -> Dict[str, Any]:
             "test_rmse": test_metrics["rmse"],
             "test_r2": test_metrics["r2"],
             "quantiles_supported": ["p10", "p50", "p90"],
-            "quantile_coverage": round(empirical_coverage, 4),
-            "quantile_width": round(avg_interval_width, 4),
             "shap_enabled": True,
             "random_seed": RANDOM_SEED,
             "data_note": "SIMULATED",
@@ -972,10 +778,9 @@ def train_pipeline() -> Dict[str, Any]:
         pickle.dump(bundle, f)
     logger.info(f"  Saved API bundle: {bundle_path}")
 
-    # Save models/demand_model_meta.json
+    # Also save models/demand_model_meta.json
     api_meta = {
-        "model_type": champion_name.lower().replace(" ", "_"),
-        "model_version": "v2.0.0",
+        "model_type": "lightgbm",
         "trained_at": training_timestamp,
         "feature_columns": feature_cols,
         "categorical_columns": list(label_encoders.keys()),
@@ -990,9 +795,7 @@ def train_pipeline() -> Dict[str, Any]:
             "test_rmse": test_metrics["rmse"],
             "test_r2": test_metrics["r2"],
         },
-        "quantile_coverage_80": round(empirical_coverage, 4),
-        "quantile_interval_width": round(avg_interval_width, 4),
-        "source": f"feature_store.parquet (v2.2-next-hour-forecast-cyclical, hash={dataset_hash})",
+        "source": f"feature_store.parquet (v2.1-next-hour-forecast, hash={dataset_hash})",
         "data_note": "SIMULATED",
     }
     with open(MODELS_DIR / "demand_model_meta.json", "w") as f:
@@ -1000,15 +803,15 @@ def train_pipeline() -> Dict[str, Any]:
     logger.info(f"  Saved: {MODELS_DIR / 'demand_model_meta.json'}")
 
     # ------------------------------------------------------------------
-    # 8. Log Champion & Artifacts to MLflow (Section 32 & Phase 8)
+    # 7. Log Champion & Artifacts to MLflow (Section 32)
     # ------------------------------------------------------------------
     if HAS_MLFLOW:
         _log_to_mlflow(
             experiment_name="GeoDemand",
-            run_name=f"{champion_name.lower().replace(' ', '_')}_champion_v2",
+            run_name="lightgbm_champion",
             params={
-                "algorithm": champion_name,
-                "model_version": "v2.0.0",
+                "algorithm": "LightGBM",
+                "model_version": "v1.0.0",
                 "dataset_version": metadata["training_dataset_version"],
                 "feature_version": metadata["feature_version"],
                 "n_features": len(feature_cols),
@@ -1017,8 +820,6 @@ def train_pipeline() -> Dict[str, Any]:
                 "n_test_rows": len(X_test),
                 "random_seed": RANDOM_SEED,
                 "quantiles": "p10,p50,p90",
-                "empirical_coverage_80": round(empirical_coverage, 4),
-                "avg_interval_width": round(avg_interval_width, 4),
             },
             metrics={
                 "val_mae": metadata["metrics"]["validation"]["mae"],
@@ -1036,16 +837,15 @@ def train_pipeline() -> Dict[str, Any]:
         )
 
     # ------------------------------------------------------------------
-    # 9. Summary
+    # 8. Summary
     # ------------------------------------------------------------------
     logger.info("\n" + "=" * 70)
     logger.info("Training Pipeline Complete (Member 3)")
     logger.info("=" * 70)
-    logger.info(f"Champion Model: {champion_name}")
+    logger.info(f"Champion Model: LightGBM")
     logger.info(f"Test MAE:  {test_metrics['mae']:.4f}")
     logger.info(f"Test RMSE: {test_metrics['rmse']:.4f}")
     logger.info(f"Test R²:   {test_metrics['r2']:.4f}")
-    logger.info(f"Quantile 80% Coverage: {empirical_coverage:.2%}")
     logger.info(f"Artifacts: {ARTIFACT_DIR}")
     logger.info(f"API bundle: {bundle_path}")
     logger.info("NOTE: Results are SIMULATED — not real-world accuracy.")

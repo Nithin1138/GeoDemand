@@ -7,13 +7,9 @@
     "college_count",
     "commercial_ratio",
     "competition_score",
-    "day_cos",
-    "day_sin",
     "event_importance",
     "hospital_count",
     "hour",
-    "hour_cos",
-    "hour_sin",
     "humidity",
     "industrial_ratio",
     "inventory_capacity",
@@ -22,8 +18,6 @@
     "mall_count",
     "metro_station_count",
     "month",
-    "month_cos",
-    "month_sin",
     "office_count",
     "park_count",
     "parking_count",
@@ -46,7 +40,7 @@
     "weekday",
     "wind_speed"
   ],
-  "n_features": 45,
+  "n_features": 39,
   "categorical_columns": [
     "weekday",
     "season",
@@ -64,6 +58,7 @@
     ],
     "season": [
       "monsoon",
+      "post_monsoon",
       "summer",
       "winter"
     ],
@@ -74,14 +69,6 @@
       "salon"
     ]
   },
-  "cyclical_features": [
-    "day_cos",
-    "day_sin",
-    "hour_cos",
-    "hour_sin",
-    "month_cos",
-    "month_sin"
-  ],
   "target_contract": "expected_customer_count_next_hour",
   "target_column": "expected_customer_count",
   "disallowed_targets": [

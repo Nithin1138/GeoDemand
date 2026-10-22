@@ -82,6 +82,3 @@ COLAB.md
 # MLOps & Tracking
 mlruns/
 mlflow.db
-catboost_info/
-models/champion_backup/
-models/candidates/

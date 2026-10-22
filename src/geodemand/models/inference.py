@@ -21,13 +21,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
-from src.geodemand.monitoring.prediction_quality import (
-    PredictionQualityError,
-    PredictionValidator,
-)
-
 logger = logging.getLogger(__name__)
-
 
 ROOT = Path(__file__).resolve().parent.parent.parent.parent
 MODELS_DIR = ROOT / "models"
@@ -40,16 +34,9 @@ class DemandModelPredictor:
     Loads models trained via train_demand_model.py.
     """
 
-    def __init__(
-        self,
-        model_dir: Optional[Union[str, Path]] = None,
-        bundle_path: Optional[Union[str, Path]] = None,
-        validate_predictions: bool = True,
-    ):
+    def __init__(self, model_dir: Optional[Union[str, Path]] = None, bundle_path: Optional[Union[str, Path]] = None):
         self.model_dir = Path(model_dir) if model_dir else ARTIFACT_DIR
         self.bundle_path = Path(bundle_path) if bundle_path else (MODELS_DIR / "demand_model.pkl")
-        self.validate_predictions = validate_predictions
-        self.validator = PredictionValidator(raise_on_violation=True)
 
         self.model = None
         self.p10_model = None
@@ -116,32 +103,11 @@ class DemandModelPredictor:
         else:
             raise TypeError(f"Unsupported data type: {type(data)}")
 
-        # Auto-derive cyclical features if required by feature schema and not present
-        weekday_map = {
-            "Monday": 0, "Tuesday": 1, "Wednesday": 2, "Thursday": 3,
-            "Friday": 4, "Saturday": 5, "Sunday": 6,
-        }
-        if "hour_sin" in self.feature_cols and "hour_sin" not in df.columns and "hour" in df.columns:
-            df["hour_sin"] = np.sin(2 * np.pi * df["hour"].astype(float) / 24.0)
-            df["hour_cos"] = np.cos(2 * np.pi * df["hour"].astype(float) / 24.0)
-        if "day_sin" in self.feature_cols and "day_sin" not in df.columns:
-            if "weekday" in df.columns:
-                day_num = df["weekday"].map(weekday_map).fillna(0).astype(float)
-                df["day_sin"] = np.sin(2 * np.pi * day_num / 7.0)
-                df["day_cos"] = np.cos(2 * np.pi * day_num / 7.0)
-            elif "day_of_week" in df.columns:
-                day_num = df["day_of_week"].astype(float)
-                df["day_sin"] = np.sin(2 * np.pi * day_num / 7.0)
-                df["day_cos"] = np.cos(2 * np.pi * day_num / 7.0)
-        if "month_sin" in self.feature_cols and "month_sin" not in df.columns and "month" in df.columns:
-            df["month_sin"] = np.sin(2 * np.pi * df["month"].astype(float) / 12.0)
-            df["month_cos"] = np.cos(2 * np.pi * df["month"].astype(float) / 12.0)
-
-        # Encode categoricals using saved encoders with safe fallback for unseen levels
+        # Encode categoricals using saved encoders
         for col, le in self.label_encoders.items():
             if col in df.columns:
                 known_classes = set(le.classes_)
-                df[col] = df[col].apply(lambda v: int(le.transform([v])[0]) if v in known_classes else 0)
+                df[col] = df[col].apply(lambda v: le.transform([v])[0] if v in known_classes else 0)
 
         # Convert booleans to int
         for col in df.columns:
@@ -156,25 +122,17 @@ class DemandModelPredictor:
                 df[c] = 0.0
 
         # Select and order columns strictly
-        X = df[self.feature_cols].copy()
-        for col in self.feature_cols:
-            if col in self.label_encoders:
-                X[col] = X[col].astype(int)
-            else:
-                X[col] = X[col].astype(float)
+        X = df[self.feature_cols].astype(float)
         return X
 
     def predict(self, data: Union[pd.DataFrame, Dict[str, Any], List[Dict[str, Any]]]) -> np.ndarray:
         """
         Predict expected_customer_count.
-        Non-negative clipped. Validates prediction quality contracts.
+        Non-negative clipped.
         """
         X = self.preprocess(data)
         raw = self.model.predict(X)
-        preds = np.clip(raw, 0, None)
-        if self.validate_predictions:
-            self.validator.validate_predictions(preds, expected_n=len(X))
-        return preds
+        return np.clip(raw, 0, None)
 
     def predict_with_interval(
         self, data: Union[pd.DataFrame, Dict[str, Any], List[Dict[str, Any]]]
@@ -196,14 +154,6 @@ class DemandModelPredictor:
             # Fallback heuristic interval (+/- 25%) if quantile models missing
             p10 = np.clip(p50 * 0.75, 0, None)
             p90 = np.clip(p50 * 1.25, 0, None)
-
-        # Final non-negativity and boundary guarantee
-        p10 = np.clip(p10, 0, None)
-        p50 = np.clip(p50, 0, None)
-        p90 = np.clip(p90, 0, None)
-
-        if self.validate_predictions:
-            self.validator.validate_quantiles(p10, p50, p90, expected_n=len(X))
 
         results = []
         for i in range(len(p50)):
@@ -229,23 +179,8 @@ class DemandModelPredictor:
         X = self.preprocess(data)
         preds = np.clip(self.model.predict(X), 0, None)
 
-        # TreeSHAP contributions: LightGBM native pred_contrib or XGBoost booster
-        if hasattr(self.model, "predict"):
-            try:
-                contribs = self.model.predict(X, pred_contrib=True)
-            except (TypeError, ValueError):
-                if hasattr(self.model, "get_booster"):
-                    import xgboost as xgb
-                    dmat = xgb.DMatrix(X)
-                    contribs = self.model.get_booster().predict(dmat, pred_contribs=True)
-                else:
-                    import shap
-                    explainer = shap.TreeExplainer(self.model)
-                    raw = explainer.shap_values(X)
-                    bias = np.full((len(X), 1), explainer.expected_value)
-                    contribs = np.hstack([raw, bias])
-        else:
-            raise ValueError("Model does not support predictions.")
+        # LightGBM native pred_contrib: shape (n_samples, n_features + 1)
+        contribs = self.model.predict(X, pred_contrib=True)
 
         explanations = []
         for i in range(len(X)):
