@@ -236,6 +236,7 @@ class GoogleMapsRoutingProvider(RoutingProvider):
             raise EnvironmentError("GOOGLE_MAPS_API_KEY not set.")
         self._cache: dict = {}
         self._cache_ttl = 120  # 2 minutes (traffic-aware, so don't cache too long)
+        self._disabled_until: float = 0.0
 
     def get_travel_time(
         self,
@@ -244,8 +245,11 @@ class GoogleMapsRoutingProvider(RoutingProvider):
         dest_lat: float,
         dest_lng: float,
     ) -> dict:
-        cache_key = f"{origin_lat:.4f},{origin_lng:.4f}->{dest_lat:.4f},{dest_lng:.4f}"
         now = time.time()
+        if now < self._disabled_until:
+            return OSRMRoutingProvider().get_travel_time(origin_lat, origin_lng, dest_lat, dest_lng)
+
+        cache_key = f"{origin_lat:.4f},{origin_lng:.4f}->{dest_lat:.4f},{dest_lng:.4f}"
         if cache_key in self._cache and now - self._cache[cache_key]["_ts"] < self._cache_ttl:
             return self._cache[cache_key]
 
@@ -259,7 +263,7 @@ class GoogleMapsRoutingProvider(RoutingProvider):
                     "departure_time": "now",  # enables traffic-aware duration
                     "key": self.api_key,
                 },
-                timeout=10,
+                timeout=3.0,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -289,8 +293,19 @@ class GoogleMapsRoutingProvider(RoutingProvider):
             return result
 
         except Exception as e:
-            logger.warning(f"Google Maps routing API failed ({e}); falling back to OSRM.")
+            logger.warning(f"Google Maps routing API failed ({e}); tripping circuit breaker for 3m, falling back to OSRM.")
+            self._disabled_until = now + 180.0
             return OSRMRoutingProvider().get_travel_time(origin_lat, origin_lng, dest_lat, dest_lng)
+
+    def get_route_geometry(
+        self,
+        origin_lat: float,
+        origin_lng: float,
+        dest_lat: float,
+        dest_lng: float,
+    ) -> dict:
+        """Returns street route geometry coordinates [[lat, lng], ...] via OSRM street network."""
+        return OSRMRoutingProvider().get_route_geometry(origin_lat, origin_lng, dest_lat, dest_lng)
 
 
 # ---------------------------------------------------------------------------

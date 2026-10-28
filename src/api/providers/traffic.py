@@ -191,6 +191,86 @@ class HERETrafficProvider(TrafficProvider):
 
 
 # ---------------------------------------------------------------------------
+# TomTom Traffic (real-time — optional)
+# ---------------------------------------------------------------------------
+
+class TomTomTrafficProvider(TrafficProvider):
+    """
+    TomTom Traffic Flow API — real-time flow data.
+    Set TOMTOM_API_KEY env var. Get key at: https://developer.tomtom.com/
+    Free tier: 2,500 requests/day.
+    """
+    source_type = "real_live"
+    source_name = "tomtom_traffic"
+
+    FLOW_URL = "https://api.tomtom.com/traffic/services/4/flowSegmentData/relative0/10/json"
+
+    def __init__(self, api_key: Optional[str] = None):
+        self.api_key = api_key or os.environ.get("TOMTOM_API_KEY")
+        if not self.api_key:
+            raise EnvironmentError("TOMTOM_API_KEY not set.")
+        self._cache: dict = {}
+        self._cache_ttl = 120  # 2 minutes
+        self._disabled_until: float = 0.0
+
+    def get_traffic(self, origin_lat: float, origin_lng: float,
+                    dest_lat: float, dest_lng: float) -> dict:
+        import requests
+        now = time.time()
+        if now < self._disabled_until:
+            return TimeOfDayTrafficProxy().get_traffic(origin_lat, origin_lng, dest_lat, dest_lng)
+
+        mid_lat = (origin_lat + dest_lat) / 2
+        mid_lng = (origin_lng + dest_lng) / 2
+        cache_key = f"{mid_lat:.3f},{mid_lng:.3f}"
+        if cache_key in self._cache and now - self._cache[cache_key]["_ts"] < self._cache_ttl:
+            return self._cache[cache_key]
+
+        headers = {"User-Agent": "GeoDemandAI/2.1", "Accept": "application/json"}
+        last_err = None
+        for attempt in range(1):
+            try:
+                resp = requests.get(
+                    self.FLOW_URL,
+                    params={
+                        "point": f"{mid_lat},{mid_lng}",
+                        "unit": "KMPH",
+                        "key": self.api_key,
+                    },
+                    headers=headers,
+                    timeout=3.0,
+                )
+                resp.raise_for_status()
+                data = resp.json()
+                flow = data.get("flowSegmentData", {})
+                curr_speed = float(flow.get("currentSpeed", 25.0))
+                free_flow = float(flow.get("freeFlowSpeed", 40.0))
+                if free_flow <= 0:
+                    free_flow = 40.0
+                congestion = max(0.0, (free_flow - curr_speed) / free_flow)
+                jam = round(congestion * 10, 1)
+
+                result = _traffic_result(
+                    speed_kmh=curr_speed,
+                    free_flow_kmh=free_flow,
+                    congestion_ratio=congestion,
+                    jam_factor=jam,
+                    source_type=self.source_type,
+                    source_name=self.source_name,
+                    retrieved_at=datetime.now(timezone.utc).isoformat(),
+                )
+                result["_ts"] = now
+                self._cache[cache_key] = result
+                return result
+            except Exception as e:
+                last_err = e
+
+        logger.warning(f"TomTom traffic API failed ({last_err}); tripping circuit breaker for 3m and falling back to proxy.")
+        self._disabled_until = now + 180.0
+        return TimeOfDayTrafficProxy().get_traffic(origin_lat, origin_lng, dest_lat, dest_lng)
+
+
+# ---------------------------------------------------------------------------
 # Factory
 # ---------------------------------------------------------------------------
 
@@ -203,6 +283,12 @@ class TrafficProviderFactory:
 
         if pref == "time_of_day" or pref == "synthetic":
             return TimeOfDayTrafficProxy()
+
+        if pref in ("tomtom", "auto") and os.environ.get("TOMTOM_API_KEY"):
+            try:
+                return TomTomTrafficProvider()
+            except Exception as e:
+                logger.info(f"TomTom traffic provider initialization failed ({e}).")
 
         if pref in ("here", "auto") and os.environ.get("HERE_API_KEY"):
             try:

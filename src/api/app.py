@@ -29,6 +29,9 @@ sys.path.insert(0, str(ROOT / "src" / "data"))
 sys.path.insert(0, str(ROOT / "src" / "features"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
 
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env", override=False)
+
 
 from contextlib import asynccontextmanager
 
@@ -40,7 +43,14 @@ from pydantic import BaseModel, Field
 
 from api.location import get_location_context, generate_candidates
 from api.feature_assembler import FeatureAssembler
-from api.recommender import DemandModel, calculate_business_metrics, rank_candidates, generate_explanation
+from api.recommender import (
+    DemandModel,
+    calculate_business_metrics,
+    rank_candidates,
+    generate_explanation,
+    calculate_category_demand,
+    compute_category_affinity,
+)
 from api.providers.competition import CompetitionProviderFactory
 from api.providers.traffic import TrafficProviderFactory
 from api.providers.events import EventProviderFactory
@@ -231,6 +241,20 @@ async def ping():
             "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
+@app.get("/v1/system/config")
+async def system_config():
+    """Returns public client configuration like Mapbox token and default coordinates."""
+    import os
+    return {
+        "mapbox_token": os.getenv("MAPBOX_TOKEN"),
+        "live_mode": os.getenv("LIVE_MODE", "true").lower() == "true",
+        "default_lat": 16.5062,
+        "default_lng": 80.6480,
+        "city": "Vijayawada",
+        "state": "Andhra Pradesh",
+    }
+
+
 @app.get("/v1/system/data-health")
 async def data_health():
     """Returns provenance and freshness status for all data sources."""
@@ -324,8 +348,23 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
     )
 
     model = DemandModel.get()
-    uncertainty = model.predict_with_uncertainty(features)
-    expected_customers = uncertainty["p50"]
+    raw_uncertainty = model.predict_with_uncertainty(features)
+    raw_p50 = raw_uncertainty["p50"]
+
+    # Category-calibrated customer conversion & spatial affinity
+    cat_customers, category_affinity = calculate_category_demand(
+        raw_p50=raw_p50,
+        vendor_category=req.vendor_category,
+        features=features,
+    )
+
+    scale_ratio = cat_customers / max(1, raw_p50)
+    uncertainty = {
+        "p10": max(1, int(round(raw_uncertainty.get("p10", raw_p50 * 0.8) * scale_ratio))),
+        "p50": cat_customers,
+        "p90": max(cat_customers, int(round(raw_uncertainty.get("p90", raw_p50 * 1.2) * scale_ratio))),
+    }
+    expected_customers = cat_customers
 
     biz = calculate_business_metrics(
         expected_customers=expected_customers,
@@ -457,11 +496,10 @@ async def recommendations_live(req: RecommendationRequest):
         search_radius_km=req.search_radius_km,
     )
 
-    # --- Assemble features + predict for each candidate ---
-    candidate_results = []
-    global_freshness = None
+    # --- Assemble features + predict for each candidate (concurrently) ---
+    from concurrent.futures import ThreadPoolExecutor
 
-    for cand in candidates_raw:
+    def _eval_candidate(cand):
         comp = competition_prov.get_competition_score(cand.h3_cell, req.vendor_category)
         event = event_prov.get_event_importance(cand.h3_cell, now)
         traffic = traffic_prov.get_traffic(req.latitude, req.longitude,
@@ -478,7 +516,6 @@ async def recommendations_live(req: RecommendationRequest):
         actual_fuel_cost = round(base_fuel["fuel_cost_inr"] * congestion_penalty, 2)
 
         # Features at decision_timestamp t (current weather for current context)
-        # For next-hour prediction, use forecast weather
         features, freshness = assembler.assemble(
             h3_cell=cand.h3_cell,
             vendor_profile=vendor_profile,
@@ -488,11 +525,23 @@ async def recommendations_live(req: RecommendationRequest):
             decision_timestamp=now,
         )
 
-        if global_freshness is None:
-            global_freshness = freshness
+        raw_uncertainty = model.predict_with_uncertainty(features)
+        raw_p50 = raw_uncertainty["p50"]
 
-        uncertainty = model.predict_with_uncertainty(features)
-        expected_customers = uncertainty["p50"]
+        # Category-calibrated customer conversion & spatial affinity
+        cat_customers, category_affinity = calculate_category_demand(
+            raw_p50=raw_p50,
+            vendor_category=req.vendor_category,
+            features=features,
+        )
+
+        scale_ratio = cat_customers / max(1, raw_p50)
+        uncertainty = {
+            "p10": max(1, int(round(raw_uncertainty.get("p10", raw_p50 * 0.8) * scale_ratio))),
+            "p50": cat_customers,
+            "p90": max(cat_customers, int(round(raw_uncertainty.get("p90", raw_p50 * 1.2) * scale_ratio))),
+        }
+        expected_customers = cat_customers
 
         biz = calculate_business_metrics(
             expected_customers=expected_customers,
@@ -509,7 +558,7 @@ async def recommendations_live(req: RecommendationRequest):
             req.vendor_category,
         )
 
-        candidate_results.append({
+        return {
             "h3_cell": cand.h3_cell,
             "latitude": cand.centroid_lat,
             "longitude": cand.centroid_lng,
@@ -521,6 +570,7 @@ async def recommendations_live(req: RecommendationRequest):
             "expected_customers": expected_customers,
             "prediction_interval": uncertainty,
             "confidence_interval": uncertainty,
+            "category_affinity": category_affinity,
             "expected_revenue_inr": biz["expected_revenue_inr"],
             "expected_profit_inr": biz["expected_profit_inr"],
             "candidate_predicted_profit_inr": biz["candidate_predicted_profit_inr"],
@@ -536,13 +586,24 @@ async def recommendations_live(req: RecommendationRequest):
             "weather_condition": weather_forecast.get("weather_condition", "clear"),
             "top_drivers": drivers,
             "explanation": explanation,
-            # for ranking
             "_features": features,
-        })
+            "_freshness": freshness,
+        }
 
-    # --- Step 1: Candidate Ranking (Multi-Factor Scoring) ---
-    # Multi-factor score: 60% profit, 25% demand, -10% distance, -5% competition
-    ranked_candidates = rank_candidates(candidate_results)
+    # Parallel evaluation across thread pool ensures sub-2-second response times
+    max_workers = min(12, max(1, len(candidates_raw)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        raw_eval_results = list(executor.map(_eval_candidate, candidates_raw))
+
+    candidate_results = []
+    global_freshness = None
+    for res in raw_eval_results:
+        if global_freshness is None and "_freshness" in res:
+            global_freshness = res["_freshness"]
+        candidate_results.append(res)
+
+    # --- Step 1: Candidate Ranking (Category-Aware Multi-Factor Scoring) ---
+    ranked_candidates = rank_candidates(candidate_results, vendor_category=req.vendor_category)
 
     # Establish baseline for current location cell
     current_cell_data = next((c for c in ranked_candidates if c["is_current_cell"]), ranked_candidates[0] if ranked_candidates else {})
@@ -550,6 +611,7 @@ async def recommendations_live(req: RecommendationRequest):
 
     # --- Step 2: Compute Net Realized Uplift & Decision Metrics for Valid Destination Candidates ---
     valid_destinations = []
+    viable_destinations = []
     for c in ranked_candidates:
         if (
             c.get("is_current_cell")
@@ -612,13 +674,50 @@ async def recommendations_live(req: RecommendationRequest):
 
         valid_destinations.append(c)
 
-    # --- Step 3: Final Recommendation Selection (Primarily ordered by Net Realized Uplift with Travel Constraints) ---
+        # Commercial viability filter tailored to mobile vendor type
+        feat = c.get("_features", {})
+        poi_cols = [
+            "office_count", "college_count", "school_count", "hospital_count",
+            "mall_count", "restaurant_count", "bus_stop_count", "park_count",
+        ]
+        total_pois = sum(feat.get(col, 0.0) for col in poi_cols)
+        bldg_cnt = feat.get("building_count", 0.0)
+        comm_ratio = feat.get("commercial_ratio", 0.0)
+        ind_ratio = feat.get("industrial_ratio", 0.0)
+        road_dens = feat.get("road_density", 0.5)
+
+        cat = (req.vendor_category or "food").lower()
+        is_viable = False
+        if road_dens >= 0.10:
+            if cat == "repair":
+                if ind_ratio >= 0.08 or comm_ratio >= 0.15 or total_pois >= 5 or bldg_cnt >= 2:
+                    is_viable = True
+            elif cat == "fruits":
+                hosp_cnt = feat.get("hospital_count", 0.0)
+                park_cnt = feat.get("park_count", 0.0)
+                if (hosp_cnt >= 3 or park_cnt >= 2) or total_pois >= 8 or (bldg_cnt >= 2 and total_pois >= 3):
+                    is_viable = True
+            else:
+                if (
+                    total_pois >= 8
+                    or (bldg_cnt >= 2 and total_pois >= 3)
+                    or (comm_ratio >= 0.20 and total_pois >= 4)
+                ):
+                    is_viable = True
+
+        if is_viable:
+            viable_destinations.append(c)
+
+    # Prioritize commercially viable destinations over empty land/fields
+    target_destinations = viable_destinations if viable_destinations else valid_destinations
+
+    # --- Step 3: Final Recommendation Selection (Ordered by Verdict & Category-Aware Multi-Factor Score) ---
     recommendations = sorted(
-        valid_destinations,
+        target_destinations,
         key=lambda x: (
             1 if x["decision_verdict"] == "RECOMMENDED_MOVE" else 0,
-            x["realized_net_uplift_inr"],
             x.get("recommendation_score", 0),
+            x["realized_net_uplift_inr"],
         ),
         reverse=True,
     )[:req.top_n]
@@ -760,7 +859,19 @@ async def recommendations_live(req: RecommendationRequest):
         "recommendations": recommendations,
         "demand_heatmap": demand_heatmap,
         "total_candidates_evaluated": len(demand_heatmap),
-        "data_freshness": global_freshness or {},
+        "data_freshness": {
+            **(global_freshness or {}),
+            "traffic": {
+                "source_type": traffic_prov.source_type,
+                "source_name": traffic_prov.source_name,
+                "retrieved_at": now.isoformat(),
+                "note": f"Live traffic from {traffic_prov.source_name}" if traffic_prov.source_type == "real_live" else "Time-of-day proxy model",
+            },
+            "static_poi": {
+                **(global_freshness or {}).get("static_poi", {}),
+                "source_type": "real_periodic",
+            },
+        },
         "data_quality": data_quality_summary,
         "model_info": {
             "model_type": model.meta.get("model_type"),

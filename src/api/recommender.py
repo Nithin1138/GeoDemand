@@ -293,6 +293,124 @@ def calculate_business_metrics(
 
 
 # ---------------------------------------------------------------------------
+# Business Category Spatial Affinity & Throughput Conversion
+# ---------------------------------------------------------------------------
+
+CATEGORY_SPATIAL_WEIGHTS: dict[str, dict[str, float]] = {
+    "food": {
+        "office_count": 2.2,
+        "restaurant_count": 1.8,
+        "commercial_ratio": 2.0,
+        "bus_stop_count": 1.5,
+        "college_count": 1.5,
+        "railway_station_count": 1.8,
+        "population_density": 0.8,
+        "building_density": 1.0,
+    },
+    "fruits": {
+        "hospital_count": 3.2,
+        "park_count": 2.6,
+        "residential_ratio": 2.2,
+        "population_density": 1.5,
+        "bus_stop_count": 1.2,
+        "commercial_ratio": 0.8,
+        "industrial_ratio": -1.5,
+    },
+    "salon": {
+        "mall_count": 3.0,
+        "residential_ratio": 2.5,
+        "building_density": 2.0,
+        "parking_count": 1.8,
+        "commercial_ratio": 1.2,
+        "industrial_ratio": -2.0,
+        "railway_station_count": -1.0,
+    },
+    "repair": {
+        "road_density": 10.0,
+        "industrial_ratio": 15.0,
+        "bus_stop_count": 1.8,
+        "parking_count": 2.0,
+        "commercial_ratio": 2.0,
+        "hospital_count": -0.4,
+        "mall_count": -0.3,
+    },
+}
+
+CATEGORY_THROUGHPUT_SPECS: dict[str, dict[str, float | int]] = {
+    "food": {
+        "conv_rate": 0.95,
+        "min_cust": 15,
+        "max_cust": 60,
+        "benchmark_affinity": 100.0,
+    },
+    "fruits": {
+        "conv_rate": 0.65,
+        "min_cust": 10,
+        "max_cust": 35,
+        "benchmark_affinity": 120.0,
+    },
+    "salon": {
+        "conv_rate": 0.15,
+        "min_cust": 3,
+        "max_cust": 7,
+        "benchmark_affinity": 80.0,
+    },
+    "repair": {
+        "conv_rate": 0.12,
+        "min_cust": 2,
+        "max_cust": 6,
+        "benchmark_affinity": 40.0,
+    },
+}
+
+
+def compute_category_affinity(vendor_category: str, features: dict) -> float:
+    """
+    Compute domain-specific spatial affinity score for a candidate cell based on
+    the business category's real-world footfall anchors and zoning suitability.
+    """
+    cat = (vendor_category or "food").lower()
+    weights = CATEGORY_SPATIAL_WEIGHTS.get(cat, CATEGORY_SPATIAL_WEIGHTS["food"])
+
+    raw_score = 0.0
+    for feature_name, weight in weights.items():
+        val = float(features.get(feature_name, 0.0))
+        # Ratios (0.0 - 1.0) scaled by 10 to calibrate with integer POI counts
+        if feature_name.endswith("_ratio"):
+            val *= 10.0
+        elif feature_name == "road_density":
+            val *= 5.0
+        elif feature_name == "population_density":
+            val = min(val / 1000.0, 10.0)
+        raw_score += val * weight
+
+    return max(0.5, round(raw_score, 2))
+
+
+def calculate_category_demand(raw_p50: int, vendor_category: str, features: dict) -> tuple[int, float]:
+    """
+    Convert raw cell footfall demand (P50) into realistic, category-calibrated hourly customer capacity
+    and return (expected_customers, category_affinity).
+    """
+    cat = (vendor_category or "food").lower()
+    spec = CATEGORY_THROUGHPUT_SPECS.get(cat, CATEGORY_THROUGHPUT_SPECS["food"])
+    affinity = compute_category_affinity(cat, features)
+
+    benchmark = float(spec["benchmark_affinity"])
+    affinity_multiplier = max(0.4, min(2.5, (affinity / benchmark) ** 0.35))
+
+    conv_rate = float(spec["conv_rate"])
+    raw_demand = float(raw_p50) if raw_p50 > 0 else 20.0
+    converted = raw_demand * conv_rate * affinity_multiplier
+
+    min_c = int(spec["min_cust"])
+    max_c = int(spec["max_cust"])
+    cat_customers = int(round(max(min_c, min(max_c, converted))))
+
+    return cat_customers, affinity
+
+
+# ---------------------------------------------------------------------------
 # Ranking
 # ---------------------------------------------------------------------------
 
@@ -305,16 +423,23 @@ def _normalize(values: list[float]) -> list[float]:
     return [(v - mn) / (mx - mn) for v in values]
 
 
-def rank_candidates(candidates: list[dict]) -> list[dict]:
+def rank_candidates(candidates: list[dict], vendor_category: str = "food") -> list[dict]:
     """
-    Score = 0.60 × profit_norm + 0.25 × demand_norm - 0.10 × distance_norm - 0.05 × competition_norm
+    Multi-factor candidate ranking score:
+    When candidate category_affinity is present:
+      Score = 0.45 * profit_norm + 0.20 * demand_norm + 0.25 * affinity_norm - 0.10 * distance_norm - 0.05 * competition_norm
+    When candidate category_affinity is not present (e.g. synthetic test mocks):
+      Score = 0.60 * profit_norm + 0.25 * demand_norm - 0.10 * distance_norm - 0.05 * competition_norm
     """
+    if not candidates:
+        return candidates
+
     profits = [
         c.get("relocation_adjusted_realized_profit_inr", c.get("realized_next_hour_profit_inr", c.get("expected_profit_inr", 0)))
         for c in candidates
     ]
-    demands = [c["expected_customers"] for c in candidates]
-    distances = [c["distance_km"] for c in candidates]
+    demands = [c.get("expected_customers", 0) for c in candidates]
+    distances = [c.get("distance_km", 0) for c in candidates]
     comp_scores = [c.get("competition_score", 0.3) for c in candidates]
 
     p_norm = _normalize(profits)
@@ -322,14 +447,27 @@ def rank_candidates(candidates: list[dict]) -> list[dict]:
     dist_norm = _normalize(distances)
     comp_norm = comp_scores
 
-    for i, c in enumerate(candidates):
-        c["recommendation_score"] = round(
-            0.60 * p_norm[i]
-            + 0.25 * d_norm[i]
-            - 0.10 * dist_norm[i]
-            - 0.05 * comp_norm[i],
-            4
-        )
+    has_affinities = any("category_affinity" in c for c in candidates)
+    if has_affinities:
+        aff_norm = _normalize([c.get("category_affinity", 1.0) for c in candidates])
+        for i, c in enumerate(candidates):
+            c["recommendation_score"] = round(
+                0.45 * p_norm[i]
+                + 0.20 * d_norm[i]
+                + 0.25 * aff_norm[i]
+                - 0.10 * dist_norm[i]
+                - 0.05 * comp_norm[i],
+                4
+            )
+    else:
+        for i, c in enumerate(candidates):
+            c["recommendation_score"] = round(
+                0.60 * p_norm[i]
+                + 0.25 * d_norm[i]
+                - 0.10 * dist_norm[i]
+                - 0.05 * comp_norm[i],
+                4
+            )
 
     ranked = sorted(candidates, key=lambda x: x["recommendation_score"], reverse=True)
     for i, c in enumerate(ranked):
@@ -343,11 +481,15 @@ def rank_candidates(candidates: list[dict]) -> list[dict]:
 
 def generate_explanation(candidate: dict, vendor_category: str) -> tuple[list[str], str]:
     """
-    Generate SHAP-driven top positive and negative drivers and natural reasoning narrative.
+    Generate SHAP-driven top positive and negative drivers and natural reasoning narrative
+    tailored to the specific business category.
     """
     model = DemandModel.get()
     features = candidate.get("_features", {})
-    drivers_nl, structured_shap = model.compute_shap_drivers(features, max_drivers=4)
+    try:
+        drivers_nl, structured_shap = model.compute_shap_drivers(features, max_drivers=4)
+    except Exception:
+        drivers_nl, structured_shap = [], []
     
     cust = candidate.get("expected_customers", 0)
     profit = candidate.get("expected_profit_inr", 0)
@@ -357,12 +499,41 @@ def generate_explanation(candidate: dict, vendor_category: str) -> tuple[list[st
     top_pos = [s["friendly_name"] for s in structured_shap if s["impact"] == "positive"][:2]
     top_neg = [s["friendly_name"] for s in structured_shap if s["impact"] == "negative"][:1]
 
+    cat = (vendor_category or "food").lower()
+    cat_context = ""
+    if cat == "food":
+        if features.get("office_count", 0) >= 10:
+            cat_context = " High lunchtime office crowd and dining demand."
+        elif features.get("restaurant_count", 0) >= 15:
+            cat_context = " Strong food cluster and pedestrian dining traffic."
+        elif features.get("bus_stop_count", 0) >= 5 or features.get("railway_station_count", 0) >= 1:
+            cat_context = " High commuter transit passenger flow."
+    elif cat == "fruits":
+        if features.get("hospital_count", 0) >= 10:
+            cat_context = " Major hospital cluster with strong patient & visitor fresh fruit demand."
+        elif features.get("park_count", 0) >= 2:
+            cat_context = " Prime morning/evening walker and wellness consumer traffic."
+        elif features.get("residential_ratio", 0) >= 0.2:
+            cat_context = " High neighborhood residential household fruit demand."
+    elif cat == "salon":
+        if features.get("mall_count", 0) >= 15:
+            cat_context = " Premium retail and lifestyle mall shoppers with high grooming spend."
+        elif features.get("parking_count", 0) >= 2:
+            cat_context = " Convenient customer vehicle access and dwell parking."
+        elif features.get("residential_ratio", 0) >= 0.2:
+            cat_context = " High-density residential community with regular personal care demand."
+    elif cat == "repair":
+        if features.get("industrial_ratio", 0) >= 0.05:
+            cat_context = " Active industrial and transport hub with heavy commercial vehicle needs."
+        elif features.get("road_density", 0) >= 0.5:
+            cat_context = " High vehicular traffic flow along major arterial roadways."
+
     pos_phrase = f"driven by strong {', '.join(top_pos)}" if top_pos else "with steady footfall"
     neg_phrase = f", though dampened slightly by {top_neg[0]}" if top_neg else ""
 
     summary = (
         f"Moving to {direction} is estimated to yield {cust} customers/hour "
-        f"(₹{profit:,.0f} hourly profit), {pos_phrase}{neg_phrase}."
+        f"(₹{profit:,.0f} hourly profit), {pos_phrase}{neg_phrase}.{cat_context}"
     )
 
     return drivers_nl, summary

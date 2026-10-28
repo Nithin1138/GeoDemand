@@ -156,6 +156,15 @@ Open your browser and navigate to:
 - **Interactive Dashboard:** `http://localhost:8000/`
 - **Swagger Interactive API Docs:** `http://localhost:8000/docs`
 
+### Using the dashboard
+- Set a starting point by clicking the map, entering coordinates, or using your device location.
+- Choose your business category, average order value, and search radius, then select **Find my best locations**.
+- Compare hourly profit and demand estimates. Sort recommendations by profit, distance, or customers.
+- Select **View on map** to see a route, or expand a card for prediction intervals and the drivers behind its forecast.
+- Use the map-style switcher, demand-zone toggle, expanded map, and CSV export to explore the results.
+
+The dashboard adapts to mobile screens and includes a quick-start guide. Changing any business or location setting clears the previous forecast. Live, periodic, proxy, simulated, and derived sources are labeled separately; unavailable road routes are shown only as dashed straight-line previews, not navigation. Forecasts are estimates, not guaranteed earnings.
+
 ---
 
 ## 🧪 Running Automated Tests
@@ -170,6 +179,18 @@ pytest tests/ -v
 ```text
 ============================== 16 passed in 1.45s ==============================
 ```
+
+---
+
+### Dashboard browser smoke check
+
+With the API running and an existing Playwright installation available to Node:
+
+```bash
+DASHBOARD_URL=http://127.0.0.1:8000 node tests/dashboard_smoke.cjs
+```
+
+If Playwright is installed outside this project, set `NODE_PATH` to that installation’s `node_modules` directory. The check uses Chrome, the real dashboard assets, and deterministic **test-only** API fixtures to verify desktop/mobile interactions, sorting, exports, loading/error/empty states, and stale-response protection. Set `SCREENSHOT_DIR` to save visual-review screenshots. It does not verify live third-party data availability.
 
 ---
 
