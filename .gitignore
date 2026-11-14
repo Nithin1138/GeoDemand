@@ -72,6 +72,7 @@ scratch/
 RESUME.md
 AGENTS.md
 agents.md
+agent1.md
 .agents/
 colab_indetail.md
 COLAB.md
@@ -84,3 +85,11 @@ COLAB*
 # Ignore all data/raw/weather files (as they are large and generated)
 data/raw/weather/
 __agent__/
+*.zip
+
+# MLOps & Tracking
+mlruns/
+mlflow.db
+catboost_info/
+models/champion_backup/
+models/candidates/

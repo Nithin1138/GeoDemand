@@ -1,67 +1,155 @@
 {
   "model_type": "lightgbm",
-  "trained_at": "2026-08-18T14:50:11.462240+00:00",
-  "feature_columns": [
-    "population_density",
-    "road_density",
-    "office_count",
-    "school_count",
-    "college_count",
-    "hospital_count",
-    "restaurant_count",
-    "mall_count",
-    "park_count",
-    "bus_stop_count",
-    "railway_station_count",
-    "metro_station_count",
-    "parking_count",
-    "building_density",
-    "residential_ratio",
-    "commercial_ratio",
-    "industrial_ratio",
-    "temperature",
-    "humidity",
-    "rainfall",
-    "wind_speed",
-    "pressure",
-    "cloud_cover",
-    "visibility",
-    "weather_condition",
-    "uv_index",
-    "hour",
-    "weekday",
-    "month",
-    "season",
-    "quarter",
-    "is_weekend",
-    "is_holiday",
-    "school_vacation",
-    "competition_score",
-    "event_importance",
-    "vendor_category",
-    "inventory_capacity",
-    "preparation_time",
-    "average_order_value"
-  ],
-  "categorical_columns": [
-    "weather_condition",
-    "vendor_category",
-    "weekday",
-    "season"
-  ],
+  "model_version": "v2.1.0",
+  "algorithm": "LightGBM",
   "target": "expected_customer_count",
-  "train_rows": 532350,
-  "val_rows": 60450,
-  "test_rows": 118950,
-  "train_end": "2025-10-01",
-  "val_end": "2025-11-01",
+  "target_column": "expected_customer_count",
+  "target_contract": "expected_customer_count_next_hour",
+  "contract_principle": "Predict expected customer count, never profit/revenue/decision/demand score directly.",
+  "training_dataset_version": "feature_store_f1da89bf16b8",
+  "feature_version": "v2.2-next-hour-forecast-cyclical",
+  "training_timestamp": "2026-10-10T14:36:56.945999+00:00",
+  "feature_columns": [
+    "average_order_value",
+    "building_density",
+    "bus_stop_count",
+    "cloud_cover",
+    "college_count",
+    "commercial_ratio",
+    "competition_score",
+    "day_cos",
+    "day_sin",
+    "event_importance",
+    "hospital_count",
+    "hour",
+    "hour_cos",
+    "hour_sin",
+    "humidity",
+    "industrial_ratio",
+    "inventory_capacity",
+    "is_holiday",
+    "is_weekend",
+    "mall_count",
+    "metro_station_count",
+    "month",
+    "month_cos",
+    "month_sin",
+    "office_count",
+    "park_count",
+    "parking_count",
+    "population_density",
+    "preparation_time",
+    "pressure",
+    "quarter",
+    "railway_station_count",
+    "rainfall",
+    "residential_ratio",
+    "restaurant_count",
+    "road_density",
+    "school_count",
+    "school_vacation",
+    "season",
+    "temperature",
+    "uv_index",
+    "vendor_category",
+    "visibility",
+    "weekday",
+    "wind_speed"
+  ],
+  "n_features": 45,
+  "categorical_columns": [
+    "weekday",
+    "season",
+    "vendor_category"
+  ],
   "metrics": {
-    "train_mae": 0.9,
-    "val_mae": 0.946,
-    "test_mae": 0.906,
-    "train_rmse": 1.209,
-    "val_rmse": 1.351,
-    "test_rmse": 1.223
+    "val_mae": 0.7693,
+    "val_rmse": 1.0345,
+    "val_r2": 0.9752,
+    "test_mae": 0.7565,
+    "test_rmse": 1.0072,
+    "test_r2": 0.976,
+    "validation": {
+      "mae": 0.7693,
+      "rmse": 1.0345,
+      "r2": 0.9752
+    },
+    "test": {
+      "mae": 0.7565,
+      "rmse": 1.0072,
+      "r2": 0.976
+    }
   },
-  "source": "feature_store.parquet (v2.1-next-hour-forecast)"
+  "quantiles": [
+    "p10",
+    "p50",
+    "p90"
+  ],
+  "quantiles_supported": [
+    "p10",
+    "p50",
+    "p90"
+  ],
+  "quantile_coverage_80": 0.799,
+  "quantile_interval_width": 2.603,
+  "shap_enabled": true,
+  "random_seed": 42,
+  "data_note": "SIMULATED",
+  "timestamp": "2026-10-10T15:46:04.655695+00:00",
+  "candidate_id": "v2.1.0",
+  "candidate_model_type": "lightgbm",
+  "champion_id": "v2.0.0",
+  "champion_model_type": "xgboost",
+  "decision": "APPROVED",
+  "passed_all_gates": true,
+  "gate_checks": {
+    "artifact_structure": {
+      "name": "artifact_structure",
+      "passed": true,
+      "details": "All bundle components present"
+    },
+    "feature_schema_match": {
+      "name": "feature_schema_match",
+      "passed": true,
+      "details": "Exact match on 45 features"
+    },
+    "predictions_finite_and_valid": {
+      "name": "predictions_finite_and_valid",
+      "passed": true,
+      "details": "Predictions valid (N=106,800, min=4.37, max=80.23)"
+    },
+    "quantile_ordering": {
+      "name": "quantile_ordering",
+      "passed": true,
+      "details": "P10 <= P50 <= P90 verified (Mean interval width=2.60, raw crossing rate=0.043%)"
+    },
+    "shap_explainability": {
+      "name": "shap_explainability",
+      "passed": true,
+      "details": "TreeSHAP local feature attribution operational"
+    },
+    "inference_latency": {
+      "name": "inference_latency",
+      "passed": true,
+      "details": "P95 latency 0.0149 ms/sample <= 25.0 ms"
+    },
+    "validation_performance": {
+      "name": "validation_performance",
+      "passed": true,
+      "details": "Candidate MAE=0.7693 vs Champion MAE=0.7738 (+0.58%)"
+    }
+  },
+  "candidate_metrics": {
+    "val_mae": 0.7693,
+    "val_rmse": 1.0345,
+    "val_r2": 0.9752,
+    "latency_p95_ms": 0.0149
+  },
+  "champion_metrics": {
+    "val_mae": 0.7738,
+    "val_rmse": 1.0045
+  },
+  "reasons": [
+    "Approved: Candidate demonstrated superior/equal performance with full contract compatibility."
+  ]
 }
