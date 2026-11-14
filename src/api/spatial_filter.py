@@ -71,10 +71,10 @@ BHAVANI_ISLAND_WATER_POLYGON: List[Tuple[float, float]] = [
 ]
 
 ELURU_CANAL_MARSH_POLYGON: List[Tuple[float, float]] = [
-    (16.514, 80.650),
-    (16.520, 80.650),
-    (16.522, 80.658),
-    (16.515, 80.658),
+    (16.514, 80.640),
+    (16.528, 80.640),
+    (16.528, 80.658),
+    (16.514, 80.658),
 ]
 
 ALL_WATER_POLYGONS = [

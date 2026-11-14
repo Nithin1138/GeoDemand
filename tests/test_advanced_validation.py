@@ -179,8 +179,12 @@ def test_competition_provider_fallback():
             assert 0.0 <= comp["competition_score"] <= 1.0
 
 
-def test_event_provider_fallback():
+def test_event_provider_fallback(monkeypatch):
     """When external event provider has no key or fails, it falls back to StochasticEventProvider."""
+    monkeypatch.delenv("TICKETMASTER_API_KEY", raising=False)
+    monkeypatch.delenv("PREDICTHQ_API_KEY", raising=False)
+    monkeypatch.delenv("EVENTBRITE_TOKEN", raising=False)
+    monkeypatch.delenv("EVENT_PROVIDER", raising=False)
     prov = EventProviderFactory.get_provider(preferred="auto")
     assert isinstance(prov, StochasticEventProvider)
     event_data = prov.get_event_importance("88619aa6c7fffff", timestamp=pytest.importorskip("datetime").datetime.now())
