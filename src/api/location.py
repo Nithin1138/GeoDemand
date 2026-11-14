@@ -14,13 +14,32 @@ from __future__ import annotations
 import math
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import List
+from pathlib import Path
+from typing import List, Optional, Dict
 
 import h3
+import pandas as pd
 
 from api.spatial_filter import is_water_location, is_water_cell, is_suitable_vendor_cell
 
 H3_RESOLUTION = 8
+
+_STATIC_FEATURES_CACHE: Optional[Dict[str, dict]] = None
+
+
+def _get_static_features_cache() -> Dict[str, dict]:
+    global _STATIC_FEATURES_CACHE
+    if _STATIC_FEATURES_CACHE is None:
+        try:
+            path = Path(__file__).resolve().parent.parent.parent / "data" / "processed" / "static_features.parquet"
+            if path.exists():
+                df = pd.read_parquet(path)
+                _STATIC_FEATURES_CACHE = df.set_index("h3_cell_id").to_dict(orient="index")
+            else:
+                _STATIC_FEATURES_CACHE = {}
+        except Exception:
+            _STATIC_FEATURES_CACHE = {}
+    return _STATIC_FEATURES_CACHE
 
 
 @dataclass
@@ -139,6 +158,8 @@ def generate_candidates(
         ring_distance=0,
     )
 
+    static_cache = _get_static_features_cache()
+
     # Expand neighbor H3 rings until all cells in ring exceed search_radius_km
     for k in range(1, 25):
         ring_cells = h3.grid_ring(h3_cell, k)
@@ -157,7 +178,8 @@ def generate_candidates(
 
             if dist <= search_radius_km and cell not in candidates:
                 cell_in_water = is_water_location(c_lat, c_lng) or is_water_cell(cell)
-                cell_unsuitable = not is_suitable_vendor_cell(c_lat, c_lng, h3_cell=cell)
+                cell_feat = static_cache.get(cell)
+                cell_unsuitable = not is_suitable_vendor_cell(c_lat, c_lng, h3_cell=cell, static_features=cell_feat)
 
                 # Exclude water bodies and unsuitable cells for recommendation targets
                 if exclude_water and cell_in_water:
@@ -186,9 +208,21 @@ def generate_candidates(
         if c.is_current_cell or (
             c.distance_km <= search_radius_km
             and (not exclude_water or not c.is_water)
-            and (not exclude_unsuitable or is_suitable_vendor_cell(c.centroid_lat, c.centroid_lng, h3_cell=c.h3_cell))
+            and (not exclude_unsuitable or is_suitable_vendor_cell(c.centroid_lat, c.centroid_lng, h3_cell=c.h3_cell, static_features=static_cache.get(c.h3_cell)))
         )
     ]
+
+    # Fallback if in sparse area and all destination candidates were rejected
+    if exclude_unsuitable and not [c for c in valid_candidates if not c.is_current_cell]:
+        valid_candidates = [
+            c for c in candidates.values()
+            if c.is_current_cell or (
+                c.distance_km <= search_radius_km
+                and (not exclude_water or not c.is_water)
+                and is_suitable_vendor_cell(c.centroid_lat, c.centroid_lng, h3_cell=c.h3_cell, static_features=None)
+            )
+        ]
+
     return sorted(valid_candidates, key=lambda c: c.distance_km)
 
 

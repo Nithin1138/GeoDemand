@@ -74,10 +74,18 @@ AGENTS.md
 agents.md
 agent1.md
 .agents/
-data/raw/weather/
-
 colab_indetail.md
 COLAB.md
+
+# Collaboration & Team Onboarding Guides
+COLAB
+COLAB.md
+COLAB*
+
+# Ignore all data/raw/weather files (as they are large and generated)
+data/raw/weather/
+__agent__/
+*.zip
 
 # MLOps & Tracking
 mlruns/

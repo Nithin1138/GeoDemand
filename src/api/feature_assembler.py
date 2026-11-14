@@ -92,9 +92,14 @@ def _calendar_features(ts: datetime) -> dict:
 # Main assembler
 # ---------------------------------------------------------------------------
 
+_DYNAMIC_SPATIAL_CACHE: dict[str, dict] = {}
+
+
 class FeatureAssembler:
     """
     Assembles inference feature vectors from live data providers.
+    Supports both pre-computed grid datasets (e.g. Vijayawada) and
+    dynamic spatial POI & road feature discovery for any global location.
     """
 
     def __init__(self, static_features_path: Optional[Path] = None):
@@ -104,6 +109,94 @@ class FeatureAssembler:
             self._static = df.set_index("h3_cell_id")
         else:
             raise FileNotFoundError(f"static_features.parquet not found at {path}. Run build_all_datasets.py first.")
+
+    def _discover_cell_features(self, h3_cell: str) -> tuple[dict, str]:
+        """
+        Dynamically extract live real-world spatial & POI features for any H3 cell
+        outside the pre-computed grid dataset (e.g. Hyderabad, Guntur, Bangalore, Mumbai).
+        """
+        import os
+        import requests
+        import h3
+
+        medians = {
+            col: float(self._static[col].median()) if col in self._static.columns else 0.0
+            for col in STATIC_FEATURE_COLUMNS
+        }
+        feat = medians.copy()
+
+        try:
+            lat, lng = h3.cell_to_latlng(h3_cell)
+        except Exception:
+            return feat, "synthetic_fallback"
+
+        tomtom_key = os.getenv("TOMTOM_API_KEY")
+        source = "synthetic_fallback"
+
+        # 1. Live POI Category Discovery via TomTom Places API
+        if tomtom_key:
+            try:
+                url = f"https://api.tomtom.com/search/2/nearbySearch/.json?lat={lat:.5f}&lon={lng:.5f}&radius=450&limit=30&key={tomtom_key}"
+                resp = requests.get(url, timeout=2.5).json()
+                results = resp.get("results", [])
+                if results:
+                    poi_counts = {
+                        "office_count": 0, "restaurant_count": 0, "hospital_count": 0,
+                        "mall_count": 0, "school_count": 0, "college_count": 0,
+                        "park_count": 0, "bus_stop_count": 0, "parking_count": 0
+                    }
+                    for item in results:
+                        cats = [c.lower() for c in item.get("poi", {}).get("categories", [])]
+                        cat_str = " ".join(cats)
+                        if any(k in cat_str for k in ["office", "government", "corporate"]):
+                            poi_counts["office_count"] += 1
+                        if any(k in cat_str for k in ["restaurant", "cafe", "food", "fast food"]):
+                            poi_counts["restaurant_count"] += 1
+                        if any(k in cat_str for k in ["hospital", "clinic", "health", "dentist", "pharmacy"]):
+                            poi_counts["hospital_count"] += 1
+                        if any(k in cat_str for k in ["shop", "mall", "clothing", "retail", "market"]):
+                            poi_counts["mall_count"] += 1
+                        if any(k in cat_str for k in ["school"]):
+                            poi_counts["school_count"] += 1
+                        if any(k in cat_str for k in ["college", "university"]):
+                            poi_counts["college_count"] += 1
+                        if any(k in cat_str for k in ["park", "garden", "recreation"]):
+                            poi_counts["park_count"] += 1
+                        if any(k in cat_str for k in ["bus", "transit", "station"]):
+                            poi_counts["bus_stop_count"] += 1
+                        if any(k in cat_str for k in ["parking"]):
+                            poi_counts["parking_count"] += 1
+
+                    for k, v in poi_counts.items():
+                        feat[k] = float(v)
+
+                    comm = feat["office_count"] + feat["restaurant_count"] + feat["mall_count"]
+                    tot = sum(poi_counts.values())
+                    feat["commercial_ratio"] = round(min(1.0, comm / max(1.0, tot + 2.0)), 2)
+                    feat["residential_ratio"] = round(max(0.1, 1.0 - feat["commercial_ratio"]), 2)
+                    feat["building_density"] = round(min(5.0, max(0.5, tot * 0.2)), 2)
+                    source = "real_live_poi"
+            except Exception as e:
+                logger.debug(f"Live POI discovery error for {h3_cell}: {e}")
+
+        # 2. Road Accessibility & Density via OSRM
+        try:
+            osrm_url = f"https://router.project-osrm.org/nearest/v1/driving/{lng:.5f},{lat:.5f}"
+            osrm_resp = requests.get(osrm_url, timeout=1.5).json()
+            if osrm_resp.get("code") == "Ok" and osrm_resp.get("waypoints"):
+                dist = float(osrm_resp["waypoints"][0].get("distance", 50.0))
+                if dist <= 15.0:
+                    feat["road_density"] = 0.85
+                elif dist <= 60.0:
+                    feat["road_density"] = 0.60
+                elif dist <= 150.0:
+                    feat["road_density"] = 0.35
+                else:
+                    feat["road_density"] = 0.05
+        except Exception:
+            pass
+
+        return feat, source
 
     def assemble(
         self,
@@ -122,10 +215,12 @@ class FeatureAssembler:
 
         # --- 1. Static spatial features ---
         if h3_cell not in self._static.index:
-            logger.warning(f"H3 cell {h3_cell} not in static_features. Using median defaults.")
-            static_row = {col: float(self._static[col].median()) if col in self._static.columns else 0.0
-                          for col in STATIC_FEATURE_COLUMNS}
-            static_source = "synthetic_fallback"
+            if h3_cell in _DYNAMIC_SPATIAL_CACHE:
+                static_row = _DYNAMIC_SPATIAL_CACHE[h3_cell].copy()
+                static_source = "real_live_poi"
+            else:
+                static_row, static_source = self._discover_cell_features(h3_cell)
+                _DYNAMIC_SPATIAL_CACHE[h3_cell] = static_row.copy()
         else:
             row = self._static.loc[h3_cell]
             static_row = {col: float(row[col]) if col in row.index else 0.0 for col in STATIC_FEATURE_COLUMNS}

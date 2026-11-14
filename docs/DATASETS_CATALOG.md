@@ -334,6 +334,9 @@ Target Variable (Supervised ML Regression Target)
 
 ---
 
+(image.png)
+
+
 ## 4. Legacy Dataset Designation
 
 | Artifact Path | Status | Policy |
@@ -355,3 +358,5 @@ The current dataset build is cryptographically snapshot in `data/processed/pipel
   * Holidays $\to$ overall demand up: **✅ PASS (+27.16% lift)**
   * Weekends $\to$ salon demand up: **✅ PASS (+24.28% lift)**
   * More competitors $\to$ lower per-vendor demand: **✅ PASS (-18.38% suppression)**
+
+

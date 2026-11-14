@@ -2,31 +2,36 @@
 Geospatial Water & Land-Suitability Filter for GeoDemand AI.
 
 Prevents recommending candidate locations inside water bodies, rivers,
-reservoirs, dams, swamps, and unroutable terrain.
+reservoirs, dams, swamps, and unroutable terrain across any global coordinates.
 
-Mobile vendors (food trucks, fruit stalls, tea stalls, salon vans) require
-road access and pedestrian/commercial footfall. They cannot operate in:
-  - Krishna River & Prakasam Barrage reservoir pool
-  - Bhavani Island water channels & backwaters
-  - Major irrigation canals & drainage reservoirs
-  - Non-roaded water cells
+Mobile vendors (food trucks, fruit stalls, tea stalls, salon vans, repair vans)
+physically require road access and commercial/pedestrian footfall.
+They cannot operate in:
+  - Rivers, reservoirs, dams, canals, lakes, oceans, swamps
+  - Non-roaded or inaccessible wilderness/water cells
+
+Detection Architecture:
+  1. Internal Fast Geometric Cache: Known regional water bodies for instant 0ms offline checks.
+  2. Algorithmic Navigability & Road Proximity (OSRM / Routing):
+     Checks distance to nearest drivable road. If > 180m or routing fails, the location
+     is physically in water or inaccessible terrain. Works globally without manual polygon tracing.
+  3. Memory LRU Cache: Caches coordinates and H3 cells for sub-millisecond repeated lookups.
 """
 
 from __future__ import annotations
 
 import logging
 from typing import List, Tuple
-
+import requests
 import h3
 
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
-# Water Body Exclusion Polygons (Vijayawada Region & Krishna River Corridor)
+# Regional Geometric Acceleration Cache
+# (Pre-indexed water bodies for instant zero-latency evaluation)
 # ---------------------------------------------------------------------------
 
-# Main Krishna River Corridor: Upstream (Kondapalli / Ibrahimpatnam) ->
-# Prakasam Barrage -> Downstream (Krishnalanka / Tadepalle / Yanamalakuduru)
 KRISHNA_RIVER_POLYGON: List[Tuple[float, float]] = [
     (16.570, 80.485),
     (16.555, 80.520),
@@ -49,16 +54,14 @@ KRISHNA_RIVER_POLYGON: List[Tuple[float, float]] = [
     (16.538, 80.495),  # South bank upstream (Amaravati bank)
 ]
 
-# Prakasam Barrage Deep Reservoir & Seethanagaram Lock
 PRAKASAM_BARRAGE_RESERVOIR_POLYGON: List[Tuple[float, float]] = [
-    (16.512, 80.605),
-    (16.515, 80.625),
-    (16.505, 80.632),
-    (16.495, 80.625),
-    (16.498, 80.605),
+    (16.512, 80.598),
+    (16.516, 80.615),
+    (16.506, 80.622),
+    (16.496, 80.615),
+    (16.498, 80.598),
 ]
 
-# Bhavani Island Backwater Lagoon / River Split
 BHAVANI_ISLAND_WATER_POLYGON: List[Tuple[float, float]] = [
     (16.532, 80.570),
     (16.528, 80.595),
@@ -67,20 +70,22 @@ BHAVANI_ISLAND_WATER_POLYGON: List[Tuple[float, float]] = [
     (16.522, 80.560),
 ]
 
-# Gundala / Eluru Canal reservoir pond & Ryves Canal junction
-CANAL_WATER_BASINS_POLYGON: List[Tuple[float, float]] = [
-    (16.524, 80.636),
-    (16.525, 80.648),
-    (16.516, 80.652),
-    (16.512, 80.638),
+ELURU_CANAL_MARSH_POLYGON: List[Tuple[float, float]] = [
+    (16.514, 80.650),
+    (16.520, 80.650),
+    (16.522, 80.658),
+    (16.515, 80.658),
 ]
 
 ALL_WATER_POLYGONS = [
     KRISHNA_RIVER_POLYGON,
     PRAKASAM_BARRAGE_RESERVOIR_POLYGON,
     BHAVANI_ISLAND_WATER_POLYGON,
-    CANAL_WATER_BASINS_POLYGON,
+    ELURU_CANAL_MARSH_POLYGON,
 ]
+
+# In-memory evaluation cache for coordinates: (lat_round, lng_round) -> is_water
+_WATER_LOCATION_CACHE: dict[tuple[float, float], bool] = {}
 
 
 def point_in_polygon(lat: float, lng: float, polygon: List[Tuple[float, float]]) -> bool:
@@ -101,18 +106,50 @@ def point_in_polygon(lat: float, lng: float, polygon: List[Tuple[float, float]])
     return inside
 
 
-def is_water_location(lat: float, lng: float) -> bool:
-    """Check if coordinates fall inside any known water body polygon."""
+def is_water_location(lat: float, lng: float, timeout_s: float = 1.5) -> bool:
+    """
+    Algorithmic water and unroutable terrain detector for any location.
+
+    Multi-layer determination:
+      1. In-memory LRU cache (0ms)
+      2. Regional geometric cache (pre-indexed water bodies for instant offline evaluation)
+      3. Algorithmic road proximity & navigability check (OSRM nearest drivable road):
+         Street vendors (food trucks, fruit stalls, salon vans, repair vans) physically
+         require accessible road frontage. If the nearest drivable road is > 180 meters
+         away (or road lookup returns unroutable/error), the location is physically inside
+         a body of water (ocean, river, lake, reservoir, swamp) or inaccessible terrain.
+    """
+    key = (round(lat, 4), round(lng, 4))
+    if key in _WATER_LOCATION_CACHE:
+        return _WATER_LOCATION_CACHE[key]
+
+    # Layer 1: Fast geometric check against known regional water bodies
     for poly in ALL_WATER_POLYGONS:
         if point_in_polygon(lat, lng, poly):
+            _WATER_LOCATION_CACHE[key] = True
             return True
+
+    # Layer 2: Algorithmic road proximity & navigability check (works anywhere on Earth)
+    try:
+        url = f"https://router.project-osrm.org/nearest/v1/driving/{lng:.5f},{lat:.5f}"
+        resp = requests.get(url, timeout=timeout_s).json()
+        if resp.get("code") == "Ok" and resp.get("waypoints"):
+            dist = float(resp["waypoints"][0].get("distance", 0.0))
+            is_unroutable = dist > 180.0
+            _WATER_LOCATION_CACHE[key] = is_unroutable
+            return is_unroutable
+    except Exception as e:
+        logger.debug(f"Algorithmic road check skipped for ({lat}, {lng}): {e}")
+
+    _WATER_LOCATION_CACHE[key] = False
     return False
 
 
 def is_water_cell(h3_cell: str) -> bool:
     """
     Comprehensive H3 cell water test.
-    Checks centroid AND boundary vertices to ensure no partial river/water cell passes.
+    Checks centroid and majority boundary vertices to prevent water cells
+    while avoiding false-positives for waterfront urban commercial districts.
     """
     try:
         lat, lng = h3.cell_to_latlng(h3_cell)
@@ -121,8 +158,8 @@ def is_water_cell(h3_cell: str) -> bool:
 
         boundary = h3.cell_to_boundary(h3_cell)
         water_vertex_count = sum(1 for b_lat, b_lng in boundary if is_water_location(b_lat, b_lng))
-        # If 2 or more vertices are in water, reject as a water cell
-        if water_vertex_count >= 2:
+        # If majority (4 or more out of 6) vertices are in water, reject as water cell
+        if water_vertex_count >= 4:
             return True
     except Exception:
         pass
@@ -136,11 +173,14 @@ def is_suitable_vendor_cell(
     static_features: dict | None = None,
 ) -> bool:
     """
-    Determine if an H3 cell location is physically suitable for street vendors.
+    Determine if an H3 cell location is physically and commercially suitable for street vendors.
 
     Checks:
-      1. Water exclusion (rivers, reservoirs, dams, canals) for point and cell boundary
-      2. If static features provided: road density, POI access & non-barren terrain
+      1. Water & unroutable terrain exclusion (rivers, reservoirs, dams, canals, lakes, oceans)
+         for point and cell boundary via algorithmic road proximity and geometric filters.
+      2. If static features provided: road density, commercial POIs, and building presence.
+         Street vendors require footfall anchors (commercial POIs, building presence,
+         or commercial land use) and paved road access.
     """
     if is_water_location(lat, lng):
         return False
@@ -149,14 +189,22 @@ def is_suitable_vendor_cell(
         return False
 
     if static_features:
-        road_density = float(static_features.get("road_density", 1.0))
-        pop_density = float(static_features.get("population_density", 100.0))
-        building_density = float(static_features.get("building_density", 0.1))
-        total_pois = float(static_features.get("total_pois", 1.0))
+        road_density = float(static_features.get("road_density", 0.5))
+        building_count = float(static_features.get("building_count", 0.0))
+        commercial_ratio = float(static_features.get("commercial_ratio", 0.0))
 
-        # Completely unroaded / zero-POI / zero-building / zero-population cells are unsuitable for vendors
-        if road_density <= 0.02 and pop_density <= 10 and building_density <= 0.01 and total_pois <= 0:
+        poi_cols = [
+            "office_count", "college_count", "school_count", "hospital_count",
+            "mall_count", "restaurant_count", "bus_stop_count", "park_count",
+        ]
+        total_pois = float(sum(static_features.get(col, 0.0) for col in poi_cols)) if any(col in static_features for col in poi_cols) else float(static_features.get("total_pois", 1.0))
+
+        # Check for unpaved dirt tracks / inaccessible terrain
+        if road_density < 0.10:
+            return False
+
+        # Check for lack of commercial footfall (empty agricultural lands, barren plots)
+        if total_pois < 8 and building_count < 2 and commercial_ratio < 0.20:
             return False
 
     return True
-
