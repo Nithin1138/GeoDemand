@@ -96,6 +96,8 @@ def main():
     # 4. Verify MLflow
     try:
         import mlflow
+        db_path = ROOT_DIR / "mlflow.db"
+        mlflow.set_tracking_uri(f"sqlite:///{db_path}".replace("\\", "/"))
         client = mlflow.tracking.MlflowClient()
         exp = client.get_experiment_by_name("GeoDemand")
         if exp:
