@@ -25,7 +25,7 @@ import hashlib
 import json
 import logging
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional
 
@@ -201,7 +201,13 @@ class OpenMeteoClient:
 
         except requests.exceptions.RequestException as e:
             logger.warning(f"Open-Meteo current weather failed ({e}); using synthetic fallback.")
-            return self._synthetic_current_fallback(lat, lng)
+            fallback = self._synthetic_current_fallback(lat, lng)
+            try:
+                with open(cache_path, "w") as f:
+                    json.dump(fallback, f)
+            except OSError as cache_err:
+                logger.debug(f"Failed to write fallback cache: {cache_err}")
+            return fallback
 
     # ------------------------------------------------------------------
     # 3. HOURLY FORECAST (for next-hour prediction — features at t for window t+1)
@@ -290,7 +296,13 @@ class OpenMeteoClient:
 
         except requests.exceptions.RequestException as e:
             logger.warning(f"Open-Meteo forecast failed ({e}); using synthetic fallback.")
-            return self._synthetic_current_fallback(lat, lng)
+            fallback = self._synthetic_hourly_fallback(lat, lng, target_hour_offset=target_hour_offset)
+            try:
+                with open(cache_path, "w") as f:
+                    json.dump(fallback, f)
+            except OSError as cache_err:
+                logger.debug(f"Failed to write hourly fallback cache: {cache_err}")
+            return fallback
 
     # ------------------------------------------------------------------
     # SYNTHETIC FALLBACKS (explicit source tagging — never pretend it's real)
@@ -319,6 +331,39 @@ class OpenMeteoClient:
             "source_type": "synthetic_fallback",
             "source_name": "open-meteo-synthetic",
             "observation_timestamp": now.isoformat(),
+            "retrieved_at": now.isoformat(),
+            "from_cache": False,
+            "cache_age_seconds": 0,
+            "fallback_reason": "open-meteo API unavailable",
+        }
+
+    def _synthetic_hourly_fallback(self, lat: float, lng: float, target_hour_offset: int = 1) -> dict:
+        """Deterministic synthetic hourly forecast for window (now + target_hour_offset hours)."""
+        now = datetime.now(timezone.utc)
+        target_dt = now + timedelta(hours=target_hour_offset)
+        hour = target_dt.hour
+        doy = target_dt.timetuple().tm_yday
+        temp = round(27 + 8 * np.sin(2 * np.pi * (doy - 60) / 365) + 3 * np.sin(2 * np.pi * hour / 24), 1)
+        is_monsoon = 160 < doy < 270
+        rainfall = round(float(np.random.default_rng(doy + hour).uniform(0, 5) if is_monsoon else 0), 2)
+        condition = "rain" if rainfall > 1.0 else ("cloudy" if is_monsoon else "clear")
+
+        return {
+            "temperature": float(temp),
+            "humidity": round(65.0 + 15.0 * float(is_monsoon), 1),
+            "rainfall": rainfall,
+            "wind_speed": 8.0,
+            "pressure": 1010.0,
+            "cloud_cover": 60.0 if is_monsoon else 20.0,
+            "visibility": 6.0 if is_monsoon else 10.0,
+            "weather_condition": condition,
+            "uv_index": max(0.0, round(8.0 * np.sin(np.pi * hour / 12), 1)) if 6 <= hour <= 18 else 0.0,
+            "source": "synthetic:open-meteo-hourly-fallback",
+            "source_type": "synthetic_fallback",
+            "source_name": "open-meteo-synthetic",
+            "forecast_for_timestamp": target_dt.isoformat(),
+            "forecast_generation_timestamp": now.isoformat(),
+            "hourly_forecast_offset": target_hour_offset,
             "retrieved_at": now.isoformat(),
             "from_cache": False,
             "cache_age_seconds": 0,
