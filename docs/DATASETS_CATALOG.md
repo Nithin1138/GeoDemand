@@ -360,3 +360,133 @@ The current dataset build is cryptographically snapshot in `data/processed/pipel
   * More competitors $\to$ lower per-vendor demand: **✅ PASS (-18.38% suppression)**
 
 
+---
+
+## 6. V2 Extended Data Sources & Enriched Geospatial Layers
+
+GeoDemand AI V2 introduces live operational telemetry, demographic census integration, competitor operating-hours tracking, and multi-city spatial grids.
+
+### 6.1 Real-Time POS Ingestion & Hourly Ground-Truth Actuals
+* **Provenance**: `real:pos_actuals` (Live mobile vendor POS terminals & UPI payment callbacks).
+* **Ingestion Schema** ([src/ingestion/schema.py](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/ingestion/schema.py)):
+  - Validates `TransactionRecord`: `transaction_id`, `vendor_id`, `event_timestamp`, `amount_inr`, `payment_method`, `location` (lat/lng/H3 cell), and `items`.
+  - Enforces duplicate transaction detection, delayed transaction handling, and cancellation/refund state tracking.
+* **Hourly Actuals Aggregation** ([src/data/actuals_aggregator.py](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/data/actuals_aggregator.py)):
+  - Buckets transactions into floored $[t, t+1\text{h})$ windows.
+  - Generates distinct `unique_customer_count`, `transaction_count`, and `total_items_sold`.
+  - Reconciles total sales against raw receipts with zero financial discrepancy.
+  - Enforces 90-day telemetry retention policy with PII exclusion.
+
+### 6.2 Census 2011 & High-Resolution Population Grids
+* **Provenance**: Multi-source demographic ensemble:
+  1. **Census 2011 Municipal Wards**: Official 59 municipal ward polygons of Vijayawada Municipal Corporation (VMC) under GODL license.
+  2. **Meta High Resolution Settlement Layer (HRSL)**: 30m gridded building-based population estimates under CC-BY 4.0.
+  3. **Kontur Population 2023**: Global Uber H3 Resolution 8 population grid derived from OSM and satellite imagery under ODbL 1.0.
+* **Demographic Pipeline** ([src/data/demographic_enrichment.py](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/data/demographic_enrichment.py)):
+  - Validates WGS84 EPSG:4326 Coordinate Reference System.
+  - Cleans degenerate polygons, closes vertex rings, and performs ray-casting point-in-polygon containment.
+  - Computes area-weighted population density and inverse-distance decay for peri-urban boundary cells.
+
+### 6.3 Time-Aware Competitor & Operating-Hours Pipeline
+* **Provenance**: `real_periodic:osm_overpass` & Google Places API.
+* **Categories**: Normalized into 4 canonical sectors: `food`, `fruits`, `salon`, `repair`.
+* **Temporal Parsing** ([src/data/competitor_pipeline.py](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/data/competitor_pipeline.py)):
+  - Parses OpenStreetMap `opening_hours` syntax.
+  - Distinguishes daytime competitors (06:00–18:00) vs nighttime competitors (18:00–06:00).
+  - Automatically identifies stale competitor records unverified for $>30$ days.
+  - Local parquet caching with daily refresh cycle.
+
+### 6.4 Multi-City Urban Coverage
+* **Engine**: [src/data/multicity.py](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/data/multicity.py).
+* **Coverage Scope**:
+  1. **Vijayawada (AP)**: Benz Circle, MG Road, One Town, Governorpet, Krishna Riverfront.
+  2. **Hyderabad (TS)**: HITEC City, Cyberabad, Madhapur, Gachibowli, Jubilee Hills.
+  3. **Bengaluru (KA)**: Koramangala, Indiranagar, Electronic City, Whitefield, MG Road.
+  4. **Visakhapatnam (AP)**: Beach Road, MVP Colony, Jagadamba Centre, Gajuwaka.
+
+### 6.5 Relational Storage & PostGIS Migration (OLTP)
+* **Engine**: [src/data/persistence.py](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/data/persistence.py) & [src/db/](file:///c:/Users/ALEKHYA/Desktop/GeoDemand/src/db/).
+* **Classification**:
+  - **Operational (PostgreSQL / PostGIS)**: `vendors`, `transactions`, `reservations`, `location_events`.
+  - **Analytical (Parquet Columnar)**: `feature_store`, `hourly_actuals`, `static_features`, `demographic_enrichment`.
+* **Spatial Schema**:
+  - Generated PostGIS geometry columns: `geom geometry(Point, 4326) GENERATED ALWAYS AS (ST_SetSRID(ST_MakePoint(lng, lat), 4326)) STORED`.
+  - Sub-millisecond GIST spatial indexes: `idx_vendors_geom`, `idx_transactions_geom`, `idx_location_events_geom`.
+  - Composite B-Tree indexes: `idx_transactions_vendor_time`, `idx_reservations_cell_slot`.
+
+---
+
+## 7. Data Transformation & Assembly Pipelines
+
+| Pipeline Stage | Module | Input Data | Output Data | Transformation / Contract |
+|---|---|---|---|---|
+| **Spatial Indexing** | `h3_cells.py` | Bounding Box | `h3_cells.parquet` | Generates uniform Resolution 8 hexagons (~0.737 km²). |
+| **Demographic Enrichment** | `demographic_enrichment.py` | Ward Polygons, Kontur | Enriched H3 cells | Ray-casting point-in-polygon containment and distance decay. |
+| **Competitor Extraction** | `competitor_pipeline.py` | OSM Overpass Nodes | Competitor Features | Classifies 4 sectors, segments day/night, flags stale $>30\text{d}$. |
+| **Telemetry Ingestion** | `validator.py` | Raw POS JSON / Stream | Validated Records | GPS coordinate validation, H3 mapping, duplicate rejection. |
+| **Actuals Aggregation** | `actuals_aggregator.py` | Validated Records | `hourly_actuals.parquet`| Floored $[t, t+1\text{h})$ aggregation, distinct customer counts. |
+| **Multi-City Grids** | `multicity.py` | City Configs | Multi-city H3 Stores | Automated bounding box grid expansion and static feature synthesis. |
+| **Relational Migration** | `persistence.py` | Parquet / JSON | PostgreSQL / PostGIS | PostGIS WKT conversion, GIST indexing, count reconciliation. |
+| **Quality Monitoring** | `data_monitoring.py` | Live Feeds | Quality Reports & Alerts | Monitors failure rate, freshness SLA, null/duplicate profiling. |
+| **Release Freezing** | `release_verification.py`| Canonical Store | Release Manifest | SHA-256 hash snapshotting, backup creation & restoration audit. |
+
+---
+
+## 8. Real vs. Simulated Data Boundaries
+
+GeoDemand AI maintains strict boundaries between empirical observations and stochastic simulations:
+
+### Real Data Assets (Empirical Observations)
+* **OpenStreetMap POIs & Infrastructure**: 35,800+ real geospatial entities across 27 commercial and civic categories.
+* **Open-Meteo Meteorology**: Real hourly weather archive (temperature, rainfall, wind speed, pressure, humidity).
+* **Census 2011 & Kontur**: Official municipal ward demographics and satellite population grids.
+* **POS Telemetry & Actuals**: Real transaction amounts, payment methods, customer IDs, and GPS device events.
+
+### Simulated Data Assets (Synthetic Market Experiments)
+* **Historical Training Footfall**: `expected_customer_count` generated by agent-based market simulation for offline historical backtesting.
+* **Latent Latency Factors**: `hidden_skill_factor` and `cell_reputation` used to simulate realistic vendor heterogeneity.
+* **Leakage Prevention Guarantee**: All latent simulation variables are strictly excluded from `feature_store.parquet` and `trainable_columns()`. The model cannot reverse-engineer simulation formulas.
+
+---
+
+## 9. Temporal Validation & Chronological Splitting
+
+* **Chronological Ordering**: Data is strictly partitioned along the time dimension:
+  - **Training Set ($80\%$)**: Months 1 through 9.
+  - **Validation / Test Set ($20\%$)**: Months 10 through 12.
+* **No Random K-Fold Shuffling**: Random cross-validation across time is prohibited to prevent future leakage.
+* **Decision Time Precedence**: For all observations, decision timestamp $t$ strictly precedes target timestamp $t+1\text{h}$ by exactly 60 minutes.
+
+---
+
+## 10. Multi-City Onboarding Protocol (Standard Operating Procedure)
+
+To onboard a new urban metropolitan area into GeoDemand AI:
+
+1. **Step 1: Define City Configuration (`CityConfig`)**:
+   - Provide `city_id`, `city_name`, `state`, `state_code` (e.g., `TS`, `KA`, `AP`), and `country`.
+   - Provide centroid coordinates (`latitude`, `longitude`) and operational radius in kilometers.
+   - Define geographic bounding box: `(min_lat, min_lon, max_lat, max_lon)`.
+2. **Step 2: Register in `MultiCityRegistry`**:
+   - Add configuration to `src/data/multicity.py` or invoke `registry.register_city(config)`.
+3. **Step 3: Generate H3 Spatial Grid**:
+   - Execute `MultiCityPipeline.generate_h3_grid(city_id)`.
+   - Verifies all generated hexagons have resolution 8 and non-zero boundary area.
+4. **Step 4: Collect Static POIs and Demographics**:
+   - Run Overpass POI extraction or synthesize static features using `generate_city_static_features()`.
+   - Intersect municipal ward boundaries for population enrichment.
+5. **Step 5: Validate and Freeze**:
+   - Execute `run_full_release_verification()` to verify 0 nulls and generate frozen pipeline manifest.
+
+---
+
+## 11. Production Backup, Recovery & Monitoring
+
+* **Automated Checkpoints**: Ingestion and feature pipelines maintain incremental parquet state checkpoints in `data/processed/checkpoints/`.
+* **Logical Database Dumps**: `DatabaseMigrationManager.create_backup()` exports complete schemas and records to versioned JSON/SQL dumps.
+* **Lossless Restoration**: `DatabaseMigrationManager.restore_backup()` restores table states with checksum validation and record count reconciliation.
+* **Quality & Freshness SLAs**:
+  - `transactions`: SLA $<15$ minutes fresh.
+  - `weather`: SLA $<60$ minutes fresh.
+  - `competitors`: SLA $<24$ hours fresh.
+  - Alerts are routed by `AlertManager` (`INFO`, `WARNING`, `CRITICAL`) with cooldown deduplication.

@@ -74,6 +74,9 @@ AGENTS.md
 agents.md
 agent1.md
 .agents/
+data/raw/weather/
+data/raw/osm/competitors_aggregated_cache.parquet
+
 colab_indetail.md
 COLAB.md
 
@@ -90,6 +93,8 @@ __agent__/
 # MLOps & Tracking
 mlruns/
 mlflow.db
+v2-plan2.md
+alekhya-checklist.md
 catboost_info/
 models/champion_backup/
 models/candidates/

@@ -1,12 +1,12 @@
 {
   "pipeline_schema_version": "v2.1-next-hour-forecast",
-  "generated_at": "2026-08-18T17:48:20.329649+00:00",
+  "generated_at": "2026-11-15T06:11:31.329710+00:00",
   "files": {
     "h3_cells.parquet": {
-      "sha256_16": "c7ce05ead4d3ba1b",
+      "sha256_16": "f2260e46a09bdc1b",
       "n_rows": 817,
-      "n_cols": 9,
-      "size_bytes": 33768,
+      "n_cols": 10,
+      "size_bytes": 34330,
       "provenance": "real:spatial_indexing",
       "description": "Deterministic H3 hexagonal indexing (Uber H3, Res 8) over Vijayawada geographic boundary",
       "columns": [
@@ -18,6 +18,7 @@
         "state",
         "country",
         "boundary_area_km2",
+        "is_water",
         "source"
       ]
     },
@@ -26,8 +27,8 @@
       "n_rows": 817,
       "n_cols": 29,
       "size_bytes": 48246,
-      "provenance": "real-proxy:osm_synthetic_fallback",
-      "description": "Spatial POI counts and land-use attributes (real OSM Overpass API ready with spatial smooth fallback)",
+      "provenance": "real:openstreetmap_overpass",
+      "description": "Spatial POI counts and land-use attributes from OpenStreetMap Overpass (population density via OSM building proxy)",
       "columns": [
         "h3_cell_id",
         "latitude",
@@ -65,8 +66,8 @@
       "n_rows": 210240,
       "n_cols": 11,
       "size_bytes": 1460052,
-      "provenance": "real-proxy:open_meteo_synthetic_fallback",
-      "description": "Hourly weather metrics (Open-Meteo historical archive API ready with MD5-seeded diurnal fallback)",
+      "provenance": "real:open-meteo-archive",
+      "description": "Hourly weather metrics from Open-Meteo archive (with deterministic diurnal simulation fallback)",
       "columns": [
         "timestamp",
         "temperature",
@@ -108,7 +109,7 @@
       "n_rows": 5964,
       "n_cols": 8,
       "size_bytes": 132041,
-      "provenance": "simulated:sparse_stochastic",
+      "provenance": "simulated:sparse",
       "description": "Sparse stochastic festival, wedding, and college fest local event spikes",
       "columns": [
         "event_id",
@@ -254,5 +255,5 @@
       ]
     }
   },
-  "pipeline_version_hash": "e817d7a33e14"
+  "pipeline_version_hash": "12c8b1128aa9"
 }
