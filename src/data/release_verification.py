@@ -50,8 +50,8 @@ def verify_production_manifest(processed_dir: Path) -> Tuple[bool, str, Dict[str
     if not manifest_files:
         return False, "", {"error": "No pipeline manifest found"}
 
-    # Use the latest or canonical manifest
-    manifest_file = sorted(manifest_files)[-1]
+    # Use the latest manifest by file modification time (mtime)
+    manifest_file = max(manifest_files, key=lambda p: p.stat().st_mtime)
     with open(manifest_file, "r", encoding="utf-8") as f:
         manifest_data = json.load(f)
 

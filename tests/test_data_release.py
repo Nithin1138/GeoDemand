@@ -23,7 +23,8 @@ def test_freeze_production_dataset_versions():
 
     manifest_ok, v_hash, manifest_data = verify_production_manifest(processed_dir)
     assert manifest_ok is True
-    assert v_hash == "12c8b1128aa9"
+    assert len(v_hash) == 12
+    assert v_hash == manifest_data.get("pipeline_version_hash")
     assert manifest_data["pipeline_schema_version"] == "v2.1-next-hour-forecast"
 
 

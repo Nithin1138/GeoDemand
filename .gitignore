@@ -90,6 +90,9 @@ data/raw/weather/
 __agent__/
 *.zip
 
+# Member Checklists
+members-checklist*
+
 # MLOps & Tracking
 mlruns/
 mlflow.db

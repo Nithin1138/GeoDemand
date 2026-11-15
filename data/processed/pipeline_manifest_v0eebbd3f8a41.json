@@ -1,12 +1,12 @@
 {
   "pipeline_schema_version": "v2.1-next-hour-forecast",
-  "generated_at": "2026-11-15T06:11:31.329710+00:00",
+  "generated_at": "2026-11-15T08:05:40.326437+00:00",
   "files": {
     "h3_cells.parquet": {
-      "sha256_16": "f2260e46a09bdc1b",
+      "sha256_16": "ea87c7de4724fdaf",
       "n_rows": 817,
       "n_cols": 10,
-      "size_bytes": 34330,
+      "size_bytes": 34309,
       "provenance": "real:spatial_indexing",
       "description": "Deterministic H3 hexagonal indexing (Uber H3, Res 8) over Vijayawada geographic boundary",
       "columns": [
@@ -23,10 +23,10 @@
       ]
     },
     "static_features.parquet": {
-      "sha256_16": "0b3408282997c1ae",
+      "sha256_16": "c31d998d11cf10c8",
       "n_rows": 817,
       "n_cols": 29,
-      "size_bytes": 48246,
+      "size_bytes": 48217,
       "provenance": "real:openstreetmap_overpass",
       "description": "Spatial POI counts and land-use attributes from OpenStreetMap Overpass (population density via OSM building proxy)",
       "columns": [
@@ -83,10 +83,10 @@
       ]
     },
     "calendar.parquet": {
-      "sha256_16": "6963d53fc8e1da37",
+      "sha256_16": "0fb9fe9dce61fa38",
       "n_rows": 8760,
       "n_cols": 12,
-      "size_bytes": 84058,
+      "size_bytes": 84139,
       "provenance": "real:holidays_lib",
       "description": "Temporal and national/state holiday calendar flags from Python holidays library",
       "columns": [
@@ -105,10 +105,10 @@
       ]
     },
     "events.parquet": {
-      "sha256_16": "3011f19d52a5f46b",
+      "sha256_16": "29a260b918614371",
       "n_rows": 5964,
       "n_cols": 8,
-      "size_bytes": 132041,
+      "size_bytes": 131950,
       "provenance": "simulated:sparse",
       "description": "Sparse stochastic festival, wedding, and college fest local event spikes",
       "columns": [
@@ -171,10 +171,10 @@
       ]
     },
     "historical_transactions.parquet": {
-      "sha256_16": "a2e955345b211cf2",
+      "sha256_16": "c6814b64480c7154",
       "n_rows": 711750,
       "n_cols": 19,
-      "size_bytes": 14958377,
+      "size_bytes": 14960577,
       "provenance": "simulated:market_outcomes",
       "description": "Simulated hourly transactions with decision_timestamp (t) -> target_timestamp (t+1h) demand contract",
       "columns": [
@@ -200,10 +200,10 @@
       ]
     },
     "feature_store.parquet": {
-      "sha256_16": "d718f9d89b3db1db",
+      "sha256_16": "4338b1f386d81ddc",
       "n_rows": 711750,
       "n_cols": 45,
-      "size_bytes": 6538885,
+      "size_bytes": 6538812,
       "provenance": "hybrid:joined_feature_store",
       "description": "Unified ML training store: features joined strictly at decision_timestamp t to predict target at t+1h",
       "columns": [
@@ -255,5 +255,5 @@
       ]
     }
   },
-  "pipeline_version_hash": "12c8b1128aa9"
+  "pipeline_version_hash": "0eebbd3f8a41"
 }
