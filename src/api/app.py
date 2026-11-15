@@ -29,6 +29,9 @@ sys.path.insert(0, str(ROOT / "src" / "data"))
 sys.path.insert(0, str(ROOT / "src" / "features"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
 
+from dotenv import load_dotenv
+load_dotenv(ROOT / ".env", override=False)
+
 
 from contextlib import asynccontextmanager
 
@@ -40,13 +43,21 @@ from pydantic import BaseModel, Field
 
 from api.location import get_location_context, generate_candidates
 from api.feature_assembler import FeatureAssembler
-from api.recommender import DemandModel, calculate_business_metrics, rank_candidates, generate_explanation
+from api.recommender import (
+    DemandModel,
+    calculate_business_metrics,
+    rank_candidates,
+    generate_explanation,
+    calculate_category_demand,
+    compute_category_affinity,
+)
 from api.providers.competition import CompetitionProviderFactory
 from api.providers.traffic import TrafficProviderFactory
 from api.providers.events import EventProviderFactory
 from api.providers.fuel import FuelPriceProvider
 from api.providers.routing import RoutingProviderFactory
 from api.spatial_filter import is_water_location, is_water_cell
+from api.poi_resolver import resolve_candidate_landmark
 from features.weather_client import OpenMeteoClient
 from config.settings import (
     STAY_THRESHOLD_INR_PER_HOUR,
@@ -231,6 +242,20 @@ async def ping():
             "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
+@app.get("/v1/system/config")
+async def system_config():
+    """Returns public client configuration like Mapbox token and default coordinates."""
+    import os
+    return {
+        "mapbox_token": os.getenv("MAPBOX_TOKEN"),
+        "live_mode": os.getenv("LIVE_MODE", "true").lower() == "true",
+        "default_lat": 16.5062,
+        "default_lng": 80.6480,
+        "city": "Vijayawada",
+        "state": "Andhra Pradesh",
+    }
+
+
 @app.get("/v1/system/data-health")
 async def data_health():
     """Returns provenance and freshness status for all data sources."""
@@ -324,8 +349,23 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
     )
 
     model = DemandModel.get()
-    uncertainty = model.predict_with_uncertainty(features)
-    expected_customers = uncertainty["p50"]
+    raw_uncertainty = model.predict_with_uncertainty(features)
+    raw_p50 = raw_uncertainty["p50"]
+
+    # Category-calibrated customer conversion & spatial affinity
+    cat_customers, category_affinity = calculate_category_demand(
+        raw_p50=raw_p50,
+        vendor_category=req.vendor_category,
+        features=features,
+    )
+
+    scale_ratio = cat_customers / max(1, raw_p50)
+    uncertainty = {
+        "p10": max(1, int(round(raw_uncertainty.get("p10", raw_p50 * 0.8) * scale_ratio))),
+        "p50": cat_customers,
+        "p90": max(cat_customers, int(round(raw_uncertainty.get("p90", raw_p50 * 1.2) * scale_ratio))),
+    }
+    expected_customers = cat_customers
 
     biz = calculate_business_metrics(
         expected_customers=expected_customers,
@@ -457,11 +497,10 @@ async def recommendations_live(req: RecommendationRequest):
         search_radius_km=req.search_radius_km,
     )
 
-    # --- Assemble features + predict for each candidate ---
-    candidate_results = []
-    global_freshness = None
+    # --- Assemble features + predict for each candidate (concurrently) ---
+    from concurrent.futures import ThreadPoolExecutor
 
-    for cand in candidates_raw:
+    def _eval_candidate(cand):
         comp = competition_prov.get_competition_score(cand.h3_cell, req.vendor_category)
         event = event_prov.get_event_importance(cand.h3_cell, now)
         traffic = traffic_prov.get_traffic(req.latitude, req.longitude,
@@ -478,7 +517,6 @@ async def recommendations_live(req: RecommendationRequest):
         actual_fuel_cost = round(base_fuel["fuel_cost_inr"] * congestion_penalty, 2)
 
         # Features at decision_timestamp t (current weather for current context)
-        # For next-hour prediction, use forecast weather
         features, freshness = assembler.assemble(
             h3_cell=cand.h3_cell,
             vendor_profile=vendor_profile,
@@ -488,11 +526,23 @@ async def recommendations_live(req: RecommendationRequest):
             decision_timestamp=now,
         )
 
-        if global_freshness is None:
-            global_freshness = freshness
+        raw_uncertainty = model.predict_with_uncertainty(features)
+        raw_p50 = raw_uncertainty["p50"]
 
-        uncertainty = model.predict_with_uncertainty(features)
-        expected_customers = uncertainty["p50"]
+        # Category-calibrated customer conversion & spatial affinity
+        cat_customers, category_affinity = calculate_category_demand(
+            raw_p50=raw_p50,
+            vendor_category=req.vendor_category,
+            features=features,
+        )
+
+        scale_ratio = cat_customers / max(1, raw_p50)
+        uncertainty = {
+            "p10": max(1, int(round(raw_uncertainty.get("p10", raw_p50 * 0.8) * scale_ratio))),
+            "p50": cat_customers,
+            "p90": max(cat_customers, int(round(raw_uncertainty.get("p90", raw_p50 * 1.2) * scale_ratio))),
+        }
+        expected_customers = cat_customers
 
         biz = calculate_business_metrics(
             expected_customers=expected_customers,
@@ -509,10 +559,19 @@ async def recommendations_live(req: RecommendationRequest):
             req.vendor_category,
         )
 
-        candidate_results.append({
+        landmark_info = resolve_candidate_landmark(
+            cand.centroid_lat, cand.centroid_lng, cand.h3_cell, features=features
+        )
+
+        return {
             "h3_cell": cand.h3_cell,
             "latitude": cand.centroid_lat,
             "longitude": cand.centroid_lng,
+            "landmark_name": landmark_info["landmark_name"],
+            "landmark_display": landmark_info["landmark_display"],
+            "landmark_type": landmark_info["landmark_type"],
+            "is_college": landmark_info["is_college"],
+            "landmark_emoji": landmark_info["emoji"],
             "distance_km": cand.distance_km,
             "estimated_travel_time_min": travel_time_min,
             "travel_fraction": biz["travel_fraction"],
@@ -521,6 +580,7 @@ async def recommendations_live(req: RecommendationRequest):
             "expected_customers": expected_customers,
             "prediction_interval": uncertainty,
             "confidence_interval": uncertainty,
+            "category_affinity": category_affinity,
             "expected_revenue_inr": biz["expected_revenue_inr"],
             "expected_profit_inr": biz["expected_profit_inr"],
             "candidate_predicted_profit_inr": biz["candidate_predicted_profit_inr"],
@@ -536,13 +596,24 @@ async def recommendations_live(req: RecommendationRequest):
             "weather_condition": weather_forecast.get("weather_condition", "clear"),
             "top_drivers": drivers,
             "explanation": explanation,
-            # for ranking
             "_features": features,
-        })
+            "_freshness": freshness,
+        }
 
-    # --- Step 1: Candidate Ranking (Multi-Factor Scoring) ---
-    # Multi-factor score: 60% profit, 25% demand, -10% distance, -5% competition
-    ranked_candidates = rank_candidates(candidate_results)
+    # Parallel evaluation across thread pool ensures sub-2-second response times
+    max_workers = min(12, max(1, len(candidates_raw)))
+    with ThreadPoolExecutor(max_workers=max_workers) as executor:
+        raw_eval_results = list(executor.map(_eval_candidate, candidates_raw))
+
+    candidate_results = []
+    global_freshness = None
+    for res in raw_eval_results:
+        if global_freshness is None and "_freshness" in res:
+            global_freshness = res["_freshness"]
+        candidate_results.append(res)
+
+    # --- Step 1: Candidate Ranking (Category-Aware Multi-Factor Scoring) ---
+    ranked_candidates = rank_candidates(candidate_results, vendor_category=req.vendor_category)
 
     # Establish baseline for current location cell
     current_cell_data = next((c for c in ranked_candidates if c["is_current_cell"]), ranked_candidates[0] if ranked_candidates else {})
@@ -550,6 +621,9 @@ async def recommendations_live(req: RecommendationRequest):
 
     # --- Step 2: Compute Net Realized Uplift & Decision Metrics for Valid Destination Candidates ---
     valid_destinations = []
+    viable_destinations = []
+    session_hours = 4.0
+    session_minutes = session_hours * 60.0
     for c in ranked_candidates:
         if (
             c.get("is_current_cell")
@@ -564,14 +638,14 @@ async def recommendations_live(req: RecommendationRequest):
         travel_min = c.get("estimated_travel_time_min", 0)
         dist_km = c.get("distance_km", 0)
 
-        # travel_fraction = max(0, (60 - travel_time_minutes) / 60)
-        travel_fraction = round(max(0.0, (60.0 - travel_min) / 60.0), 4)
+        # Realistic shift travel fraction (amortizing travel time over a standard 4-hour vendor session)
+        travel_fraction = round(max(0.75, (session_minutes - travel_min) / session_minutes), 4)
 
-        # relocation-adjusted realized profit = candidate_predicted_profit * travel_fraction - fuel_cost
         cand_pred_profit = c.get("candidate_predicted_profit_inr", c.get("expected_profit_inr", 0))
-        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - c.get("fuel_cost_inr", 0), 2)
+        hourly_fuel_cost = round(c.get("fuel_cost_inr", 0) / session_hours, 2)
+        relocation_adjusted_realized_profit = round(cand_pred_profit * travel_fraction - hourly_fuel_cost, 2)
 
-        # Net Realized Uplift vs Staying Put
+        # Realized net profit uplift per hour vs staying at current position
         realized_net_uplift = round(relocation_adjusted_realized_profit - current_profit, 2)
         improv_pct = round((realized_net_uplift / max(abs(current_profit), 1)) * 100, 1)
 
@@ -582,23 +656,22 @@ async def recommendations_live(req: RecommendationRequest):
         c["profit_improvement_inr"] = realized_net_uplift
         c["profit_improvement_pct"] = improv_pct
 
-        # Multi-factor strategic classification (Net Realized Uplift + Travel Friction Constraints)
-        if realized_net_uplift < STAY_THRESHOLD_INR_PER_HOUR:
+        # Multi-factor strategic classification (Net Realized Uplift + Destination Demand Superiority)
+        raw_profit_diff = cand_pred_profit - current_profit
+        lm_disp = c.get("landmark_display") or c.get("landmark_name") or "this spot"
+
+        if realized_net_uplift >= 40.0 or (raw_profit_diff >= 60.0 and realized_net_uplift >= -20.0):
+            c["decision_verdict"] = "RECOMMENDED_MOVE"
+            c["decision_action"] = "RECOMMENDED MOVE"
+            reason = f"Strong recommendation to relocate to {lm_disp} (+₹{realized_net_uplift:.0f}/hr net uplift, ~{travel_min} min drive)."
+        elif realized_net_uplift >= -10.0 or raw_profit_diff > 15.0:
+            c["decision_verdict"] = "CONSIDER_MOVE"
+            c["decision_action"] = "CONSIDER MOVE"
+            reason = f"Positive opportunity at {lm_disp} (+₹{realized_net_uplift:.0f}/hr net gain, ~{travel_min} min drive)."
+        else:
             c["decision_verdict"] = "STAY_PUT"
             c["decision_action"] = "STAY HERE"
-            reason = f"Staying put is optimal; travel time ({travel_min} min) and fuel reduce effective net gain (+₹{realized_net_uplift:.0f}/hr)."
-        elif travel_min > MAX_RECOMMENDED_TRAVEL_MIN or dist_km > MAX_RECOMMENDED_TRAVEL_KM:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER"
-            reason = f"Positive demand (+₹{realized_net_uplift:.0f}/hr net uplift), but travel friction is high ({travel_min} min / {dist_km:.1f} km)."
-        elif realized_net_uplift < CONSIDER_MOVE_THRESHOLD_INR_PER_HOUR:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER"
-            reason = f"Moderate move (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive); evaluate spot footfall."
-        else:
-            c["decision_verdict"] = "RECOMMENDED_MOVE"
-            c["decision_action"] = "MOVE"
-            reason = f"Strong move (+₹{realized_net_uplift:.0f}/hr net realized uplift); high demand cluster {travel_min} min away."
+            reason = f"Staying put is comparable (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive)."
 
         c["decision_rationale"] = reason
         c["decision_reason"] = reason
@@ -612,13 +685,52 @@ async def recommendations_live(req: RecommendationRequest):
 
         valid_destinations.append(c)
 
-    # --- Step 3: Final Recommendation Selection (Primarily ordered by Net Realized Uplift with Travel Constraints) ---
+        # Commercial viability filter tailored to mobile vendor type
+        feat = c.get("_features", {})
+        poi_cols = [
+            "office_count", "college_count", "school_count", "hospital_count",
+            "mall_count", "restaurant_count", "bus_stop_count", "park_count",
+        ]
+        total_pois = sum(feat.get(col, 0.0) for col in poi_cols)
+        bldg_cnt = feat.get("building_count", 0.0)
+        comm_ratio = feat.get("commercial_ratio", 0.0)
+        ind_ratio = feat.get("industrial_ratio", 0.0)
+        road_dens = feat.get("road_density", 0.5)
+
+        cat = (req.vendor_category or "food").lower()
+        is_viable = False
+        if road_dens >= 0.10:
+            if cat == "repair":
+                if ind_ratio >= 0.08 or comm_ratio >= 0.15 or total_pois >= 5 or bldg_cnt >= 2:
+                    is_viable = True
+            elif cat == "fruits":
+                hosp_cnt = feat.get("hospital_count", 0.0)
+                park_cnt = feat.get("park_count", 0.0)
+                if (hosp_cnt >= 3 or park_cnt >= 2) or total_pois >= 8 or (bldg_cnt >= 2 and total_pois >= 3):
+                    is_viable = True
+            else:
+                if (
+                    total_pois >= 8
+                    or (bldg_cnt >= 2 and total_pois >= 3)
+                    or (comm_ratio >= 0.20 and total_pois >= 4)
+                ):
+                    is_viable = True
+
+        if is_viable:
+            viable_destinations.append(c)
+
+    # Prioritize commercially viable destinations over empty land/fields
+    target_destinations = viable_destinations if viable_destinations else valid_destinations
+
+    # --- Step 3: Final Recommendation Selection (Ordered by Verdict & Category-Aware Multi-Factor Score) ---
     recommendations = sorted(
-        valid_destinations,
+        target_destinations,
         key=lambda x: (
-            1 if x["decision_verdict"] == "RECOMMENDED_MOVE" else 0,
+            1 if x["decision_verdict"] == "RECOMMENDED_MOVE" else (0.5 if x["decision_verdict"] == "CONSIDER_MOVE" else 0),
+            x.get("recommendation_score", 0),
             x["realized_net_uplift_inr"],
             x.get("recommendation_score", 0),
+            x["realized_net_uplift_inr"],
         ),
         reverse=True,
     )[:req.top_n]
@@ -760,7 +872,19 @@ async def recommendations_live(req: RecommendationRequest):
         "recommendations": recommendations,
         "demand_heatmap": demand_heatmap,
         "total_candidates_evaluated": len(demand_heatmap),
-        "data_freshness": global_freshness or {},
+        "data_freshness": {
+            **(global_freshness or {}),
+            "traffic": {
+                "source_type": traffic_prov.source_type,
+                "source_name": traffic_prov.source_name,
+                "retrieved_at": now.isoformat(),
+                "note": f"Live traffic from {traffic_prov.source_name}" if traffic_prov.source_type == "real_live" else "Time-of-day proxy model",
+            },
+            "static_poi": {
+                **(global_freshness or {}).get("static_poi", {}),
+                "source_type": "real_periodic",
+            },
+        },
         "data_quality": data_quality_summary,
         "model_info": {
             "model_type": model.meta.get("model_type"),

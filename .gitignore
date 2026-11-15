@@ -80,9 +80,21 @@ data/raw/osm/competitors_aggregated_cache.parquet
 colab_indetail.md
 COLAB.md
 
+# Collaboration & Team Onboarding Guides
+COLAB
+COLAB.md
+COLAB*
+
+# Ignore all data/raw/weather files (as they are large and generated)
+data/raw/weather/
+__agent__/
+*.zip
+
 # MLOps & Tracking
 mlruns/
 mlflow.db
-
 v2-plan2.md
 alekhya-checklist.md
+catboost_info/
+models/champion_backup/
+models/candidates/

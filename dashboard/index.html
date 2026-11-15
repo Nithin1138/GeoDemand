@@ -3,175 +3,144 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>GeoDemand AI — Vendor Location Intelligence</title>
-  <meta name="description" content="Real-time geospatial demand forecasting for mobile vendors. Find the best locations to maximize profit using AI-powered recommendations.">
-  
-  <!-- Leaflet.js for maps -->
+  <meta name="theme-color" content="#153e35" />
+  <title>GeoDemand AI — Location Overview</title>
+  <meta name="description" content="A clearer view of your next business opportunity. Explore nearby demand, compare estimated profits, and find the right location for your mobile business." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  
-  <!-- Google Fonts -->
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
-  
   <link rel="stylesheet" href="/static/style.css" />
+  <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+  <script defer src="/static/app.js"></script>
 </head>
 <body>
-  <!-- HEADER -->
-  <header class="header">
-    <div class="header-brand">
-      <div class="header-logo">⬡</div>
-      <div>
-        <div class="header-title">GeoDemand AI</div>
-        <div class="header-subtitle">Vendor Location Intelligence</div>
+  <a class="skip-link" href="#mainContent">Skip to dashboard</a>
+  <!-- Small, consistent line icons rather than competing emoji. -->
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+    <symbol id="i-grid" viewBox="0 0 24 24"><rect x="3" y="3" width="7" height="7" rx="2"/><rect x="14" y="3" width="7" height="7" rx="2"/><rect x="3" y="14" width="7" height="7" rx="2"/><rect x="14" y="14" width="7" height="7" rx="2"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="m3 6 6-3 6 3 6-3v15l-6 3-6-3-6 3Z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 1 1 16 0Z"/><circle cx="12" cy="10" r="2.5"/></symbol>
+    <symbol id="i-trend" viewBox="0 0 24 24"><path d="m3 17 6-6 4 4 8-10M15 5h6v6"/></symbol>
+    <symbol id="i-layers" viewBox="0 0 24 24"><path d="m12 3 10 6-10 6L2 9Z M2 13l10 6 10-6M2 17l10 6 10-6"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M4 12h16m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8" r="3"/><path d="M3 21v-2a6 6 0 0 1 12 0v2m1-16a3 3 0 0 1 0 6m5 10v-2a6 6 0 0 0-4-5"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M20 8V5H5a3 3 0 0 0 0 6h15v10H5a3 3 0 0 1-3-3V8"/><path d="M20 12h-5v5h5"/><path d="M17 14.5h.01"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z M20 2v4m-2-2h4"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 3v4m10-4v4M3 11h18m-14 4h2m3 0h2"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10h.01"/></symbol>
+    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="m6 6 12 12M6 18 18 6"/></symbol>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+  </svg>
+
+  <div class="app-shell">
+    <aside class="sidebar" id="sidebar" aria-label="Workspace navigation">
+      <a class="brand" href="#overview" aria-label="GeoDemand AI overview">
+        <span class="brand-mark"><svg class="icon"><use href="#i-pin"/></svg></span>
+        <span><span class="brand-name">GeoDemand<span class="brand-ai">AI</span></span><span class="brand-caption">A little location intelligence.</span></span>
+      </a>
+      <div class="workspace-label">WORKSPACE</div>
+      <nav class="sidebar-nav">
+        <a class="nav-link active" href="#overview" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg>Overview<span class="nav-active-dot"></span></a>
+        <a class="nav-link" href="#explore"><svg class="icon"><use href="#i-map"/></svg>Explore map</a>
+        <a class="nav-link" href="#recommendations"><svg class="icon"><use href="#i-trend"/></svg>Recommendations</a>
+        <a class="nav-link" href="#dataSources"><svg class="icon"><use href="#i-layers"/></svg>Data sources</a>
+      </nav>
+      <div class="sidebar-note">
+        <div class="note-art" aria-hidden="true"><span class="orbit orbit-one"></span><span class="orbit orbit-two"></span><svg class="icon"><use href="#i-spark"/></svg><span class="orbit-dot"></span></div>
+        <h3>Small moves.<br/>Bigger possibilities.</h3>
+        <p>Find the right place for your business to thrive.</p>
+        <button class="sidebar-help" type="button" data-help>Meet your dashboard<svg class="icon"><use href="#i-arrow"/></svg></button>
       </div>
-    </div>
-    <div class="header-status" id="systemStatus">
-      <span class="status-dot status-loading"></span>
-      <span id="statusText">Initializing...</span>
-    </div>
-  </header>
-
-  <main class="main-grid">
-    <!-- LEFT PANEL: Controls -->
-    <aside class="panel panel-controls">
-      
-      <!-- Location Section -->
-      <section class="section">
-        <h2 class="section-title">📍 Your Location</h2>
-        <button class="btn btn-primary btn-full" id="useLocationBtn" onclick="useCurrentLocation()">
-          <span class="btn-icon">🎯</span>
-          Use My Current Location
-        </button>
-        
-        <div class="divider"><span>or enter manually</span></div>
-        
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Latitude</label>
-            <input class="form-input" type="number" id="latInput" value="16.5062" step="0.0001" min="-90" max="90" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Longitude</label>
-            <input class="form-input" type="number" id="lngInput" value="80.6480" step="0.0001" min="-180" max="180" />
-          </div>
-        </div>
-        
-        <div id="locationInfo" class="location-badge hidden">
-          <span class="badge-icon">📡</span>
-          <div>
-            <div class="badge-label">H3 Cell</div>
-            <div class="badge-value mono" id="h3CellDisplay">—</div>
-          </div>
-        </div>
-      </section>
-
-      <!-- Vendor Profile -->
-      <section class="section">
-        <h2 class="section-title">🛺 Vendor Profile</h2>
-        <div class="form-group">
-          <label class="form-label">Category</label>
-          <select class="form-input" id="vendorCategory">
-            <option value="food">🍱 Food (Meals / Tea / Dosa)</option>
-            <option value="fruits">🍉 Fruits & Juice</option>
-            <option value="salon">💇 Salon Van</option>
-            <option value="repair">🔧 Repair Van</option>
-          </select>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label class="form-label">Avg Order (₹)</label>
-            <input class="form-input" type="number" id="aov" value="100" min="20" max="500" />
-          </div>
-          <div class="form-group">
-            <label class="form-label">Search Radius (km)</label>
-            <input class="form-input" type="number" id="searchRadius" value="3" min="0.5" max="8" step="0.5" />
-          </div>
-        </div>
-      </section>
-
-      <!-- Get Recommendations -->
-      <section class="section">
-        <button class="btn btn-success btn-full btn-large" id="getRecsBtn" onclick="getRecommendations()">
-          <span class="btn-icon">🚀</span>
-          Get Recommendations
-        </button>
-        <div id="loadingBar" class="loading-bar hidden">
-          <div class="loading-fill" id="loadingFill"></div>
-        </div>
-        <div id="errorMsg" class="error-msg hidden"></div>
-      </section>
-
-      <!-- Current Location Baseline -->
-      <section class="section" id="currentSection" style="display:none">
-        <h2 class="section-title">📌 Current Position</h2>
-        <div class="current-stats">
-          <div class="stat-card">
-            <div class="stat-value" id="currentCustomers">—</div>
-            <div class="stat-label">Est. Customers/hr</div>
-          </div>
-          <div class="stat-card stat-card-green">
-            <div class="stat-value" id="currentProfit">—</div>
-            <div class="stat-label">Est. Hourly Profit</div>
-          </div>
-        </div>
-        <div class="weather-strip" id="weatherStrip">
-          <span id="weatherIcon">🌤</span>
-          <span id="weatherText">—</span>
-          <span class="provenance-badge badge-live" id="weatherBadge">LIVE</span>
-        </div>
-      </section>
-
-      <!-- Data Freshness -->
-      <section class="section" id="freshnessSection" style="display:none">
-        <h2 class="section-title">🔄 Data Sources</h2>
-        <div id="freshnessTable" class="freshness-table"></div>
-      </section>
-
+      <div class="sidebar-bottom"><span class="workspace-avatar">V</span><div><strong>Vendor workspace</strong><span>Location intelligence</span></div><svg class="icon"><use href="#i-check"/></svg></div>
     </aside>
+    <button class="sidebar-scrim hidden" id="sidebarScrim" type="button" aria-label="Close navigation"></button>
 
-    <!-- CENTER: Map -->
-    <div class="panel panel-map">
-      <div id="map"></div>
-      
-      <!-- Map Layer Switcher -->
-      <div class="map-layer-switcher">
-        <button class="layer-btn active" id="btnLayerStreets" onclick="setBaseLayer('streets')">🗺️ OpenStreetMap</button>
-        <button class="layer-btn" id="btnLayerSatellite" onclick="setBaseLayer('satellite')">🛰️ Satellite</button>
-        <button class="layer-btn" id="btnLayerDark" onclick="setBaseLayer('dark')">🌙 Dark</button>
-      </div>
+    <div class="workspace">
+      <header class="topbar">
+        <div class="breadcrumb"><button class="icon-button mobile-menu" id="menuBtn" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#i-menu"/></svg></button><span>Workspace</span><svg class="icon"><use href="#i-chevron"/></svg><strong>Overview</strong></div>
+        <div class="topbar-right"><div class="system-status" id="systemStatus" role="status"><span class="status-dot status-loading"></span><span id="statusText">Connecting</span></div><span class="topbar-divider"></span><span class="today-date"><svg class="icon"><use href="#i-calendar"/></svg><span id="todayDate">Today</span></span><button class="icon-button" type="button" aria-label="How this dashboard works" data-help><svg class="icon"><use href="#i-info"/></svg></button></div>
+      </header>
 
-      <!-- Map Legend -->
-      <div class="map-legend">
-        <div class="legend-title">📍 MAP OVERLAYS</div>
-        <div class="legend-item"><span class="legend-dot dot-current"></span> Start Location</div>
-        <div class="legend-item"><span class="legend-dot dot-top1"></span> #1 Recommendation</div>
-        <div class="legend-item"><span class="legend-dot dot-candidate"></span> #2–5 Recommendations</div>
-        <div class="legend-item"><span class="legend-line"></span> Street Driving Route</div>
-        <div class="legend-item"><span class="legend-hex"></span> H3 Demand Heat Zones</div>
-      </div>
+      <main id="mainContent">
+        <section class="page-heading" id="overview">
+          <div><div class="eyebrow">YOUR NEXT OPPORTUNITY STARTS HERE</div><h1>Location overview<span class="heading-dot">.</span></h1><p>Less guesswork. More potential. Find the right spot for your business.</p></div>
+          <button class="btn btn-outline help-button" type="button" data-help><svg class="icon"><use href="#i-spark"/></svg>How it works</button>
+        </section>
+
+        <section class="metrics-grid" aria-label="Demand and profit estimates">
+          <article class="summary-card"><div class="summary-top"><span>Current hourly profit</span><span class="summary-icon"><svg class="icon"><use href="#i-wallet"/></svg></span></div><div class="summary-value" id="currentProfit">—</div><div class="summary-foot" id="currentProfitMeta">Your starting location · estimate</div></article>
+          <article class="summary-card summary-featured"><div class="summary-top"><span>Best nearby profit</span><span class="summary-icon"><svg class="icon"><use href="#i-trend"/></svg></span></div><div class="summary-value" id="bestProfit">—</div><div class="summary-foot" id="profitUplift"><span class="mini-dot"></span>Discover your earning potential</div></article>
+          <article class="summary-card"><div class="summary-top"><span>Customers per hour</span><span class="summary-icon lavender"><svg class="icon"><use href="#i-users"/></svg></span></div><div class="summary-value" id="currentCustomers">—</div><div class="summary-foot" id="customersMeta">At your starting point · ML forecast</div></article>
+          <article class="summary-card"><div class="summary-top"><span>Nearby zones evaluated</span><span class="summary-icon sand"><svg class="icon"><use href="#i-layers"/></svg></span></div><div class="summary-value" id="zonesCount">—</div><div class="summary-foot" id="zonesMeta">Find opportunities within 3 km</div></article>
+        </section>
+
+        <div class="explore-grid" id="explore">
+          <section class="surface map-card" id="mapCard" aria-labelledby="mapTitle">
+            <div class="card-heading">
+              <div class="card-heading-title">
+                <div class="title-with-badge">
+                  <h2 id="mapTitle">Opportunity map</h2>
+                  <span class="radar-live-badge"><span class="radar-pulse"></span>LIVE RADAR</span>
+                </div>
+                <p>Interactive H3 hexagonal demand grid · Real-time road routing</p>
+              </div>
+              <div class="card-heading-actions">
+                <button class="icon-button" id="expandMapBtn" type="button" aria-label="Expand map" aria-pressed="false" title="Expand map size"><svg class="icon"><use href="#i-expand"/></svg></button>
+              </div>
+            </div>
+            <div class="map-container">
+              <div id="map" aria-label="Interactive opportunity map. Click to choose a starting point."></div>
+              <div class="map-unavailable hidden" id="mapUnavailable" role="status"><svg class="icon"><use href="#i-map"/></svg><strong>The map couldn’t load</strong><span>You can still enter coordinates and compare recommendations. Check your connection to restore map tiles.</span></div>
+              <div class="map-toolbar"><span class="map-tip"><svg class="icon"><use href="#i-pin"/></svg>Click anywhere on the map to set location</span><div class="map-layer-switcher" role="group" aria-label="Map style"><button class="layer-btn active" id="btnLayerStreets" type="button" data-layer="streets" aria-pressed="true">Map</button><button class="layer-btn" id="btnLayerSatellite" type="button" data-layer="satellite" aria-pressed="false">Satellite</button><button class="layer-btn" id="btnLayerDark" type="button" data-layer="dark" aria-pressed="false">Dark</button></div></div>
+              <div class="map-legend"><div class="legend-heading"><span>Predicted demand</span><button class="toggle" id="heatmapToggle" type="button" aria-label="Show demand zones" aria-pressed="true"><span></span></button></div><div class="demand-gradient"></div><div class="legend-scale"><span>Lower</span><span>Higher</span></div><div class="legend-markers"><span><i class="legend-dot dot-current"></i>Your location</span><span><i class="legend-dot dot-top1"></i>Recommended</span></div></div>
+              <button class="recenter-button icon-button" id="recenterBtn" type="button" aria-label="Recenter map on your location" title="Recenter on your location"><svg class="icon"><use href="#i-target"/></svg></button>
+            </div>
+            <div class="map-footer">
+              <span class="map-location"><svg class="icon"><use href="#i-pin"/></svg><strong id="mapLocationName">Vijayawada</strong><span id="mapCoordinates">16.5062, 80.6480</span></span>
+              <div class="map-footer-meta">
+                <span class="telemetry-pill"><svg class="icon"><use href="#i-spark"/></svg>Real-time traffic & weather</span>
+                <span class="radius-pill" id="mapRadius">3 km radius</span>
+              </div>
+            </div>
+          </section>
+
+          <section class="surface profile-card" aria-labelledby="profileTitle">
+            <div class="card-heading"><div><h2 id="profileTitle">Make it your own</h2><p>A few details. A better recommendation.</p></div></div>
+            <form id="analysisForm">
+              <div class="form-row profile-inputs"><div class="form-group"><label for="vendorCategory">Your business</label><div class="select-wrap"><select id="vendorCategory" class="form-input"><option value="food">Food & beverages</option><option value="fruits">Fruits & juice</option><option value="salon">Salon van</option><option value="repair">Repair services</option></select></div></div><div class="form-group"><label for="aov">Avg. order value</label><div class="input-affix"><span>₹</span><input class="form-input" type="number" id="aov" value="100" min="20" max="500" step="1" required /></div></div></div>
+              <div class="radius-control"><div class="label-row"><label for="searchRadius">Search radius</label><output for="searchRadius" id="radiusValue">3 km</output></div><input type="range" id="searchRadius" value="3" min="0.5" max="8" step="0.5" /><div class="range-labels"><span>0.5 km</span><span>8 km</span></div></div>
+              <div class="location-control"><div class="label-row"><span class="form-label">Starting location</span><span class="location-mode">Map or coordinates</span></div><button class="btn btn-location" id="useLocationBtn" type="button"><svg class="icon"><use href="#i-target"/></svg>Use my current location</button><div class="form-row coordinates-row"><div class="form-group"><label for="latInput">Latitude</label><input class="form-input" type="number" id="latInput" value="16.5062" step="any" min="-90" max="90" required /></div><div class="form-group"><label for="lngInput">Longitude</label><input class="form-input" type="number" id="lngInput" value="80.6480" step="any" min="-180" max="180" required /></div></div></div>
+              <button class="btn btn-primary btn-full" id="getRecsBtn" type="submit"><svg class="icon"><use href="#i-spark"/></svg>Find my best locations<svg class="icon button-arrow"><use href="#i-arrow"/></svg></button>
+              <div id="loadingBar" class="loading-bar hidden" aria-hidden="true"><div class="loading-fill"></div></div><p class="form-note" id="formNote"><svg class="icon"><use href="#i-check"/></svg>Built on local signals. Powered by AI.</p><div class="error-msg hidden" id="errorMsg" role="alert"></div>
+            </form>
+          </section>
+        </div>
+
+        <section class="recommendations-section" id="recommendations" aria-labelledby="recsTitle">
+          <div class="section-heading"><div><div class="heading-with-badge"><h2 id="recsTitle">Your next best locations</h2><span class="count-badge" id="recsCount">0</span></div><p id="evalCount">Good opportunities start with a little insight.</p></div><div class="recommendation-actions"><div class="sort-control"><label for="sortRecs">Sort by</label><select id="sortRecs" disabled><option value="recommended">Recommended</option><option value="profit">Highest profit</option><option value="distance">Nearest first</option><option value="demand">Most customers</option></select></div><button class="icon-button" type="button" id="exportBtn" disabled aria-label="Export recommendations as CSV" title="Export recommendations"><svg class="icon"><use href="#i-download"/></svg></button></div></div>
+          <div class="decision-banner hidden" id="decisionBanner" role="status"></div>
+          <div class="recs-placeholder surface" id="recsPlaceholder"><div class="empty-illustration" aria-hidden="true"><span></span><svg class="icon"><use href="#i-pin"/></svg><i class="empty-dot one"></i><i class="empty-dot two"></i></div><div class="empty-copy"><h3>Your next opportunity is out there.</h3><p>Set your starting point and business details. We’ll compare nearby locations so you can make your next move with confidence.</p><div class="empty-steps"><span><b>01</b>Set your location</span><svg class="icon"><use href="#i-chevron"/></svg><span><b>02</b>Tell us your business</span><svg class="icon"><use href="#i-chevron"/></svg><span><b>03</b>Discover opportunities</span></div></div><button class="btn btn-outline" id="setupBtn" type="button">Let’s get started<svg class="icon"><use href="#i-arrow"/></svg></button></div>
+          <div class="recs-list" id="recsList" aria-live="polite" aria-busy="false"></div>
+        </section>
+
+        <section class="insights-grid" id="dataSources" aria-label="Local context and data transparency">
+          <article class="surface context-card"><div class="card-heading"><div><h2>A little local context</h2><p>The conditions behind the forecast.</p></div><span class="soft-icon"><svg class="icon"><use href="#i-sun"/></svg></span></div><div class="weather-overview"><span class="weather-icon" id="weatherIcon"><svg class="icon"><use href="#i-sun"/></svg></span><div><strong id="weatherTemperature">—°</strong><span id="weatherText">Weather appears after analysis</span></div><span class="provenance-badge badge-cached" id="weatherBadge">NOT CHECKED</span></div><div class="context-detail"><span>Starting H3 cell</span><code id="h3CellDisplay">Not analyzed yet</code></div><p class="water-warning hidden" id="waterWarning">Your starting point is on a river or bridge. Recommendations only include verified land zones.</p><div class="context-detail"><span>Last analysis</span><span id="lastUpdated">Not run yet</span></div></article>
+          <article class="surface sources-card"><div class="card-heading"><div><h2>Clarity behind every number</h2><p>Know what’s live, estimated, or derived.</p></div><span class="transparency-tag"><svg class="icon"><use href="#i-check"/></svg>Transparent by design</span></div><div class="freshness-table" id="freshnessTable"><div class="sources-empty"><svg class="icon"><use href="#i-layers"/></svg><p>Run an analysis to see the sources used for your forecast.</p></div></div><p class="estimate-note"><svg class="icon"><use href="#i-info"/></svg>Demand is a model estimate, not a live customer count. Profit is a calculated forecast, not guaranteed earnings.</p></article>
+        </section>
+        <footer class="page-footer"><span>GeoDemand AI <span class="footer-dot">·</span> A clearer view of what’s possible.</span><span>Made for your next move<svg class="icon"><use href="#i-arrow"/></svg></span></footer>
+      </main>
     </div>
+  </div>
 
-    <!-- RIGHT PANEL: Recommendations -->
-    <aside class="panel panel-recs">
-      <div class="recs-header">
-        <h2 class="section-title">🏆 Top Recommendations</h2>
-        <div id="evalCount" class="eval-count"></div>
-      </div>
-
-      <!-- Strategic Decision Banner -->
-      <div id="decisionBanner" class="decision-banner" style="display:none"></div>
-      
-      <div id="recsPlaceholder" class="recs-placeholder">
-        <div class="placeholder-icon">⬡</div>
-        <div class="placeholder-title">No recommendations yet</div>
-        <div class="placeholder-text">Set your location and vendor profile, then click "Get Recommendations" to see the best nearby areas.</div>
-      </div>
-      
-      <div id="recsList" class="recs-list"></div>
-    </aside>
-  </main>
-
-  <script src="/static/app.js"></script>
+  <dialog class="help-dialog" id="helpDialog" aria-labelledby="helpTitle"><div class="dialog-heading"><span class="soft-icon"><svg class="icon"><use href="#i-spark"/></svg></span><button class="icon-button" id="closeHelpBtn" type="button" aria-label="Close guide"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="eyebrow">YOUR QUICK START</div><h2 id="helpTitle">A smarter move starts here.</h2><p>Three simple steps to turn local insight into a better business decision.</p><ol class="guide-steps"><li><span>01</span><div><h3>Choose your starting point</h3><p>Click the map, enter coordinates, or use your device location. Adjust the radius to choose how far to explore.</p></div></li><li><span>02</span><div><h3>Make the forecast yours</h3><p>Choose your business category and average order value, then select “Find my best locations”.</p></div></li><li><span>03</span><div><h3>Compare before you move</h3><p>Review profit, demand, travel estimates, and uncertainty. Select a location to see its route, or expand its details to understand why it ranks.</p></div></li></ol><div class="guide-note"><svg class="icon"><use href="#i-info"/></svg>Live and proxy sources are labeled. Forecasts help guide decisions; they don’t guarantee results.</div><button class="btn btn-primary btn-full" id="startGuideBtn" type="button">Got it, let’s explore<svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
+  <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
 </body>
 </html>

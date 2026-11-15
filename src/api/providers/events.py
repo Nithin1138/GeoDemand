@@ -188,12 +188,16 @@ class PredictHQProvider(EventProvider):
             raise EnvironmentError("PREDICTHQ_API_KEY not set.")
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = 900  # 15 minutes
+        self._disabled_until: float = 0.0
 
     def get_event_importance(self, h3_cell: str, timestamp: datetime) -> dict:
         import h3 as h3lib
+        now_ts = time.time()
+        if now_ts < self._disabled_until:
+            return StochasticEventProvider().get_event_importance(h3_cell, timestamp)
+
         lat, lng = h3lib.cell_to_latlng(h3_cell)
         cache_key = f"phq_{h3_cell}_{timestamp.strftime('%Y%m%d%H')}"
-        now_ts = time.time()
 
         if cache_key in self._cache and now_ts - self._cache[cache_key]["ts"] < self._cache_ttl:
             return {**self._cache[cache_key]["data"], "from_cache": True}
@@ -209,7 +213,7 @@ class PredictHQProvider(EventProvider):
                     "sort": "rank",
                     "limit": 5,
                 },
-                timeout=10,
+                timeout=3.0,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -232,7 +236,8 @@ class PredictHQProvider(EventProvider):
                 self._cache[cache_key] = {"data": res, "ts": now_ts}
                 return res
         except Exception as e:
-            logger.warning(f"PredictHQ API failed: {e}. Falling back.")
+            logger.warning(f"PredictHQ API failed: {e}. Tripping circuit breaker for 3m, falling back.")
+            self._disabled_until = now_ts + 180.0
 
         return StochasticEventProvider().get_event_importance(h3_cell, timestamp)
 
@@ -242,20 +247,6 @@ class PredictHQProvider(EventProvider):
 # ---------------------------------------------------------------------------
 
 class TicketmasterProvider(EventProvider):
-    """
-    Ticketmaster Discovery API — concerts, sports, and large venue events.
-
-    Set TICKETMASTER_API_KEY env var.
-    Get free key at: https://developer.ticketmaster.com/
-    Free tier: 5,000 API calls/day — completely free.
-
-    Steps to get free API key:
-      1. Go to https://developer.ticketmaster.com/
-      2. Click "Get Your API Key"
-      3. Register / sign in with a Ticketmaster account
-      4. Create an app → copy the Consumer Key
-      5. Set TICKETMASTER_API_KEY=<consumer_key>
-    """
     source_type = "real_live"
     source_name = "ticketmaster_api"
 
@@ -267,12 +258,16 @@ class TicketmasterProvider(EventProvider):
             raise EnvironmentError("TICKETMASTER_API_KEY not set.")
         self._cache: Dict[str, dict] = {}
         self._cache_ttl = 900
+        self._disabled_until: float = 0.0
 
     def get_event_importance(self, h3_cell: str, timestamp: datetime) -> dict:
         import h3 as h3lib
+        now_ts = time.time()
+        if now_ts < self._disabled_until:
+            return StochasticEventProvider().get_event_importance(h3_cell, timestamp)
+
         lat, lng = h3lib.cell_to_latlng(h3_cell)
         cache_key = f"tm_{h3_cell}_{timestamp.strftime('%Y%m%d%H')}"
-        now_ts = time.time()
 
         if cache_key in self._cache and now_ts - self._cache[cache_key]["ts"] < self._cache_ttl:
             return {**self._cache[cache_key]["data"], "from_cache": True}
@@ -289,7 +284,7 @@ class TicketmasterProvider(EventProvider):
                     "size": 5,
                     "sort": "relevance,desc",
                 },
-                timeout=10,
+                timeout=3.0,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -297,23 +292,36 @@ class TicketmasterProvider(EventProvider):
             if events:
                 ev = events[0]
                 venue = ev.get("_embedded", {}).get("venues", [{}])[0]
-                capacity = venue.get("generalInfo", {}).get("generalRule")
                 res = {
                     "event_active": True,
                     "event_importance": 0.80,
                     "event_type": ev.get("classifications", [{}])[0].get("segment", {}).get("name", "entertainment"),
-                    "event_attendance_estimate": None,  # Ticketmaster doesn't expose capacity directly
+                    "event_attendance_estimate": None,
                     "event_title": ev.get("name"),
                     "event_venue": venue.get("name"),
                     "source_type": self.source_type,
                     "source_name": self.source_name,
                     "retrieved_at": datetime.now(timezone.utc).isoformat(),
-                    "note": f"Ticketmaster event: {ev.get('name', '')}",
+                    "note": f"Ticketmaster live event: {ev.get('name', '')}",
                 }
-                self._cache[cache_key] = {"data": res, "ts": now_ts}
-                return res
+            else:
+                res = {
+                    "event_active": False,
+                    "event_importance": 0.0,
+                    "event_type": "none",
+                    "event_attendance_estimate": None,
+                    "event_title": None,
+                    "event_venue": None,
+                    "source_type": self.source_type,
+                    "source_name": self.source_name,
+                    "retrieved_at": datetime.now(timezone.utc).isoformat(),
+                    "note": "Ticketmaster live: No active events scheduled nearby",
+                }
+            self._cache[cache_key] = {"data": res, "ts": now_ts}
+            return res
         except Exception as e:
-            logger.warning(f"Ticketmaster API failed: {e}. Falling back.")
+            logger.warning(f"Ticketmaster API failed: {e}. Tripping circuit breaker for 3m, falling back.")
+            self._disabled_until = now_ts + 180.0
 
         return StochasticEventProvider().get_event_importance(h3_cell, timestamp)
 

@@ -115,10 +115,15 @@ class OSMCompetitionProvider(CompetitionProvider):
     source_name = "openstreetmap"
 
     CATEGORY_POI_MAP = {
+        "chai_samosa": "restaurant_count",
         "tea": "restaurant_count",
         "coffee": "restaurant_count",
+        "tiffin_breakfast": "restaurant_count",
         "food": "restaurant_count",
+        "biryani_rice": "restaurant_count",
+        "fast_food": "restaurant_count",
         "fruits": "restaurant_count",
+        "vegetables": "restaurant_count",
         "salon": "mall_count",
         "repair": "office_count",
     }
@@ -136,15 +141,22 @@ class OSMCompetitionProvider(CompetitionProvider):
             return SimulatedCompetitionProvider().get_competition_score(h3_cell, vendor_category)
 
         poi_col = self.CATEGORY_POI_MAP.get(vendor_category.lower(), "restaurant_count")
-        raw_count = float(self._static.loc[h3_cell, poi_col]) if poi_col in self._static.columns else 2.0
+        raw_count = float(self._static.loc[h3_cell, poi_col]) if poi_col in self._static.columns else 0.0
 
-        scale = 15.0 if vendor_category in ("tea", "coffee", "fruits") else 25.0
+        # If specific POI count is 0 in an active commercial area, derive baseline competitor footprint
+        # from commercial density and building count
+        if raw_count <= 0.0 and "building_count" in self._static.columns and "commercial_ratio" in self._static.columns:
+            bldg_cnt = float(self._static.loc[h3_cell, "building_count"])
+            comm_ratio = float(self._static.loc[h3_cell, "commercial_ratio"])
+            raw_count = max(0.5, bldg_cnt * 0.4 + comm_ratio * 3.0)
+
+        scale = 15.0 if vendor_category.lower() in ("chai_samosa", "tea", "coffee", "fruits") else 25.0
         score = min(1.0, raw_count / scale)
 
         return {
             "competition_score": round(score, 4),
             "competition_level": _score_to_level(score),
-            "raw_competitor_count": int(raw_count),
+            "raw_competitor_count": int(round(raw_count)),
             "poi_column_used": poi_col,
             "vendor_category": vendor_category,
             "source_type": self.source_type,
@@ -185,13 +197,17 @@ class GooglePlacesCompetitionProvider(CompetitionProvider):
         if not self.api_key:
             raise EnvironmentError("GOOGLE_PLACES_API_KEY not set.")
         self._cache: Dict[str, dict] = {}
-        self._cache_ttl = 1800  # 30 min
+        self._cache_ttl = 1800  # 30 minutes
+        self._disabled_until: float = 0.0
 
     def get_competition_score(self, h3_cell: str, vendor_category: str) -> dict:
         import h3
+        now_ts = time.time()
+        if now_ts < self._disabled_until:
+            return OSMCompetitionProvider().get_competition_score(h3_cell, vendor_category)
+
         lat, lng = h3.cell_to_latlng(h3_cell)
         cache_key = f"{h3_cell}_{vendor_category}"
-        now_ts = time.time()
 
         if cache_key in self._cache:
             entry = self._cache[cache_key]
@@ -218,7 +234,7 @@ class GooglePlacesCompetitionProvider(CompetitionProvider):
                     }
                 },
             }
-            resp = requests.post(url_new, json=body, headers=headers, timeout=8)
+            resp = requests.post(url_new, json=body, headers=headers, timeout=3.0)
             if resp.status_code == 200:
                 data = resp.json()
                 places = data.get("places", [])
@@ -249,7 +265,7 @@ class GooglePlacesCompetitionProvider(CompetitionProvider):
                 "keyword": keyword,
                 "key": self.api_key,
             }
-            resp = requests.get(url_legacy, params=params, timeout=8)
+            resp = requests.get(url_legacy, params=params, timeout=3.0)
             resp.raise_for_status()
             data = resp.json()
             results = data.get("results", [])
@@ -268,7 +284,8 @@ class GooglePlacesCompetitionProvider(CompetitionProvider):
             self._cache[cache_key] = {"data": res, "ts": now_ts}
             return res
         except Exception as e:
-            logger.warning(f"Google Places API failed ({e}). Falling back to OSM.")
+            logger.warning(f"Google Places API failed ({e}). Tripping circuit breaker for 3m, falling back to OSM.")
+            self._disabled_until = now_ts + 180.0
             return OSMCompetitionProvider().get_competition_score(h3_cell, vendor_category)
 
 
