@@ -75,6 +75,7 @@ agents.md
 agent1.md
 .agents/
 data/raw/weather/
+data/raw/osm/competitors_aggregated_cache.parquet
 
 colab_indetail.md
 COLAB.md

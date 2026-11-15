@@ -1,6 +1,6 @@
 {
   "pipeline_schema_version": "v2.1-next-hour-forecast",
-  "generated_at": "2026-11-15T04:50:38.847881+00:00",
+  "generated_at": "2026-11-15T06:11:31.329710+00:00",
   "files": {
     "h3_cells.parquet": {
       "sha256_16": "f2260e46a09bdc1b",

@@ -146,6 +146,8 @@ class CompetitorPipeline:
         Normalize raw OSM/Places elements into structured CompetitorRecords.
         """
         now = as_of_time or datetime.now(timezone.utc)
+        if now.tzinfo is None:
+            now = now.replace(tzinfo=timezone.utc)
         records: List[CompetitorRecord] = []
 
         for elem in raw_elements:
@@ -170,11 +172,14 @@ class CompetitorPipeline:
             verified_str = elem.get("last_verified") or tags.get("check_date")
             if verified_str:
                 try:
-                    verified_dt = datetime.fromisoformat(verified_str.replace("Z", "+00:00"))
+                    verified_dt = datetime.fromisoformat(str(verified_str).replace("Z", "+00:00"))
                 except ValueError:
                     verified_dt = now
             else:
                 verified_dt = now
+
+            if verified_dt.tzinfo is None:
+                verified_dt = verified_dt.replace(tzinfo=timezone.utc)
 
             is_stale = (now - verified_dt) > timedelta(days=STALE_RECORD_THRESHOLD_DAYS)
 
