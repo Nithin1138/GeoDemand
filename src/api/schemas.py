@@ -813,4 +813,54 @@ class BrokerStatusResponse(BaseModel):
     telemetry: Dict[str, Any] = Field(..., description="Runtime broker delivery and queue metrics")
 
 
+# ===========================================================================
+# Competitor Intelligence Schemas
+# ===========================================================================
+
+class CompetitorItemResponse(BaseModel):
+    competitor_id: str = Field(..., description="Unique competitor identifier")
+    name: str = Field(..., description="Business name")
+    category: str = Field(..., description="Normalized vendor category")
+    raw_type: str = Field(..., description="Original amenity or place type")
+    latitude: float = Field(..., description="Latitude coordinate")
+    longitude: float = Field(..., description="Longitude coordinate")
+    h3_cell: str = Field(..., description="H3 resolution 8 index")
+    opening_hours: Optional[str] = Field(default=None, description="Raw opening hours string if available")
+    is_open_now: Optional[bool] = Field(default=None, description="Whether open at request time")
+    is_daytime_active: bool = Field(default=True, description="Whether active during daytime hours (06:00-18:00)")
+    is_nighttime_active: bool = Field(default=False, description="Whether active during nighttime hours (18:00-06:00)")
+    operating_hours_source: str = Field(..., description="'provider_explicit', 'category_default', or 'unknown'")
+    source: str = Field(..., description="Data provider source name")
+    rating: Optional[float] = Field(default=None, description="Star rating if available")
+    address: Optional[str] = Field(default=None, description="Street address or landmark description")
+    retrieved_at: str = Field(..., description="Retrieval timestamp (ISO 8601)")
+
+
+class CellCompetitionResponse(BaseModel):
+    h3_cell: str = Field(..., description="Queried H3 resolution 8 cell index")
+    vendor_category: str = Field(..., description="Evaluated vendor category")
+    competition_score: float = Field(..., description="Normalized competition score [0.0, 1.0]")
+    competition_level: str = Field(..., description="'low', 'medium', or 'high'")
+    total_competitors: int = Field(..., description="Total commercial competitors in this cell")
+    same_category_competitors: int = Field(..., description="Number of competitors in the same category")
+    active_competitors_now: int = Field(..., description="Competitors actively operating at current hour")
+    category_counts: Dict[str, int] = Field(..., description="Competitor count breakdown by category")
+    competitors: List[CompetitorItemResponse] = Field(default_factory=list, description="Competitor entities list")
+    freshness: Dict[str, Any] = Field(..., description="Provider source, retrieval time, cache age and rate limit status")
+
+
+class CompetitorRefreshRequest(BaseModel):
+    h3_cells: Optional[List[str]] = Field(default=None, description="List of H3 cells to refresh; if omitted, refreshes monitored core zones")
+    force: bool = Field(default=False, description="Bypass cache and force upstream refresh")
+
+
+class CompetitorRefreshResponse(BaseModel):
+    status: str = Field(..., description="'COMPLETED', 'SCHEDULED', or 'UP_TO_DATE'")
+    refreshed_cells_count: int = Field(..., description="Count of H3 cells updated")
+    total_competitors_found: int = Field(..., description="Total competitor entities discovered/cached")
+    provider_used: str = Field(..., description="Active competitor provider name")
+    timestamp: str = Field(..., description="Refresh execution timestamp (ISO 8601)")
+
+
+
 

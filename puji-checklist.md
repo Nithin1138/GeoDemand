@@ -276,6 +276,36 @@
   - Comprehensive unit & integration test suite: `tests/test_event_broker.py` (11/11 passed).
   - Architecture report: `docs/event_broker_report.md` & brain artifact.
 
+### 13. Competitor Intelligence & Provider Subsystem (Completed)
+- [x] **Common Competitor Provider Interface (`src/api/providers/competition.py`):**
+  - Defined `CompetitionProvider` ABC (`get_competition_score`, `get_competitors`, `get_cell_competition`, `refresh`).
+  - Structured `CompetitorEntity` dataclass tracking ID, name, category, raw amenity/place type, lat/lng, H3 cell, rating, address, and operating hours metadata.
+- [x] **Operating Hours & Daytime/Nighttime Heuristics (`parse_operating_hours_detailed`):**
+  - Parsed 24/7 continuous operation, explicit closed, standard hour ranges (e.g. `11:00-23:00`), and overnight shift spans (e.g. `18:00-02:00`).
+  - Implemented category-specific daytime and nighttime availability heuristics for missing hours, distinguishing explicit provider hours (`provider_explicit`) from imputed heuristics (`category_default`).
+- [x] **Provider Implementations (`src/api/providers/competition.py`):**
+  - `OSMCompetitionProvider`: Periodically indexes 1,192+ commercial POIs from `data/raw/osm/osm_vijayawada_pois.json` into H3 resolution 8 cells with 0ms local offline lookup.
+  - `OSMOverpassCompetitionProvider`: Queries live OpenStreetMap Overpass QL API with in-memory caching (3600s TTL) and circuit breaker fallback to the local OSM snapshot on HTTP 429 rate limits or timeouts.
+  - `GooglePlacesCompetitionProvider`: Integrates live Google Places API (New SearchNearby & Legacy nearbysearch) with caching (1800s TTL) and circuit breaker fallback to OSM on HTTP 429 rate limits or quota exhaustion.
+  - `SimulatedCompetitionProvider`: High-speed fallback provider utilizing offline static features.
+- [x] **Spatial Aggregation & Category Breakdown (`aggregate_competitors_for_cell`):**
+  - Groups competitors by H3 resolution 8 cells and category.
+  - Computes active competitors open at the current hour, total competitors, category count distribution, and calibrated `competition_score` $\in [0.0, 1.0]$.
+- [x] **Scheduled Competitor Refresh Engine (`ScheduledCompetitorRefresh`):**
+  - Background daemon thread refreshing competitor intelligence and operating hours across monitored deployment zones.
+  - Non-blocking server startup and on-demand refresh execution (`refresh_cells`).
+  - Integrated into FastAPI `lifespan` (`start()` on startup, graceful `stop()` on shutdown).
+- [x] **FastAPI Competitor Endpoints (`src/api/app.py`):**
+  - `GET /v1/competitors/cell/{h3_cell}`: Returns structured competitor lists, category distribution, active vendor count, and freshness metadata.
+  - `POST /v1/competitors/refresh`: Triggers on-demand or targeted H3 zone competitor refresh.
+  - `GET /v1/competitors/scheduler-status`: Telemetry endpoint for background refresh state and monitored zones.
+- [x] **Deliverables Completed:**
+  - Competitor provider subsystem: `src/api/providers/competition.py`
+  - API schemas: `src/api/schemas.py`
+  - API endpoints: `src/api/app.py`
+  - Unit & integration test suite: `tests/test_competitor_provider.py` (16/16 passed).
+  - Competitor report: `docs/competitor_provider_report.md` & brain artifact.
+
 ---
 
 ## 🏆 Completed Previously (V1 / Foundation)

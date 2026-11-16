@@ -104,9 +104,21 @@ async def lifespan(app: FastAPI):
         logger.info("Event Gateway and Broker consumers started.")
     except Exception as e:
         logger.warning(f"Failed to start Event Gateway broker: {e}")
+    try:
+        from api.providers.competition import competitor_refresh_scheduler
+        competitor_refresh_scheduler.start()
+        logger.info("Competitor refresh scheduler started.")
+    except Exception as e:
+        logger.warning(f"Failed to start competitor refresh scheduler: {e}")
     logger.info("Startup complete.")
     yield
     logger.info("GeoDemand AI API shutting down...")
+    try:
+        from api.providers.competition import competitor_refresh_scheduler
+        competitor_refresh_scheduler.stop()
+        logger.info("Competitor refresh scheduler stopped.")
+    except Exception as e:
+        logger.warning(f"Error stopping competitor refresh scheduler: {e}")
     try:
         from src.ingestion.event_broker import event_gateway
         event_gateway.broker.stop()
@@ -155,6 +167,10 @@ OPENAPI_TAGS = [
     {
         "name": "Event Broker",
         "description": "Stream/event ingestion gateway, RabbitMQ/In-Memory broker status, and throughput sizing.",
+    },
+    {
+        "name": "Competition",
+        "description": "Category-aware competitor intelligence, Google Places & OSM Overpass providers, and spatial H3 aggregation.",
     },
 ]
 
@@ -266,6 +282,10 @@ from api.schemas import (
     BrokerPublishTestRequest,
     BrokerStatusResponse,
     DecisionVerdict,
+    CompetitorItemResponse,
+    CellCompetitionResponse,
+    CompetitorRefreshRequest,
+    CompetitorRefreshResponse,
 )
 from api.cache import api_response_cache, generate_cache_key
 from api.scenario_simulation import ScenarioSimulator
@@ -635,6 +655,52 @@ async def fleet_list_vendors(fleet_id: Optional[str] = None, status: Optional[st
             pass
     vendors = fleet_manager.list_vendors(fleet_id=fleet_id, status=stat_enum)
     return [v.to_dict() for v in vendors]
+
+
+# ---------------------------------------------------------------------------
+# Competitor Intelligence Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/v1/competitors/cell/{h3_cell}", response_model=CellCompetitionResponse, tags=["Competition"], summary="Get competitor intelligence and breakdown for an H3 cell")
+async def get_cell_competitors(
+    h3_cell: str,
+    vendor_category: Optional[str] = Query("food", description="Target vendor category to evaluate"),
+    provider: Optional[str] = Query(None, description="Optional override: 'google_places', 'osm_overpass', 'osm', or 'synthetic'"),
+):
+    """
+    Retrieves commercial competitors mapped to an H3 cell:
+    - Resolves competitors via Google Places, OSM Overpass, or local OSM snapshot
+    - Parses operating hours, daytime/nighttime availability, and category
+    - Aggregates competitor density and computes normalized competition score
+    - Returns data provenance and cache freshness metadata
+    """
+    if not h3.is_valid_cell(h3_cell):
+        raise HTTPException(status_code=400, detail=f"Invalid H3 cell index: {h3_cell}")
+
+    comp_prov = CompetitionProviderFactory.get_provider(provider) if provider else _get_providers()[0]
+    return comp_prov.get_cell_competition(h3_cell, vendor_category or "food")
+
+
+@app.post("/v1/competitors/refresh", response_model=CompetitorRefreshResponse, tags=["Competition"], summary="Trigger scheduled or on-demand competitor intelligence refresh")
+async def refresh_competitors(
+    req: CompetitorRefreshRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Refreshes competitor counts and operating hours across monitored H3 deployment zones or target cells.
+    """
+    from api.providers.competition import competitor_refresh_scheduler
+    res = competitor_refresh_scheduler.refresh_cells(h3_cells=req.h3_cells, force=req.force)
+    return res
+
+
+@app.get("/v1/competitors/scheduler-status", tags=["Competition"], summary="Get competitor background refresh scheduler status")
+async def get_competitor_scheduler_status(api_key: str = Depends(verify_api_key)):
+    """
+    Returns the operational state, refresh intervals, and monitored zone statistics of the competitor refresh engine.
+    """
+    from api.providers.competition import competitor_refresh_scheduler
+    return competitor_refresh_scheduler.get_status()
 
 
 # ---------------------------------------------------------------------------
