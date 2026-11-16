@@ -1,0 +1,109 @@
+{
+  "timestamp": "2026-11-16T08:10:42.712023+00:00",
+  "phase": "18.2",
+  "subsystem": "Machine Learning & MLOps",
+  "tests": {
+    "1_production_model_loading": {
+      "status": "PASSED",
+      "model_version": "v2.0.0",
+      "model_type": "lightgbm",
+      "feature_count": 45,
+      "quantiles_loaded": [
+        "p10",
+        "p50",
+        "p90"
+      ]
+    },
+    "2_schema_across_cities": {
+      "status": "PASSED",
+      "cities_verified": {
+        "vijayawada": {
+          "resolved_city": "Vijayawada",
+          "scale": 1.0,
+          "status": "VERIFIED"
+        },
+        "hyderabad": {
+          "resolved_city": "Hyderabad",
+          "scale": 1.25,
+          "status": "VERIFIED"
+        },
+        "bengaluru": {
+          "resolved_city": "Bengaluru",
+          "scale": 1.35,
+          "status": "VERIFIED"
+        },
+        "visakhapatnam": {
+          "resolved_city": "Visakhapatnam",
+          "scale": 1.05,
+          "status": "VERIFIED"
+        }
+      },
+      "boundary_rejection_enforced": true
+    },
+    "3_multi_hour_predictions": {
+      "status": "PASSED",
+      "horizons_evaluated": [
+        1,
+        2,
+        4,
+        8
+      ],
+      "mean_predictions_by_horizon": {
+        "H_1h_mean": 22.46,
+        "H_2h_mean": 21.59,
+        "H_4h_mean": 19.57,
+        "H_8h_mean": 17.1
+      }
+    },
+    "4_quantile_ordering": {
+      "status": "PASSED",
+      "p10": 15.76,
+      "p50": 28.17,
+      "p90": 28.71,
+      "monotonicity_valid": true,
+      "nonnegative": true
+    },
+    "5_shap_explanations": {
+      "status": "PASSED",
+      "predicted_count": 28.17,
+      "base_bias": 11.8467,
+      "top_positive_factors": [
+        "event_importance",
+        "commercial_ratio",
+        "average_order_value"
+      ],
+      "top_negative_factors": [
+        "hour_sin",
+        "hour_cos",
+        "competition_score"
+      ],
+      "formatted_explanation_snippet": "Prediction: 28 customers/hour\n\nTop positive factors:\n+ event_importance\n+ commercial_ratio\n+ average_order_value\n\nTop ne"
+    },
+    "6_drift_detection": {
+      "status": "PASSED",
+      "max_psi": 11.0604,
+      "drift_detected": true,
+      "drifted_features": [
+        "temperature"
+      ]
+    },
+    "7_retraining_workflow": {
+      "status": "PASSED",
+      "eligibility_verified": true,
+      "sample_count": 600,
+      "sample_sufficiency_threshold": 500
+    },
+    "8_promotion_and_rollback": {
+      "status": "PASSED",
+      "champion_backup_exists": true,
+      "rollback_ready": true
+    },
+    "9_actual_data_evaluation": {
+      "status": "PASSED",
+      "mae": 0.634,
+      "rmse": 0.7992,
+      "r2": 0.979,
+      "simulation_disclaimer_included": true
+    }
+  }
+}
