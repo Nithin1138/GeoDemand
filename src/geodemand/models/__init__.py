@@ -31,10 +31,14 @@ from src.geodemand.models.multi_horizon import (
     TimeAlignmentReport,
 )
 from src.geodemand.models.multicity_eval import (
+    CityBoundaryError,
     CityEvaluationMetrics,
+    CityModelSelector,
+    CitySelectionResult,
     CrossCityTransferResult,
     MultiCityEvaluator,
     MultiCityGeneralizationReport,
+    NonGeneralizableFeaturesReport,
 )
 from src.geodemand.models.promotion import (
     GateCheckResult,
@@ -71,6 +75,10 @@ __all__ = [
     "MultiCityGeneralizationReport",
     "CityEvaluationMetrics",
     "CrossCityTransferResult",
+    "CityModelSelector",
+    "CityBoundaryError",
+    "CitySelectionResult",
+    "NonGeneralizableFeaturesReport",
     "train_pipeline",
     "load_and_validate",
     "prepare_features",
