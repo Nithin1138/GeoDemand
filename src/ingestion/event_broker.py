@@ -414,13 +414,13 @@ class RabbitMQEventBroker(EventBroker):
     """
 
     def __init__(self, amqp_url: Optional[str] = None):
-        self.amqp_url = amqp_url or os.getenv("RABBITMQ_URL", "amqp://guest:guest@localhost:5672/")
+        self.amqp_url = amqp_url or os.getenv("RABBITMQ_URL")
         self._fallback = InMemoryEventBroker()
         self._is_connected = False
         self._lock = threading.RLock()
         self._handlers: Dict[str, List[Tuple[Callable[[Dict[str, Any]], bool], int, float]]] = {}
 
-        if HAS_PIKA:
+        if HAS_PIKA and (self.amqp_url or os.getenv("ENABLE_RABBITMQ", "false").lower() in ("true", "1", "yes")):
             self._try_connect()
         else:
             logger.info("Pika not installed or AMQP daemon offline; running on In-Memory broker fallback.")
@@ -504,7 +504,8 @@ class RabbitMQEventBroker(EventBroker):
         metrics = self._fallback.get_metrics()
         metrics["broker_type"] = "RabbitMQEventBroker" if self._is_connected else "RabbitMQEventBroker(Fallback:InMemory)"
         metrics["is_connected_to_amqp"] = self._is_connected
-        metrics["amqp_url"] = self.amqp_url.split("@")[-1] if "@" in self.amqp_url else self.amqp_url
+        url = self.amqp_url or "amqp://guest:guest@localhost:5672/"
+        metrics["amqp_url"] = url.split("@")[-1] if "@" in url else url
         return metrics
 
 
