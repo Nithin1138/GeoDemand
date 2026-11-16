@@ -162,9 +162,17 @@ class ShiftOptimizer:
         # -----------------------------------------------------------------------
         if not HAS_ORTOOLS or cp_model is None:
             logger.warning("Google OR-Tools is not installed; returning fallback stay plan.")
-            return self._fallback_stay_plan(
-                origin_lat, origin_lng, shift_start, shift_duration_hours,
-                vendor_category, inventory_capacity, "Google OR-Tools is not installed in environment"
+            return self._build_stay_plan(
+                origin_cand=origin_cand,
+                shift_start=shift_start,
+                shift_end=shift_end,
+                shift_duration_hours=shift_duration_hours,
+                shift_duration_minutes=shift_duration_minutes,
+                aov=aov,
+                cogs_rate=cogs_rate,
+                start_t0=start_t0,
+                pool=pool,
+                reason="Google OR-Tools is not installed in environment",
             )
 
         K_max = max(1, min(max_relocation_stops, 5))
@@ -477,6 +485,92 @@ class ShiftOptimizer:
             "solver_telemetry": {
                 "solver_name": "google_ortools_cp_sat",
                 "solver_status": solver_status,
+                "solve_time_ms": solve_time_ms,
+                "candidates_evaluated": len(pool),
+            },
+        }
+
+    def _build_stay_plan(
+        self,
+        origin_cand: Dict[str, Any],
+        shift_start: datetime,
+        shift_end: datetime,
+        shift_duration_hours: float,
+        shift_duration_minutes: int,
+        aov: float,
+        cogs_rate: float,
+        start_t0: float,
+        pool: List[Dict[str, Any]],
+        reason: str = "Origin stay plan",
+    ) -> Dict[str, Any]:
+        """Constructs a deterministic single-stop baseline plan staying at the origin location."""
+        solve_time_ms = round((time.time() - start_t0) * 1000, 1)
+        dwell_h = shift_duration_hours
+        stop_cust = max(1, int(round(origin_cand.get("expected_customers", 12) * dwell_h)))
+        stop_rev = round(stop_cust * aov, 2)
+        stop_cogs = round(stop_rev * cogs_rate, 2)
+        fixed_cost = round(DEFAULT_FIXED_COST_PER_DAY_INR * (shift_duration_hours / 13.0), 2)
+        stop_prof = round(stop_rev - stop_cogs - fixed_cost, 2)
+
+        itinerary = [{
+            "stop_number": 1,
+            "h3_cell": origin_cand["h3_cell"],
+            "latitude": origin_cand["latitude"],
+            "longitude": origin_cand["longitude"],
+            "landmark_name": origin_cand.get("landmark_name", "Current Starting Point"),
+            "landmark_display": origin_cand.get("landmark_display", "Origin Zone"),
+            "landmark_type": origin_cand.get("landmark_type", "origin"),
+            "landmark_emoji": "📍",
+            "is_current_cell": True,
+            "arrival_time": shift_start.isoformat(),
+            "arrival_formatted": shift_start.strftime("%I:%M %p"),
+            "setup_time_minutes": 0,
+            "trading_start_time": shift_start.isoformat(),
+            "trading_start_formatted": shift_start.strftime("%I:%M %p"),
+            "dwell_minutes": shift_duration_minutes,
+            "dwell_hours": shift_duration_hours,
+            "trading_end_time": shift_end.isoformat(),
+            "trading_end_formatted": shift_end.strftime("%I:%M %p"),
+            "teardown_time_minutes": 0,
+            "departure_time": shift_end.isoformat(),
+            "departure_formatted": shift_end.strftime("%I:%M %p"),
+            "travel_to_next_stop_minutes": 0,
+            "travel_to_next_stop_km": 0.0,
+            "fuel_cost_to_next_inr": 0.0,
+            "expected_hourly_customers": origin_cand.get("expected_customers", 12),
+            "customers_served_at_stop": stop_cust,
+            "gross_revenue_inr": stop_rev,
+            "operating_costs_inr": stop_cogs,
+            "net_profit_inr": stop_prof,
+        }]
+
+        return {
+            "shift_id": f"shift_{shift_start.strftime('%Y%m%d%H%M%S')}_1",
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "shift_start": shift_start.isoformat(),
+            "shift_end": shift_end.isoformat(),
+            "shift_duration_hours": shift_duration_hours,
+            "itinerary": itinerary,
+            "summary": {
+                "total_stops": 1,
+                "total_dwell_minutes": shift_duration_minutes,
+                "total_dwell_hours": shift_duration_hours,
+                "total_transit_minutes": 0,
+                "total_overhead_minutes": 0,
+                "total_travel_distance_km": 0.0,
+                "total_fuel_cost_inr": 0.0,
+                "total_expected_customers": stop_cust,
+                "total_gross_revenue_inr": stop_rev,
+                "total_net_profit_inr": stop_prof,
+            },
+            "baseline_stay_profit_inr": stop_prof,
+            "shift_net_uplift_inr": 0.0,
+            "shift_net_uplift_pct": 0.0,
+            "verdict": "STAY_PUT_SHIFT",
+            "decision_reason": f"Stay at current location. {reason}.",
+            "solver_telemetry": {
+                "solver_name": "google_ortools_cp_sat" if HAS_ORTOOLS else "fallback_heuristic",
+                "solver_status": "FALLBACK_STAY",
                 "solve_time_ms": solve_time_ms,
                 "candidates_evaluated": len(pool),
             },
