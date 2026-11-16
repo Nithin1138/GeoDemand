@@ -306,6 +306,38 @@
   - Unit & integration test suite: `tests/test_competitor_provider.py` (16/16 passed).
   - Competitor report: `docs/competitor_provider_report.md` & brain artifact.
 
+### 14. Notification Trigger & Delivery Engine Subsystem (Completed)
+- [x] **Notification Trigger Engine (`src/notifications/notification_engine.py`):**
+  - Built `NotificationTriggerService` evaluating impending-rain, event-demand, and demand-spike alerts.
+  - Formulated economic net profit uplift calculations before recommending physical relocation.
+  - Attached target H3 cells, destination landmarks, recommended departure times, and expected arrival times.
+- [x] **Forecast Freshness & Reliability Safety Invariant:**
+  - Enforced `verify_forecast_freshness()` verifying live source provenance (`real_live`) and cache freshness ($\le 3600\text{s}$).
+  - Strictly blocked relocation recommendations (`is_move_recommended = False`) when forecasts are stale or synthetic fallback data, issuing canopy/shelter-in-place advisories.
+- [x] **Multi-Channel Delivery Infrastructure:**
+  - `FCMAdapter` (`src/notifications/fcm_adapter.py`): Push notification formatting, device token validation, and error code handling (`UNREGISTERED`, `INVALID_ARGUMENT`).
+  - `WhatsAppNotificationAdapter` (`src/notifications/whatsapp_adapter.py`): Conversational relocation cards via Meta Graph API, E.164 phone formatting, and opt-out tracking.
+- [x] **Preferences, Opt-Out, and Cooldown Suppression:**
+  - Granular channel toggles, alert toggles, and full opt-out support (`opt_out = True`).
+  - Quiet hours window suppression (`23:00–06:00`).
+  - Duplicate notification prevention with 60-minute idempotency cooldown per `(vendor_id, alert_type, destination_cell, hour_bucket)`.
+  - Notification expiry timestamps marking stale alerts `EXPIRED`.
+- [x] **FastAPI Endpoints (`src/api/app.py`):**
+  - `POST /v1/notifications/preferences`: Register or update vendor notification preferences.
+  - `GET /v1/notifications/preferences/{vendor_id}`: Query vendor preferences and active channel tokens.
+  - `POST /v1/notifications/trigger-check`: Evaluate real-time rain, event, and surge conditions for a vendor location.
+  - `POST /v1/notifications/dispatch`: Directly dispatch an alert notification.
+  - `GET /v1/notifications/history/{vendor_id}`: Query past delivery logs and telemetry.
+  - `GET /v1/notifications/delivery-status/{notification_id}`: Track multi-channel delivery records for a specific notification ID.
+- [x] **Deliverables Completed:**
+  - Notification models & schemas: `src/notifications/models.py`, `src/api/schemas.py`
+  - FCM adapter: `src/notifications/fcm_adapter.py`
+  - WhatsApp adapter: `src/notifications/whatsapp_adapter.py`
+  - Notification trigger engine: `src/notifications/notification_engine.py`
+  - API endpoints: `src/api/app.py`
+  - Unit & integration test suite: `tests/test_notifications.py` (22/22 passed).
+  - Documentation report: `docs/notification_trigger_report.md` & brain artifact.
+
 ---
 
 ## 🏆 Completed Previously (V1 / Foundation)

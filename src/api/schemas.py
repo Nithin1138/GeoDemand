@@ -862,5 +862,68 @@ class CompetitorRefreshResponse(BaseModel):
     timestamp: str = Field(..., description="Refresh execution timestamp (ISO 8601)")
 
 
+# ===========================================================================
+# Notification Subsystem Schemas
+# ===========================================================================
+
+class NotificationPreferencesRequest(BaseModel):
+    vendor_id: str = Field(..., description="Target vendor identifier")
+    opt_out: bool = Field(default=False, description="Whether vendor opts out of automated alerts")
+    channels: List[str] = Field(default=["FCM", "WHATSAPP"], description="Enabled notification delivery channels ('FCM', 'WHATSAPP', 'TELEGRAM', 'SMS')")
+    fcm_token: Optional[str] = Field(default=None, description="Device FCM registration token")
+    whatsapp_phone: Optional[str] = Field(default=None, description="WhatsApp contact phone number")
+    alert_impending_rain: bool = Field(default=True, description="Enable impending rain warnings")
+    alert_event_demand: bool = Field(default=True, description="Enable nearby event demand surge alerts")
+    alert_demand_spike: bool = Field(default=True, description="Enable general customer demand spike alerts")
+    min_profit_uplift_inr: float = Field(default=40.0, ge=0.0, description="Minimum profit uplift required to recommend relocation")
+    quiet_hours_start: Optional[str] = Field(default="23:00", description="Quiet hours window start time (HH:MM)")
+    quiet_hours_end: Optional[str] = Field(default="06:00", description="Quiet hours window end time (HH:MM)")
+
+
+class NotificationPreferencesResponse(BaseModel):
+    status: str = Field(..., description="'REGISTERED' or 'UPDATED'")
+    preferences: Dict[str, Any] = Field(..., description="Current vendor notification preferences")
+
+
+class NotificationTriggerCheckRequest(BaseModel):
+    vendor_id: str = Field(..., description="Vendor identifier to evaluate")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Current vendor latitude")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Current vendor longitude")
+    vendor_category: str = Field(default="food", description="Vendor business category ('food', 'fruits', 'tea', etc.)")
+    force: bool = Field(default=False, description="Bypass quiet hours or duplicate suppression filters")
+
+
+class NotificationTriggerCheckResponse(BaseModel):
+    status: str = Field(..., description="'EVALUATED'")
+    vendor_id: str = Field(..., description="Evaluated vendor identifier")
+    alerts_evaluated_count: int = Field(..., description="Total alert condition categories checked")
+    alerts_triggered_count: int = Field(..., description="Number of actionable alerts created")
+    triggered_alerts: List[Dict[str, Any]] = Field(default_factory=list, description="Alert payloads including relocation parameters")
+    delivery_records: List[Dict[str, Any]] = Field(default_factory=list, description="Channel delivery and dispatch telemetry records")
+
+
+class NotificationDispatchRequest(BaseModel):
+    vendor_id: str = Field(..., description="Recipient vendor identifier")
+    alert_type: str = Field(default="DEMAND_SPIKE", description="'IMPENDING_RAIN', 'EVENT_DEMAND', 'DEMAND_SPIKE'")
+    severity: str = Field(default="INFO", description="'INFO', 'WARNING', or 'CRITICAL'")
+    title: str = Field(..., description="Notification alert title")
+    body: str = Field(..., description="Conversational alert body")
+    destination_h3_cell: Optional[str] = Field(default=None, description="Recommended target zone H3 cell")
+    destination_name: Optional[str] = Field(default=None, description="Landmark or commercial hub name")
+    distance_km: Optional[float] = Field(default=1.2, description="Physical distance to destination in km")
+    travel_time_minutes: Optional[int] = Field(default=6, description="Estimated travel time in minutes")
+    expected_profit_uplift_inr: Optional[float] = Field(default=50.0, description="Expected net profit gain in INR")
+    channel: Optional[str] = Field(default=None, description="Optional override channel ('FCM' or 'WHATSAPP')")
+    force: bool = Field(default=False, description="Bypass opt-out and quiet-hours filters")
+
+
+class NotificationDispatchResponse(BaseModel):
+    status: str = Field(..., description="'DISPATCHED' or 'SUPPRESSED'")
+    notification_id: str = Field(..., description="Unique notification identifier")
+    vendor_id: str = Field(..., description="Target vendor identifier")
+    records: List[Dict[str, Any]] = Field(..., description="Delivery records by channel")
+
+
+
 
 

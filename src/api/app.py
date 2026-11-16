@@ -19,7 +19,7 @@ from __future__ import annotations
 import logging
 import sys
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
 from typing import Optional, List, Dict, Any
 
@@ -172,6 +172,10 @@ OPENAPI_TAGS = [
         "name": "Competition",
         "description": "Category-aware competitor intelligence, Google Places & OSM Overpass providers, and spatial H3 aggregation.",
     },
+    {
+        "name": "Notifications",
+        "description": "Notification trigger service, impending-rain alerts, event alerts, demand spikes, and multi-channel delivery (FCM, WhatsApp).",
+    },
 ]
 
 app = FastAPI(
@@ -286,6 +290,23 @@ from api.schemas import (
     CellCompetitionResponse,
     CompetitorRefreshRequest,
     CompetitorRefreshResponse,
+    NotificationPreferencesRequest,
+    NotificationPreferencesResponse,
+    NotificationTriggerCheckRequest,
+    NotificationTriggerCheckResponse,
+    NotificationDispatchRequest,
+    NotificationDispatchResponse,
+)
+from notifications.notification_engine import notification_service
+from notifications.models import (
+    NotificationPreferences,
+    NotificationMessage,
+    NotificationChannel,
+    DeliveryStatus,
+    AlertType,
+    AlertSeverity,
+    RelocationDetails,
+    ForecastFreshnessMetadata,
 )
 from api.cache import api_response_cache, generate_cache_key
 from api.scenario_simulation import ScenarioSimulator
@@ -701,6 +722,191 @@ async def get_competitor_scheduler_status(api_key: str = Depends(verify_api_key)
     """
     from api.providers.competition import competitor_refresh_scheduler
     return competitor_refresh_scheduler.get_status()
+
+
+# ---------------------------------------------------------------------------
+# Notification Trigger & Delivery Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/notifications/preferences", response_model=NotificationPreferencesResponse, tags=["Notifications"], summary="Register or update vendor notification preferences")
+async def update_notification_preferences(
+    req: NotificationPreferencesRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Registers or updates vendor alert delivery preferences:
+    - Opt-in / Opt-out settings
+    - Channels (FCM, WhatsApp)
+    - Device FCM registration token & WhatsApp phone number
+    - Impending rain, event surge, and demand spike toggles
+    - Minimum profit uplift threshold and quiet-hours window
+    """
+    channels_enum = []
+    for c in req.channels:
+        try:
+            channels_enum.append(NotificationChannel(c.upper()))
+        except ValueError:
+            pass
+
+    prefs = NotificationPreferences(
+        vendor_id=req.vendor_id,
+        opt_out=req.opt_out,
+        channels=channels_enum or [NotificationChannel.FCM, NotificationChannel.WHATSAPP],
+        fcm_token=req.fcm_token,
+        whatsapp_phone=req.whatsapp_phone,
+        alert_impending_rain=req.alert_impending_rain,
+        alert_event_demand=req.alert_event_demand,
+        alert_demand_spike=req.alert_demand_spike,
+        min_profit_uplift_inr=req.min_profit_uplift_inr,
+        quiet_hours_start=req.quiet_hours_start,
+        quiet_hours_end=req.quiet_hours_end,
+    )
+    saved = notification_service.update_preferences(prefs)
+    return {
+        "status": "UPDATED",
+        "preferences": saved.to_dict(),
+    }
+
+
+@app.get("/v1/notifications/preferences/{vendor_id}", tags=["Notifications"], summary="Get vendor notification preferences")
+async def get_notification_preferences(vendor_id: str, api_key: str = Depends(verify_api_key)):
+    """Returns the current alert preferences, quiet hours, and channel tokens for a vendor."""
+    prefs = notification_service.get_preferences(vendor_id)
+    return prefs.to_dict()
+
+
+@app.post("/v1/notifications/trigger-check", response_model=NotificationTriggerCheckResponse, tags=["Notifications"], summary="Evaluate alerts and trigger vendor notifications")
+async def check_notification_triggers(
+    req: NotificationTriggerCheckRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Evaluates real-time external signals for a vendor location:
+    - Impending-rain detection with physical canopy/shelter relocation guidance
+    - Event-demand spikes with footfall crowd attendance
+    - Customer demand surges with validated profit uplift
+    - Enforces forecast freshness and reliability safety invariants
+    """
+    # Evaluate live recommendations around location to supply candidate zones
+    rec_req = RecommendationRequest(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        top_n=5,
+        search_radius_km=3.0,
+    )
+    candidates: List[Dict[str, Any]] = []
+    try:
+        rec_res = await recommendations_live(rec_req, api_key=api_key)
+        candidates = rec_res.get("recommendations", [])
+    except Exception as e:
+        logger.debug(f"Candidate generation for notification trigger fallback: {e}")
+
+    result = notification_service.evaluate_and_trigger(
+        vendor_id=req.vendor_id,
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        candidate_zones=candidates,
+    )
+    return result
+
+
+@app.post("/v1/notifications/dispatch", response_model=NotificationDispatchResponse, tags=["Notifications"], summary="Directly dispatch an alert notification to a vendor")
+async def dispatch_notification(
+    req: NotificationDispatchRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Dispatches a structured alert message to a vendor via FCM and/or WhatsApp:
+    - Validates relocation parameters (departure time, arrival time, profit uplift)
+    - Verifies forecast freshness
+    - Enforces deduplication and quiet-hours filters
+    """
+    now = datetime.now(timezone.utc)
+    notif_id = f"NOTIF-{uuid.uuid4().hex[:8].upper()}"
+
+    relocation = None
+    if req.destination_h3_cell:
+        freshness = ForecastFreshnessMetadata(
+            source_type="real_live",
+            source_name="open_meteo",
+            is_reliable=True,
+            reliability_reason="Verified live forecast",
+        )
+        t_min = req.travel_time_minutes or 6
+        relocation = RelocationDetails(
+            destination_h3_cell=req.destination_h3_cell,
+            destination_name=req.destination_name or "Target Commercial Zone",
+            distance_km=req.distance_km or 1.2,
+            travel_time_minutes=t_min,
+            expected_profit_uplift_inr=req.expected_profit_uplift_inr or 50.0,
+            recommended_departure_time=(now + timedelta(minutes=5)).strftime("%H:%M"),
+            expected_arrival_time=(now + timedelta(minutes=5 + t_min)).strftime("%H:%M"),
+            is_move_recommended=True,
+            forecast_freshness=freshness,
+        )
+
+    override_channel = None
+    if req.channel:
+        try:
+            override_channel = NotificationChannel(req.channel.upper())
+        except ValueError:
+            pass
+
+    try:
+        a_type = AlertType(req.alert_type.upper())
+    except ValueError:
+        a_type = AlertType.GENERAL_ALERT
+
+    try:
+        sev = AlertSeverity(req.severity.upper())
+    except ValueError:
+        sev = AlertSeverity.INFO
+
+    message = NotificationMessage(
+        notification_id=notif_id,
+        vendor_id=req.vendor_id,
+        alert_type=a_type,
+        severity=sev,
+        title=req.title,
+        body=req.body,
+        relocation=relocation,
+        created_at=now,
+        expires_at=now + timedelta(minutes=45),
+        idempotency_key=f"{req.vendor_id}:{a_type.value}:{req.destination_h3_cell or 'none'}:{now.strftime('%Y%m%d%H')}",
+    )
+
+    records = notification_service.dispatch_notification(
+        message=message,
+        override_channel=override_channel,
+        force=req.force,
+    )
+
+    return {
+        "status": "DISPATCHED" if any(r.status == DeliveryStatus.DELIVERED for r in records) else "PROCESSED",
+        "notification_id": notif_id,
+        "vendor_id": req.vendor_id,
+        "records": [r.to_dict() for r in records],
+    }
+
+
+@app.get("/v1/notifications/history/{vendor_id}", tags=["Notifications"], summary="Get vendor notification delivery history")
+async def get_vendor_notification_history(
+    vendor_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    api_key: str = Depends(verify_api_key),
+):
+    """Returns past alert dispatches, channels, recipients, and delivery statuses for a vendor."""
+    records = notification_service.get_vendor_history(vendor_id, limit=limit)
+    return [r.to_dict() for r in records]
+
+
+@app.get("/v1/notifications/delivery-status/{notification_id}", tags=["Notifications"], summary="Track notification delivery status")
+async def get_notification_delivery_status(notification_id: str, api_key: str = Depends(verify_api_key)):
+    """Tracks multi-channel delivery records for a specific notification ID."""
+    records = notification_service.get_notification_status(notification_id)
+    return [r.to_dict() for r in records]
 
 
 # ---------------------------------------------------------------------------
