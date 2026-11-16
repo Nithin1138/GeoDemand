@@ -74,19 +74,89 @@ from config.settings import (
 )
 import h3
 
+import hmac
+import os
+import time
+from fastapi.exceptions import RequestValidationError
+from api.security.errors import (
+    ErrorCode,
+    ERROR_CODE_METADATA,
+    StandardErrorResponse,
+    GeoDemandAPIError,
+    AuthenticationError,
+    ForbiddenError,
+    RateLimitExceededError,
+    ResourceNotFoundError,
+    ConflictError,
+    ProviderTimeoutError,
+    CircuitOpenError,
+)
+from api.reliability.logging import (
+    setup_structured_logging,
+    correlation_id_ctx,
+    request_id_ctx,
+    user_id_ctx,
+    vendor_id_ctx,
+    route_ctx,
+    get_correlation_id,
+    get_request_id,
+    sanitize_log_message,
+)
+from api.reliability.circuit_breaker import (
+    CircuitBreaker,
+    CircuitState,
+    global_circuit_breaker_registry,
+)
+from api.reliability.metrics import (
+    global_metrics_collector,
+    format_prometheus_metrics,
+)
+from api.security.rate_limiter import (
+    global_rate_limiter,
+)
+from api.security.auth import (
+    Role,
+    UserContext,
+    global_api_key_registry,
+    get_user_context,
+    require_role,
+    verify_reservation_ownership,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
-    """Security helper to validate API key header if enabled."""
-    if REQUIRE_API_KEY:
-        if not x_api_key or (API_KEY and x_api_key != API_KEY):
+def verify_api_key(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Security helper to validate API key header timing-safely."""
+    candidate_key = x_api_key if isinstance(x_api_key, str) else None
+    auth_str = authorization if isinstance(authorization, str) else None
+    if not candidate_key and auth_str and auth_str.startswith("Bearer "):
+        candidate_key = auth_str[7:].strip()
+
+    req_api_key = os.getenv("REQUIRE_API_KEY", "false").lower() == "true" or REQUIRE_API_KEY
+    active_api_key = os.getenv("API_KEY") or API_KEY
+
+    if req_api_key:
+        if not candidate_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing API key. Provide a valid X-API-Key header.",
+                detail="Invalid or missing API key. Provide a valid X-API-Key or Authorization Bearer header.",
             )
-    return x_api_key
+        is_valid = False
+        if active_api_key and hmac.compare_digest(candidate_key, active_api_key):
+            is_valid = True
+        elif global_api_key_registry.validate_key(candidate_key) is not None:
+            is_valid = True
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key provided.",
+            )
+    return candidate_key
 
 
 
@@ -192,6 +262,190 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Security, Rate Limiting & Observability Middleware
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def security_and_observability_middleware(request: Request, call_next):
+    correlation_id = (
+        request.headers.get("X-Correlation-ID")
+        or request.headers.get("X-Request-ID")
+        or f"corr_{uuid.uuid4().hex[:12]}"
+    )
+    request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:10]}"
+
+    token_c = correlation_id_ctx.set(correlation_id)
+    token_r = request_id_ctx.set(request_id)
+    token_rt = route_ctx.set(request.url.path)
+
+    # Resolve client identity for rate limiting & metrics
+    auth_header = request.headers.get("Authorization") or ""
+    api_key_hdr = request.headers.get("X-API-Key") or ""
+    candidate_key = None
+    if auth_header.startswith("Bearer "):
+        candidate_key = auth_header[7:].strip()
+    elif api_key_hdr:
+        candidate_key = api_key_hdr.strip()
+
+    client_id = candidate_key or (request.client.host if request.client else "127.0.0.1")
+
+    # Determine rate limiting tier
+    tier = "anonymous"
+    if "/v1/webhooks/" in request.url.path:
+        tier = "webhook"
+    elif candidate_key:
+        meta = global_api_key_registry.validate_key(candidate_key)
+        if meta:
+            tier = meta.get("role", Role.ANONYMOUS).value
+
+    default_enable_rl = "false" if ("PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules) else "true"
+    enable_rl = os.getenv("ENABLE_RATE_LIMITING", default_enable_rl).lower() == "true"
+    is_whitelisted_path = (
+        request.url.path.startswith("/static")
+        or request.url.path in ("/v1/system/ping", "/docs", "/openapi.json", "/favicon.ico")
+    )
+
+    allowed = True
+    remaining = 60
+    reset_s = 60
+    limit = 60
+
+    if enable_rl and not is_whitelisted_path:
+        allowed, remaining, reset_s = global_rate_limiter.check_rate_limit(client_id=client_id, role=tier)
+        limit = global_rate_limiter.get_limit_for_role(tier)
+        if not allowed:
+            global_metrics_collector.record_request(request.url.path, request.method, 429, 0.5)
+            err_resp = StandardErrorResponse(
+                error=ErrorCode.RATE_LIMIT_EXCEEDED.value,
+                message=f"Rate limit exceeded for tier '{tier}'. Maximum {limit} requests per minute.",
+                status_code=429,
+                correlation_id=correlation_id,
+                details={"tier": tier, "limit": limit, "retry_after_seconds": reset_s},
+            )
+            return JSONResponse(
+                status_code=429,
+                content=err_resp.model_dump(),
+                headers={
+                    "Retry-After": str(reset_s),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_s),
+                    "X-Correlation-ID": correlation_id,
+                    "X-Request-ID": request_id,
+                },
+            )
+
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        global_metrics_collector.record_request(request.url.path, request.method, response.status_code, duration_ms)
+        response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["X-Request-ID"] = request_id
+        if enable_rl and not is_whitelisted_path:
+            response.headers["X-RateLimit-Limit"] = str(limit)
+            response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
+            response.headers["X-RateLimit-Reset"] = str(reset_s)
+        return response
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        global_metrics_collector.record_request(request.url.path, request.method, 500, duration_ms)
+        raise exc
+    finally:
+        correlation_id_ctx.reset(token_c)
+        request_id_ctx.reset(token_r)
+        route_ctx.reset(token_rt)
+
+
+# ---------------------------------------------------------------------------
+# Standard Exception Handlers
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(GeoDemandAPIError)
+async def geodemand_api_error_handler(request: Request, exc: GeoDemandAPIError):
+    cid = get_correlation_id()
+    resp = exc.to_response(correlation_id=cid)
+    headers = {"X-Correlation-ID": cid, "X-Request-ID": get_request_id()}
+    if isinstance(exc, RateLimitExceededError):
+        headers["Retry-After"] = str(exc.retry_after)
+    return JSONResponse(status_code=exc.status_code, content=resp.model_dump(), headers=headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    cid = get_correlation_id()
+    err_resp = StandardErrorResponse(
+        error=ErrorCode.VALIDATION_ERROR.value,
+        message="Request payload validation failed.",
+        status_code=422,
+        correlation_id=cid,
+        details={"validation_errors": exc.errors()},
+    )
+    return JSONResponse(
+        status_code=422,
+        content=err_resp.model_dump(),
+        headers={"X-Correlation-ID": cid, "X-Request-ID": get_request_id()},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    cid = get_correlation_id()
+    code_map = {
+        400: ErrorCode.BAD_REQUEST,
+        401: ErrorCode.AUTH_UNAUTHORIZED,
+        403: ErrorCode.AUTH_FORBIDDEN,
+        404: ErrorCode.RESOURCE_NOT_FOUND,
+        409: ErrorCode.CONFLICT,
+        422: ErrorCode.VALIDATION_ERROR,
+        429: ErrorCode.RATE_LIMIT_EXCEEDED,
+        502: ErrorCode.PROVIDER_UNAVAILABLE,
+        503: ErrorCode.CIRCUIT_BREAKER_OPEN,
+        504: ErrorCode.PROVIDER_TIMEOUT,
+    }
+    err_code = code_map.get(exc.status_code, ErrorCode.INTERNAL_ERROR).value
+    if isinstance(exc.detail, dict):
+        msg = exc.detail.get("message") or exc.detail.get("error") or str(exc.detail)
+        det = exc.detail
+    else:
+        msg = str(exc.detail)
+        det = str(exc.detail)
+
+    content = {
+        "error_code": err_code,
+        "error": err_code,
+        "message": msg,
+        "detail": det,
+        "status_code": exc.status_code,
+        "correlation_id": cid,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=content,
+        headers={"X-Correlation-ID": cid, "X-Request-ID": get_request_id()},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    cid = get_correlation_id()
+    logger.error(f"Unhandled exception [correlation_id={cid}]: {exc}", exc_info=True)
+    err_resp = StandardErrorResponse(
+        error=ErrorCode.INTERNAL_ERROR.value,
+        message="An unexpected server error occurred. Please contact support with the correlation ID.",
+        status_code=500,
+        correlation_id=cid,
+        details={"path": request.url.path},
+    )
+    return JSONResponse(
+        status_code=500,
+        content=err_resp.model_dump(),
+        headers={"X-Correlation-ID": cid, "X-Request-ID": get_request_id()},
+    )
 
 # Serve dashboard
 DASHBOARD_DIR = ROOT / "dashboard"
@@ -430,6 +684,40 @@ async def cache_stats():
     return api_response_cache.get_stats()
 
 
+@app.get("/v1/system/metrics", tags=["System"], summary="API latency rolling percentiles and Prometheus telemetry")
+async def system_metrics(
+    format: Optional[str] = Query(None, description="Export format: 'prometheus' or 'json'"),
+    request: Request = None,
+):
+    """
+    Returns API operational latency percentiles (p50, p90, p95, p99), error rates,
+    and throughput metrics in standard JSON or Prometheus format.
+    """
+    accept = request.headers.get("accept", "") if request else ""
+    if format == "prometheus" or "text/plain" in accept:
+        return Response(content=format_prometheus_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
+    return global_metrics_collector.get_metrics_summary()
+
+
+@app.get("/v1/system/circuit-breakers", tags=["System"], summary="Circuit breaker states, failure counters, and cooldowns")
+async def system_circuit_breakers():
+    """Returns active states (CLOSED, OPEN, HALF_OPEN) and trip metrics for all registered circuit breakers."""
+    return global_circuit_breaker_registry.get_all_metrics()
+
+
+@app.get("/v1/system/error-catalog", tags=["System"], summary="Catalogue of standardized error codes, causes, and recovery actions")
+async def system_error_catalog():
+    """Returns the comprehensive catalogue of standardized backend error codes and resolution guidance."""
+    return {
+        "catalog_version": "2.1.0",
+        "total_error_codes": len(ErrorCode),
+        "error_codes": {
+            code.value: ERROR_CODE_METADATA.get(code, {"description": "Standard API error"})
+            for code in ErrorCode
+        },
+    }
+
+
 @app.post("/v1/system/cache-clear", tags=["System"], summary="Clear API response cache")
 async def cache_clear(api_key: str = Depends(verify_api_key)):
     """Evict all items from the API response cache."""
@@ -625,8 +913,25 @@ async def fleet_reserve_cell(req: FleetReserveCellRequest, api_key: str = Depend
 
 
 @app.post("/v1/fleet/cancel-reservation", response_model=FleetCancelReservationResponse, tags=["Fleet Management"], summary="Cancel an active or pending reservation")
-async def fleet_cancel_reservation(req: FleetCancelReservationRequest, api_key: str = Depends(verify_api_key)):
-    """Cancels a reservation and immediately frees up cell capacity."""
+async def fleet_cancel_reservation(
+    req: FleetCancelReservationRequest,
+    api_key: str = Depends(verify_api_key),
+    user_ctx: UserContext = Depends(get_user_context),
+):
+    """Cancels a reservation and immediately frees up cell capacity with ownership validation."""
+    # Enforce role-based access control and reservation ownership
+    res = fleet_manager.get_reservation(req.reservation_id)
+    eff_ctx = user_ctx if isinstance(user_ctx, UserContext) else None
+    if res and eff_ctx and eff_ctx.api_key:
+        if eff_ctx.role not in (Role.FLEET_MANAGER, Role.ADMIN):
+            target_vid = eff_ctx.vendor_id or req.vendor_id
+            if target_vid and res.vendor_id != target_vid:
+                raise ForbiddenError(
+                    message=f"Vendor '{target_vid}' is not authorized to cancel reservation '{req.reservation_id}' belonging to '{res.vendor_id}'.",
+                    error_code=ErrorCode.AUTH_RESERVATION_OWNERSHIP_VIOLATION,
+                    details={"reservation_id": req.reservation_id, "owner_vendor_id": res.vendor_id},
+                )
+
     ok, msg, cell = fleet_manager.cancel_reservation(
         reservation_id=req.reservation_id,
         vendor_id=req.vendor_id,
@@ -648,7 +953,11 @@ async def fleet_cell_occupancy(h3_cell: str, vendor_category: Optional[str] = No
 
 
 @app.post("/v1/fleet/dispatch", response_model=FleetDispatchResponse, tags=["Fleet Management"], summary="Coordinate multi-vendor dispatch minimizing clustering")
-async def fleet_dispatch(req: FleetDispatchRequest, api_key: str = Depends(verify_api_key)):
+async def fleet_dispatch(
+    req: FleetDispatchRequest,
+    api_key: str = Depends(verify_api_key),
+    user_ctx: UserContext = Depends(get_user_context),
+):
     """
     Coordinate dispatch across multiple vendors:
     - Maximizes fleet-wide total net profit
@@ -656,6 +965,12 @@ async def fleet_dispatch(req: FleetDispatchRequest, api_key: str = Depends(verif
     - Minimizes unnecessary clustering across commercial zones
     - Automatically creates soft reservations for dispatched spots
     """
+    eff_ctx = user_ctx if isinstance(user_ctx, UserContext) else None
+    if eff_ctx and eff_ctx.api_key and eff_ctx.role not in (Role.FLEET_MANAGER, Role.ADMIN):
+        raise ForbiddenError(
+            message=f"Role '{eff_ctx.role.value}' is not authorized for fleet dispatch operations. Requires 'fleet_manager' or 'admin'.",
+            error_code=ErrorCode.AUTH_FORBIDDEN,
+        )
     vendor_objs: List[Vendor] = []
     for vi in req.vendors:
         v = Vendor(

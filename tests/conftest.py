@@ -44,6 +44,7 @@ os.environ.setdefault("ROUTING_PROVIDER", "auto")
 os.environ.setdefault("COMPETITION_PROVIDER", "auto")
 os.environ.setdefault("EVENT_PROVIDER", "auto")
 os.environ.setdefault("WEATHER_PROVIDER", "auto")
+os.environ.setdefault("ENABLE_RATE_LIMITING", "false")
 
 # Synthetic Mock Responses for External Services
 MOCK_OSRM_NEAREST = {

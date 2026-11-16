@@ -102,3 +102,6 @@ alekhya-checklist.md
 catboost_info/
 models/champion_backup/
 models/candidates/
+
+data/raw/weather_test/
+

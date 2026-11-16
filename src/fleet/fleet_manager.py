@@ -661,6 +661,13 @@ class FleetManager:
             logger.info(f"Confirmed reservation {res_id} for vendor {vendor_id} in {h3_cell} (soft={is_soft})")
             return True, res, "Reservation confirmed successfully"
 
+    def get_reservation(self, reservation_id: str) -> Optional[Reservation]:
+        """
+        Retrieves a reservation by ID under thread lock.
+        """
+        with self._lock:
+            return self._reservations.get(reservation_id)
+
     def cancel_reservation(self, reservation_id: str, vendor_id: Optional[str] = None) -> Tuple[bool, str, Optional[str]]:
         """
         Cancels an active or pending reservation, immediately releasing cell capacity.
@@ -788,7 +795,7 @@ class FleetManager:
                             "h3_cell": cell_id,
                             "latitude": float(c.get("latitude", lat)),
                             "longitude": float(c.get("longitude", lng)),
-                            "landmark_name": c.get("landmark_name") or resolve_candidate_landmark(lat, lng).get("name", "Commercial Hub"),
+                            "landmark_name": c.get("landmark_name") or resolve_candidate_landmark(lat, lng, cell_id).get("name", "Commercial Hub"),
                             "base_demand": float(c.get("base_demand") or c.get("expected_customers", 18)),
                         })
             else:

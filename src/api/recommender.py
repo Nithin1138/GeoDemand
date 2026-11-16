@@ -106,7 +106,9 @@ class DemandModel:
                 self._p90_model = self._predictor.p90_model
                 self._feature_cols = self._predictor.feature_cols
                 self._label_encoders = self._predictor.label_encoders
-                self._meta = self._predictor.metadata or {"model_type": "lightgbm", "shap_enabled": True}
+                self._meta = dict(self._predictor.metadata) if self._predictor.metadata else {"model_type": "lightgbm", "shap_enabled": True}
+                if "model_type" not in self._meta:
+                    self._meta["model_type"] = "lightgbm"
                 self._loaded = True
                 logger.info(
                     f"DemandModel loaded successfully via DemandModelPredictor: "

@@ -532,6 +532,10 @@ class ModelPromotionGate:
         logger.info(f"[OK] Active champion snapshot backed up to {self.backup_dir}")
         return self.backup_dir
 
+    def _backup_active_champion(self) -> Path:
+        """Alias for backup_current_champion."""
+        return self.backup_current_champion()
+
     def rollback_to_backup(self) -> bool:
         """Rollback production champion to backed-up snapshot."""
         if not (self.backup_dir / "demand_model.pkl").exists():

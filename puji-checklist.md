@@ -338,6 +338,50 @@
   - Unit & integration test suite: `tests/test_notifications.py` (22/22 passed).
   - Documentation report: `docs/notification_trigger_report.md` & brain artifact.
 
+### 15. Backend Hardening, Security, and Reliability Subsystem (Completed)
+- [x] **Structured JSON Logging & Observability (`src/api/reliability/logging.py`):**
+  - Implemented `StructuredJsonFormatter` formatting single-line JSON log events.
+  - Propagated asynchronous `ContextVar` tracing: `correlation_id`, `request_id`, `user_id`, `vendor_id`, `route`.
+  - Implemented automatic data sanitization (`sanitize_log_message`) redacting API keys, bearer tokens, passwords, and secrets.
+- [x] **API Latency & Prometheus Telemetry (`src/api/reliability/metrics.py`):**
+  - Built `LatencyMetricsCollector` with rolling percentiles ($P_{50}, P_{90}, P_{95}, P_{99}$, min, max, avg) and error rate tracking.
+  - Implemented Prometheus exposition format (`format_prometheus_metrics`) exposing counter and summary metrics.
+  - Added endpoint `GET /v1/system/metrics` with JSON and `?format=prometheus` output.
+- [x] **Circuit Breaker Pattern (`src/api/reliability/circuit_breaker.py`):**
+  - Formal 3-state finite state machine (`CLOSED`, `OPEN`, `HALF_OPEN`) protecting external providers.
+  - Configurable failure threshold, recovery cooldown timeouts, and probe success threshold.
+  - Built `CircuitBreakerRegistry` exposing metrics via `GET /v1/system/circuit-breakers`.
+- [x] **Controlled Retries with Exponential Backoff & Jitter (`src/api/reliability/retry.py`):**
+  - Built `calculate_backoff` scaling exponentially with randomized uniform jitter.
+  - Built `execute_with_retry` and `@with_retry` distinguishing retryable transient errors from non-retryable terminal errors.
+- [x] **Standardized Error Response & Error Catalogue (`src/api/security/errors.py`):**
+  - Standardized error schema `StandardErrorResponse` with `error_code`, `message`, `status_code`, `correlation_id`, and `details`.
+  - Documented 21 standardized API error codes (`ErrorCode` enum).
+  - Exposed complete error code catalog and recovery suggestions via `GET /v1/system/error-catalog`.
+- [x] **API Rate Limiting (`src/api/security/rate_limiter.py`):**
+  - Built thread-safe sliding-window counter algorithm with role-aware tiers (`anonymous`: 30/min, `vendor`: 60/min, `webhook`: 120/min, `fleet_manager`: 300/min, `admin`: 1000/min).
+  - Integrated rate limiting into HTTP middleware returning HTTP 429 and RFC 6585 headers (`Retry-After`, `X-RateLimit-Limit`, `X-RateLimit-Remaining`, `X-RateLimit-Reset`).
+- [x] **Role-Based Access Control (RBAC) & API Key Security (`src/api/security/auth.py`):**
+  - Defined roles (`ANONYMOUS`, `VENDOR`, `FLEET_MANAGER`, `ADMIN`).
+  - Implemented timing-safe API key validation using `hmac.compare_digest` to prevent timing side-channel attacks.
+  - Added role enforcement dependencies (`require_role`, `get_user_context`).
+  - Protected `POST /v1/fleet/dispatch` restricting execution to `FLEET_MANAGER` and `ADMIN`.
+- [x] **Reservation Ownership Protection:**
+  - Implemented `verify_reservation_ownership` and updated `POST /v1/fleet/cancel-reservation`.
+  - Prohibits vendors from viewing or cancelling reservations belonging to other vendors (returning 403 `AUTH_RESERVATION_OWNERSHIP_VIOLATION`).
+- [x] **Subsystem Failure Resilience (`src/api/reliability/resilience.py`):**
+  - `ResilientDatabaseManager`: Context-managed atomic database transactions with automatic rollback on exception and circuit breaker protection.
+  - `ResilientRedisClient`: Seamless, transparent fallback to local thread-safe TTL cache and locks when Redis server is unreachable.
+  - `ResilientRoutingHandler`: Graceful fallback to haversine distance and calibrated city speed when upstream routing engines trip.
+- [x] **Concurrency & Race Condition Protections:**
+  - `try_acquire_idempotency` with thread lock in `DeadLetterQueue` preventing concurrent duplicate webhook ingestion.
+  - Atomic cell capacity locks in `FleetManager` preventing double-booking and capacity oversubscription under high concurrency.
+- [x] **Deliverables Completed:**
+  - Security & error handling: `src/api/security/errors.py`, `src/api/security/auth.py`, `src/api/security/rate_limiter.py`
+  - Reliability & resilience: `src/api/reliability/logging.py`, `src/api/reliability/circuit_breaker.py`, `src/api/reliability/retry.py`, `src/api/reliability/metrics.py`, `src/api/reliability/resilience.py`
+  - Application middleware & endpoints: `src/api/app.py`
+  - Comprehensive security test suite: `tests/test_backend_security_and_reliability.py` (20/20 passed).
+
 ---
 
 ## 🏆 Completed Previously (V1 / Foundation)

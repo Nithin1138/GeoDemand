@@ -160,7 +160,7 @@ class WebhookIngestionService:
             }
 
         # 3. Idempotency Check
-        if dead_letter_queue.is_duplicate(provider_clean, record.transaction_id):
+        if not dead_letter_queue.try_acquire_idempotency(provider_clean, record.transaction_id):
             logger.info(f"Duplicate payment webhook delivery ignored: {provider_clean}:{record.transaction_id}")
             return {
                 "status": "DUPLICATE_IGNORED",

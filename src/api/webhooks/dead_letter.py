@@ -88,6 +88,25 @@ class DeadLetterQueue:
         with self._op_lock:
             return self.make_event_key(provider, tx_id) in self._seen_events
 
+    def try_acquire_idempotency(self, provider: str, tx_id: Optional[str] = None, ttl_seconds: Optional[int] = None) -> bool:
+        """
+        Atomically checks and claims an idempotency slot.
+        Returns True if the event is new and slot was claimed.
+        Returns False if the event has already been processed or is duplicate.
+        """
+        key = self.make_event_key(provider, tx_id) if tx_id is not None else str(provider).strip()
+        with self._op_lock:
+            if key in self._seen_events:
+                return False
+            self._seen_events.add(key)
+            return True
+
+    def release_idempotency(self, provider: str, tx_id: Optional[str] = None):
+        """Releases idempotency slot if processing encountered a transient failure."""
+        key = self.make_event_key(provider, tx_id) if tx_id is not None else str(provider).strip()
+        with self._op_lock:
+            self._seen_events.discard(key)
+
     def mark_processed(self, provider: str, tx_id: str):
         """Records event key in idempotency store."""
         with self._op_lock:
