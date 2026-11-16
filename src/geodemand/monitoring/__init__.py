@@ -38,6 +38,18 @@ from src.geodemand.monitoring.model_health import (
     ModelHealthProvider,
     ModelHealthReport,
 )
+from src.geodemand.monitoring.operational_monitor import (
+    InferenceLatencyMonitor,
+    LatencyMetrics,
+    ModelLoadingHealth,
+    ModelLoadingMonitor,
+    ModelRollbackTracker,
+    OperationalHealthSummary,
+    OperationalMLMonitor,
+    QuantileCoverageMonitor,
+    QuantileCoverageReport,
+    VersionAndRollbackStatus,
+)
 from src.geodemand.monitoring.performance import (
     ErrorDistribution,
     PerformanceMonitor,
@@ -96,4 +108,15 @@ __all__ = [
     "RetrainingResult",
     "RetrainingTrigger",
     "TrainingDataEligibilityReport",
+    # Operational Monitoring (Phase 17.2)
+    "OperationalMLMonitor",
+    "OperationalHealthSummary",
+    "ModelLoadingMonitor",
+    "ModelLoadingHealth",
+    "InferenceLatencyMonitor",
+    "LatencyMetrics",
+    "QuantileCoverageMonitor",
+    "QuantileCoverageReport",
+    "ModelRollbackTracker",
+    "VersionAndRollbackStatus",
 ]
