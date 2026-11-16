@@ -21,7 +21,12 @@ import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
-from ortools.sat.python import cp_model
+try:
+    from ortools.sat.python import cp_model
+    HAS_ORTOOLS = True
+except ImportError:
+    cp_model = None
+    HAS_ORTOOLS = False
 
 from config.settings import (
     DEFAULT_AOV_INR,
@@ -155,6 +160,13 @@ class ShiftOptimizer:
         # -----------------------------------------------------------------------
         # Formulate and Solve with Google OR-Tools CP-SAT
         # -----------------------------------------------------------------------
+        if not HAS_ORTOOLS or cp_model is None:
+            logger.warning("Google OR-Tools is not installed; returning fallback stay plan.")
+            return self._fallback_stay_plan(
+                origin_lat, origin_lng, shift_start, shift_duration_hours,
+                vendor_category, inventory_capacity, "Google OR-Tools is not installed in environment"
+            )
+
         K_max = max(1, min(max_relocation_stops, 5))
         model = cp_model.CpModel()
 
