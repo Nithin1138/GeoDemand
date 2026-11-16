@@ -1,0 +1,83 @@
+name: GeoDemand AI — Continuous Training Pipeline
+
+on:
+  schedule:
+    # Run weekly scheduled retraining cycle every Sunday at 02:00 UTC
+    - cron: "0 2 * * 0"
+  workflow_dispatch:
+    inputs:
+      trigger:
+        description: "Retraining trigger type"
+        required: true
+        default: "SCHEDULED"
+        type: choice
+        options:
+          - SCHEDULED
+          - DRIFT_TRIGGERED
+          - PERFORMANCE_DEGRADATION
+          - MANUAL
+      force:
+        description: "Force retraining ignoring data volume check"
+        required: false
+        default: false
+        type: boolean
+      require_approval:
+        description: "Require operator approval token before promotion"
+        required: false
+        default: false
+        type: boolean
+  repository_dispatch:
+    types: [drift_alert, performance_alert]
+
+jobs:
+  continuous-training:
+    name: Automated Retraining & Promotion Gate
+    runs-on: ubuntu-latest
+    env:
+      PYTHONPATH: "src:src/data:src/features:src/api:."
+      MLFLOW_DISABLE_AGENT_HINT: "1"
+      PYTHONUNBUFFERED: "1"
+
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+
+    - name: Set up Python 3.11
+      uses: actions/setup-python@v5
+      with:
+        python-version: "3.11"
+        cache: "pip"
+
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install uv
+        pip install -r requirements.txt
+        pip install pytest httpx
+
+    - name: Setup environment configuration
+      run: cp .env.example .env
+
+    - name: Step 1 — Verify Data Eligibility & Run CT Retraining
+      run: |
+        EXTRA_FLAGS=""
+        if [ "${{ inputs.force }}" = "true" ]; then EXTRA_FLAGS="$EXTRA_FLAGS --force"; fi
+        if [ "${{ inputs.require_approval }}" = "true" ]; then EXTRA_FLAGS="$EXTRA_FLAGS --require-approval"; fi
+        TRIGGER="${{ inputs.trigger || 'SCHEDULED' }}"
+        python scripts/run_ct_pipeline.py --trigger "$TRIGGER" $EXTRA_FLAGS
+
+    - name: Step 2 — Verify Production Model Integrity & Gating
+      run: |
+        python -m pytest tests/unit/test_ml_model.py -v --tb=short
+        python -m pytest tests/unit/test_ct_pipeline.py -v --tb=short
+
+    - name: Step 3 — Archive Retraining Audit Log Artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: ct-audit-log
+        path: |
+          models/retraining_audit_log.json
+          models/model_version.json
+          models/staged_approvals.json
+        if-no-files-found: ignore

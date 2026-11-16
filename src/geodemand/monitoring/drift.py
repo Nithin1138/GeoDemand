@@ -74,14 +74,15 @@ NON_NEGATIVE_FEATURE_PREFIXES = (
 class DriftThresholds:
     """Configurable thresholds for feature drift and schema validation."""
 
-    psi_threshold: float = 0.20  # PSI >= 0.20 indicates significant drift
-    psi_moderate_threshold: float = 0.10  # 0.10 <= PSI < 0.20 indicates moderate drift
+    psi_threshold: float = 0.15  # Roadmap trigger: PSI >= 0.15 indicates critical drift
+    psi_moderate_threshold: float = 0.10  # 0.10 <= PSI < 0.15 indicates moderate drift
     ks_alpha: float = 0.05  # Significance level for KS test
     ks_stat_threshold: float = 0.10  # Minimum KS statistic (effect size) to avoid false alarms with large N
     chi2_alpha: float = 0.05  # Significance level for categorical Chi-square test
     multiple_comparison_method: str = "benjamini-hochberg"  # "benjamini-hochberg", "bonferroni", or "none"
     missing_value_rate_threshold: float = 0.05  # Maximum acceptable null rate per feature (5%)
     min_sample_size: int = 20  # Minimum observations required for statistical significance tests
+    wasserstein_threshold: float = 0.25  # Threshold for normalized earth mover's distance
 
 
 @dataclass
@@ -103,6 +104,7 @@ class FeatureDriftResult:
     n_ref: int
     n_current: int
     message: str
+    wasserstein_distance: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -503,6 +505,26 @@ class FeatureDriftDetector:
         return float(np.maximum(0.0, psi_val))
 
     @staticmethod
+    def calculate_wasserstein_distance(
+        ref_vals: Union[List[float], np.ndarray],
+        current_vals: Union[List[float], np.ndarray],
+    ) -> float:
+        """
+        Calculate first Wasserstein distance (Earth Mover's Distance) between 1D continuous distributions.
+        Used to measure physical shift magnitude independent of binning.
+        """
+        ref_arr = np.asarray(ref_vals, dtype=float)
+        cur_arr = np.asarray(current_vals, dtype=float)
+        ref_clean = ref_arr[np.isfinite(ref_arr)]
+        cur_clean = cur_arr[np.isfinite(cur_arr)]
+        if len(ref_clean) == 0 or len(cur_clean) == 0:
+            return 0.0
+        try:
+            return float(stats.wasserstein_distance(ref_clean, cur_clean))
+        except Exception:
+            return 0.0
+
+    @staticmethod
     def adjust_p_values(
         p_values: List[float],
         method: str = "benjamini-hochberg",
@@ -598,8 +620,9 @@ class FeatureDriftDetector:
             # Compute PSI
             psi = self.calculate_psi_continuous(bin_edges, current_vals, expected_proportions=bin_props)
 
-            # Compute KS statistic and p-values
+            # Compute KS statistic, p-values, and Wasserstein distance
             ref_sample = self.profile.reference_samples.get(col, [])
+            wd_stat = self.calculate_wasserstein_distance(ref_sample, current_vals)
             if len(current_vals) >= 2 and len(ref_sample) >= 2:
                 ks_res = stats.ks_2samp(np.array(ref_sample), current_vals)
                 ks_stat = float(ks_res.statistic)
@@ -618,10 +641,10 @@ class FeatureDriftDetector:
 
             msg = "Stable"
             if pract_sig:
-                msg = f"Critical drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, adj_p={adj_p:.4f})"
+                msg = f"Critical drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, WD={wd_stat:.3f}, adj_p={adj_p:.4f})"
                 critical_drift_features.append(col)
             elif moderate_sig:
-                msg = f"Moderate drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, adj_p={adj_p:.4f})"
+                msg = f"Moderate drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, WD={wd_stat:.3f}, adj_p={adj_p:.4f})"
                 moderate_drift_features.append(col)
 
             feature_results[col] = FeatureDriftResult(
@@ -640,6 +663,7 @@ class FeatureDriftDetector:
                 n_ref=n_ref,
                 n_current=len(current_vals),
                 message=msg,
+                wasserstein_distance=round(wd_stat, 4),
             )
 
         # Evaluate categorical features

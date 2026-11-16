@@ -10,6 +10,12 @@ Exports:
 - MLflow Monitoring Logger
 """
 
+from src.geodemand.monitoring.ct_pipeline import (
+    ContinuousTrainingPipeline,
+    RetrainingResult,
+    RetrainingTrigger,
+    TrainingDataEligibilityReport,
+)
 from src.geodemand.monitoring.drift import (
     DriftReport,
     DriftThresholds,
@@ -25,6 +31,7 @@ from src.geodemand.monitoring.performance import (
     ErrorDistribution,
     PerformanceMonitor,
     PerformanceReport,
+    RollingPerformanceAssessment,
     SIMULATION_DATA_DISCLAIMER,
     SlicePerformance,
 )
@@ -50,8 +57,14 @@ __all__ = [
     "PerformanceMonitor",
     "PerformanceReport",
     "SlicePerformance",
+    "RollingPerformanceAssessment",
     "ErrorDistribution",
     "SIMULATION_DATA_DISCLAIMER",
     # MLflow
     "MLflowMonitoringLogger",
+    # Continuous Training
+    "ContinuousTrainingPipeline",
+    "RetrainingResult",
+    "RetrainingTrigger",
+    "TrainingDataEligibilityReport",
 ]

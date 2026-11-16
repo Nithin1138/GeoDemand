@@ -1,14 +1,12 @@
 {
-  "model_type": "lightgbm",
-  "model_version": "v2.1.0",
-  "algorithm": "LightGBM",
-  "target": "expected_customer_count",
-  "target_column": "expected_customer_count",
-  "target_contract": "expected_customer_count_next_hour",
-  "contract_principle": "Predict expected customer count, never profit/revenue/decision/demand score directly.",
+  "model_version": "v2.0.0",
   "training_dataset_version": "feature_store_f1da89bf16b8",
   "feature_version": "v2.2-next-hour-forecast-cyclical",
-  "training_timestamp": "2026-10-10T14:36:56.945999+00:00",
+  "training_timestamp": "2026-11-16T05:36:07.419555+00:00",
+  "algorithm": "XGBoost",
+  "target_contract": "expected_customer_count_next_hour",
+  "target_column": "expected_customer_count",
+  "contract_principle": "Predict expected customer count, never profit/revenue/decision/demand score directly.",
   "feature_columns": [
     "average_order_value",
     "building_density",
@@ -63,93 +61,405 @@
     "vendor_category"
   ],
   "metrics": {
-    "val_mae": 0.7693,
-    "val_rmse": 1.0345,
-    "val_r2": 0.9752,
-    "test_mae": 0.7565,
-    "test_rmse": 1.0072,
-    "test_r2": 0.976,
     "validation": {
-      "mae": 0.7693,
-      "rmse": 1.0345,
-      "r2": 0.9752
+      "mae": 0.7749,
+      "rmse": 1.0078,
+      "r2": 0.9767
     },
     "test": {
-      "mae": 0.7565,
-      "rmse": 1.0072,
-      "r2": 0.976
+      "mae": 0.7644,
+      "rmse": 0.9834,
+      "r2": 0.9771
     }
   },
+  "benchmark_results": [
+    {
+      "model_name": "XGBoost",
+      "split": "validation",
+      "mae": 0.7749,
+      "rmse": 1.0078,
+      "r2": 0.9767,
+      "latency_ms": 96.05,
+      "n_samples": 106800,
+      "train_time_s": 22.96
+    },
+    {
+      "model_name": "LightGBM (Tuned Champion)",
+      "split": "validation",
+      "mae": 0.7756,
+      "rmse": 1.0085,
+      "r2": 0.9767,
+      "latency_ms": 349.31,
+      "n_samples": 106800,
+      "train_time_s": 5.12
+    },
+    {
+      "model_name": "LightGBM (regression_l1)",
+      "split": "validation",
+      "mae": 0.7831,
+      "rmse": 1.0538,
+      "r2": 0.9745,
+      "latency_ms": 358.81,
+      "n_samples": 106800,
+      "train_time_s": 6.78
+    },
+    {
+      "model_name": "CatBoost",
+      "split": "validation",
+      "mae": 0.8296,
+      "rmse": 1.0915,
+      "r2": 0.9727,
+      "latency_ms": 9.54,
+      "n_samples": 106800,
+      "train_time_s": 10.24
+    },
+    {
+      "model_name": "Random Forest",
+      "split": "validation",
+      "mae": 0.9647,
+      "rmse": 1.3146,
+      "r2": 0.9603,
+      "latency_ms": 72.44,
+      "n_samples": 106800,
+      "train_time_s": 7.97
+    },
+    {
+      "model_name": "LightGBM (huber)",
+      "split": "validation",
+      "mae": 1.0668,
+      "rmse": 3.0602,
+      "r2": 0.785,
+      "latency_ms": 392.41,
+      "n_samples": 106800,
+      "train_time_s": 6.06
+    },
+    {
+      "model_name": "Linear Regression",
+      "split": "validation",
+      "mae": 2.7272,
+      "rmse": 4.2141,
+      "r2": 0.5924,
+      "latency_ms": 17.75,
+      "n_samples": 106800,
+      "train_time_s": 0.85
+    }
+  ],
+  "test_results": [
+    {
+      "model_name": "Linear Regression",
+      "split": "test",
+      "mae": 2.706,
+      "rmse": 4.1648,
+      "r2": 0.5895,
+      "latency_ms": 19.22,
+      "n_samples": 106800
+    },
+    {
+      "model_name": "Random Forest",
+      "split": "test",
+      "mae": 0.9403,
+      "rmse": 1.2566,
+      "r2": 0.9626,
+      "latency_ms": 79.96,
+      "n_samples": 106800
+    },
+    {
+      "model_name": "XGBoost",
+      "split": "test",
+      "mae": 0.7644,
+      "rmse": 0.9834,
+      "r2": 0.9771,
+      "latency_ms": 100.78,
+      "n_samples": 106800
+    },
+    {
+      "model_name": "CatBoost",
+      "split": "test",
+      "mae": 0.8149,
+      "rmse": 1.0585,
+      "r2": 0.9735,
+      "latency_ms": 10.94,
+      "n_samples": 106800
+    },
+    {
+      "model_name": "LightGBM (regression_l1)",
+      "split": "test",
+      "mae": 0.7656,
+      "rmse": 1.013,
+      "r2": 0.9757,
+      "latency_ms": 368.19,
+      "n_samples": 106800
+    },
+    {
+      "model_name": "LightGBM (huber)",
+      "split": "test",
+      "mae": 1.0376,
+      "rmse": 3.0192,
+      "r2": 0.7843,
+      "latency_ms": 382.94,
+      "n_samples": 106800
+    },
+    {
+      "model_name": "LightGBM (Tuned Champion)",
+      "split": "test",
+      "mae": 0.7641,
+      "rmse": 0.9832,
+      "r2": 0.9771,
+      "latency_ms": 339.12,
+      "n_samples": 106800
+    }
+  ],
   "quantiles": [
     "p10",
     "p50",
     "p90"
   ],
-  "quantiles_supported": [
-    "p10",
-    "p50",
-    "p90"
-  ],
-  "quantile_coverage_80": 0.799,
-  "quantile_interval_width": 2.603,
-  "shap_enabled": true,
+  "quantile_ordering_valid": true,
+  "empirical_coverage_80": 0.8,
+  "average_interval_width": 2.5715,
   "random_seed": 42,
-  "data_note": "SIMULATED",
-  "timestamp": "2026-10-10T15:46:04.655695+00:00",
-  "candidate_id": "v2.1.0",
-  "candidate_model_type": "lightgbm",
-  "champion_id": "v2.0.0",
-  "champion_model_type": "xgboost",
-  "decision": "APPROVED",
-  "passed_all_gates": true,
-  "gate_checks": {
-    "artifact_structure": {
-      "name": "artifact_structure",
-      "passed": true,
-      "details": "All bundle components present"
+  "n_train_rows": 498150,
+  "n_val_rows": 106800,
+  "n_test_rows": 106800,
+  "shap_enabled": true,
+  "shap_method": "tree_shap",
+  "shap_examples": [
+    {
+      "sample_index": 0,
+      "prediction": 9.73,
+      "actual": 12.0,
+      "bias": 11.8467,
+      "top_drivers": [
+        {
+          "feature": "average_order_value",
+          "shap_value": -1.4797,
+          "feature_value": 33.33,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_cos",
+          "shap_value": 1.23,
+          "feature_value": -0.9659,
+          "impact": "positive"
+        },
+        {
+          "feature": "day_sin",
+          "shap_value": -0.4471,
+          "feature_value": -0.4339,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_sin",
+          "shap_value": -0.4381,
+          "feature_value": 0.2588,
+          "impact": "negative"
+        },
+        {
+          "feature": "preparation_time",
+          "shap_value": 0.4352,
+          "feature_value": 1.3,
+          "impact": "positive"
+        }
+      ],
+      "top_positive": [
+        "hour_cos",
+        "preparation_time"
+      ],
+      "top_negative": [
+        "average_order_value",
+        "day_sin",
+        "hour_sin"
+      ],
+      "formatted_explanation": "Prediction: 10 customers/hour\n\nTop positive factors:\n+ hour_cos\n+ preparation_time\n\nTop negative factors:\n- average_order_value\n- day_sin\n- hour_sin"
     },
-    "feature_schema_match": {
-      "name": "feature_schema_match",
-      "passed": true,
-      "details": "Exact match on 45 features"
+    {
+      "sample_index": 1,
+      "prediction": 6.43,
+      "actual": 4.0,
+      "bias": 11.8467,
+      "top_drivers": [
+        {
+          "feature": "average_order_value",
+          "shap_value": -4.1601,
+          "feature_value": 105.0,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_cos",
+          "shap_value": 0.9094,
+          "feature_value": -0.9659,
+          "impact": "positive"
+        },
+        {
+          "feature": "vendor_category",
+          "shap_value": -0.5258,
+          "feature_value": 2.0,
+          "impact": "negative"
+        },
+        {
+          "feature": "day_sin",
+          "shap_value": -0.3676,
+          "feature_value": -0.4339,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_sin",
+          "shap_value": -0.3413,
+          "feature_value": 0.2588,
+          "impact": "negative"
+        }
+      ],
+      "top_positive": [
+        "hour_cos"
+      ],
+      "top_negative": [
+        "average_order_value",
+        "vendor_category",
+        "day_sin"
+      ],
+      "formatted_explanation": "Prediction: 6 customers/hour\n\nTop positive factors:\n+ hour_cos\n\nTop negative factors:\n- average_order_value\n- vendor_category\n- day_sin"
     },
-    "predictions_finite_and_valid": {
-      "name": "predictions_finite_and_valid",
-      "passed": true,
-      "details": "Predictions valid (N=106,800, min=4.37, max=80.23)"
+    {
+      "sample_index": 2,
+      "prediction": 8.74,
+      "actual": 9.0,
+      "bias": 11.8467,
+      "top_drivers": [
+        {
+          "feature": "average_order_value",
+          "shap_value": -1.9194,
+          "feature_value": 33.33,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_cos",
+          "shap_value": 1.2191,
+          "feature_value": -0.9659,
+          "impact": "positive"
+        },
+        {
+          "feature": "vendor_category",
+          "shap_value": -0.541,
+          "feature_value": 1.0,
+          "impact": "negative"
+        },
+        {
+          "feature": "population_density",
+          "shap_value": -0.4968,
+          "feature_value": 6700.0,
+          "impact": "negative"
+        },
+        {
+          "feature": "day_sin",
+          "shap_value": -0.453,
+          "feature_value": -0.4339,
+          "impact": "negative"
+        }
+      ],
+      "top_positive": [
+        "hour_cos"
+      ],
+      "top_negative": [
+        "average_order_value",
+        "vendor_category",
+        "population_density"
+      ],
+      "formatted_explanation": "Prediction: 9 customers/hour\n\nTop positive factors:\n+ hour_cos\n\nTop negative factors:\n- average_order_value\n- vendor_category\n- population_density"
     },
-    "quantile_ordering": {
-      "name": "quantile_ordering",
-      "passed": true,
-      "details": "P10 <= P50 <= P90 verified (Mean interval width=2.60, raw crossing rate=0.043%)"
+    {
+      "sample_index": 3,
+      "prediction": 9.55,
+      "actual": 11.0,
+      "bias": 11.8467,
+      "top_drivers": [
+        {
+          "feature": "average_order_value",
+          "shap_value": -1.7213,
+          "feature_value": 33.33,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_cos",
+          "shap_value": 1.266,
+          "feature_value": -0.9659,
+          "impact": "positive"
+        },
+        {
+          "feature": "vendor_category",
+          "shap_value": -0.4735,
+          "feature_value": 1.0,
+          "impact": "negative"
+        },
+        {
+          "feature": "day_sin",
+          "shap_value": -0.4543,
+          "feature_value": -0.4339,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_sin",
+          "shap_value": -0.4289,
+          "feature_value": 0.2588,
+          "impact": "negative"
+        }
+      ],
+      "top_positive": [
+        "hour_cos"
+      ],
+      "top_negative": [
+        "average_order_value",
+        "vendor_category",
+        "day_sin"
+      ],
+      "formatted_explanation": "Prediction: 10 customers/hour\n\nTop positive factors:\n+ hour_cos\n\nTop negative factors:\n- average_order_value\n- vendor_category\n- day_sin"
     },
-    "shap_explainability": {
-      "name": "shap_explainability",
-      "passed": true,
-      "details": "TreeSHAP local feature attribution operational"
-    },
-    "inference_latency": {
-      "name": "inference_latency",
-      "passed": true,
-      "details": "P95 latency 0.0149 ms/sample <= 25.0 ms"
-    },
-    "validation_performance": {
-      "name": "validation_performance",
-      "passed": true,
-      "details": "Candidate MAE=0.7693 vs Champion MAE=0.7738 (+0.58%)"
+    {
+      "sample_index": 4,
+      "prediction": 9.31,
+      "actual": 9.0,
+      "bias": 11.8467,
+      "top_drivers": [
+        {
+          "feature": "average_order_value",
+          "shap_value": -1.7119,
+          "feature_value": 33.33,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_cos",
+          "shap_value": 1.29,
+          "feature_value": -0.9659,
+          "impact": "positive"
+        },
+        {
+          "feature": "vendor_category",
+          "shap_value": -0.4973,
+          "feature_value": 1.0,
+          "impact": "negative"
+        },
+        {
+          "feature": "day_sin",
+          "shap_value": -0.4575,
+          "feature_value": -0.4339,
+          "impact": "negative"
+        },
+        {
+          "feature": "hour_sin",
+          "shap_value": -0.4373,
+          "feature_value": 0.2588,
+          "impact": "negative"
+        }
+      ],
+      "top_positive": [
+        "hour_cos"
+      ],
+      "top_negative": [
+        "average_order_value",
+        "vendor_category",
+        "day_sin"
+      ],
+      "formatted_explanation": "Prediction: 9 customers/hour\n\nTop positive factors:\n+ hour_cos\n\nTop negative factors:\n- average_order_value\n- vendor_category\n- day_sin"
     }
-  },
-  "candidate_metrics": {
-    "val_mae": 0.7693,
-    "val_rmse": 1.0345,
-    "val_r2": 0.9752,
-    "latency_p95_ms": 0.0149
-  },
-  "champion_metrics": {
-    "val_mae": 0.7738,
-    "val_rmse": 1.0045
-  },
-  "reasons": [
-    "Approved: Candidate demonstrated superior/equal performance with full contract compatibility."
-  ]
+  ],
+  "data_note": "SIMULATED \u2014 do not interpret as real-world accuracy"
 }
