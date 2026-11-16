@@ -446,6 +446,72 @@ def _log_to_mlflow(
         logger.warning(f"MLflow logging for '{run_name}' failed (non-fatal): {e}")
 
 
+def tune_lightgbm_hyperparameters(
+    X_train: pd.DataFrame,
+    y_train: pd.Series,
+    X_val: pd.DataFrame,
+    y_val: pd.Series,
+    n_trials: int = 15,
+) -> Dict[str, Any]:
+    """
+    Tune LightGBM hyperparameters with Optuna if available, or fallback to calibrated champion hyperparameters.
+    Optimizes for validation MAE under strict operational constraints.
+    """
+    try:
+        import optuna
+        optuna.logging.set_verbosity(optuna.logging.WARNING)
+
+        def objective(trial):
+            params = {
+                "objective": "regression_l1",
+                "n_estimators": trial.suggest_int("n_estimators", 200, 500, step=50),
+                "learning_rate": trial.suggest_float("learning_rate", 0.02, 0.10, log=True),
+                "num_leaves": trial.suggest_int("num_leaves", 31, 127),
+                "min_child_samples": trial.suggest_int("min_child_samples", 15, 50),
+                "subsample": trial.suggest_float("subsample", 0.6, 1.0),
+                "colsample_bytree": trial.suggest_float("colsample_bytree", 0.6, 1.0),
+                "reg_alpha": trial.suggest_float("reg_alpha", 1e-3, 10.0, log=True),
+                "reg_lambda": trial.suggest_float("reg_lambda", 1e-3, 10.0, log=True),
+                "random_state": RANDOM_SEED,
+                "verbose": -1,
+                "n_jobs": -1,
+            }
+            model = lgb.LGBMRegressor(**params)
+            model.fit(
+                X_train,
+                y_train,
+                categorical_feature=CATEGORICAL_COLUMNS,
+                eval_set=[(X_val, y_val)],
+                callbacks=[lgb.early_stopping(stopping_rounds=20, verbose=False)],
+            )
+            preds = model.predict(X_val)
+            return float(mean_absolute_error(y_val, preds))
+
+        study = optuna.create_study(direction="minimize", sampler=optuna.samplers.TPESampler(seed=RANDOM_SEED))
+        study.optimize(objective, n_trials=n_trials, timeout=120)
+        logger.info(f"Optuna tuning completed. Best Val MAE: {study.best_value:.4f}")
+        best_params = study.best_params
+        best_params.update({"objective": "regression_l1", "random_state": RANDOM_SEED, "verbose": -1, "n_jobs": -1})
+        return best_params
+
+    except ImportError:
+        logger.info("Optuna is not installed; using pre-calibrated optimal LightGBM hyperparameters.")
+        return {
+            "objective": "regression_l1",
+            "n_estimators": 450,
+            "learning_rate": 0.05,
+            "num_leaves": 95,
+            "min_child_samples": 25,
+            "subsample": 0.8,
+            "colsample_bytree": 0.8,
+            "reg_alpha": 0.1,
+            "reg_lambda": 0.5,
+            "random_state": RANDOM_SEED,
+            "verbose": -1,
+            "n_jobs": -1,
+        }
+
+
 # ---------------------------------------------------------------------------
 # Main training pipeline
 # ---------------------------------------------------------------------------
@@ -507,6 +573,18 @@ def train_pipeline() -> Dict[str, Any]:
         )
     else:
         logger.info("XGBoost not installed; skipping in benchmark.")
+
+    if HAS_CATBOOST:
+        benchmark_models["CatBoost"] = CatBoostRegressor(
+            iterations=400,
+            learning_rate=0.05,
+            depth=6,
+            random_seed=RANDOM_SEED,
+            verbose=False,
+            thread_count=-1,
+        )
+    else:
+        logger.info("CatBoost not installed; skipping in benchmark.")
 
     # Phase 3: Benchmark LightGBM Loss Objectives (L2, L1, Huber)
     benchmark_models["LightGBM (regression_l1)"] = lgb.LGBMRegressor(
@@ -575,6 +653,14 @@ def train_pipeline() -> Dict[str, Any]:
                 y_train,
                 eval_set=[(X_val, y_val)],
                 verbose=False,
+            )
+        elif name == "CatBoost":
+            model.fit(
+                X_train,
+                y_train,
+                eval_set=(X_val, y_val),
+                verbose=False,
+                early_stopping_rounds=30,
             )
         else:
             model.fit(X_train, y_train)
@@ -1049,6 +1135,11 @@ def train_pipeline() -> Dict[str, Any]:
     logger.info(f"Artifacts: {ARTIFACT_DIR}")
     logger.info(f"API bundle: {bundle_path}")
     logger.info("NOTE: Results are SIMULATED — not real-world accuracy.")
+
+    metadata["candidate_bundle"] = bundle
+    metadata["candidate_meta"] = api_meta
+    metadata["X_val"] = X_val
+    metadata["y_val"] = y_val
 
     return metadata
 

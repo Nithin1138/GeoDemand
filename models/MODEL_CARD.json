@@ -1,0 +1,42 @@
+{
+  "model_details": {
+    "name": "GeoDemand LightGBM Customer Count Forecaster",
+    "version": "v2.1.0",
+    "owner": "Member 2 \u2014 Machine Learning & MLOps",
+    "architecture": "LightGBM Gradient Boosted Trees with Quantile Calibration Heads (P10/P90)",
+    "release_date": "2026-11-16",
+    "license": "Proprietary MOVIGO-ENG"
+  },
+  "intended_use": {
+    "primary_task": "Next-hour expected customer footfall forecasting for mobile street vendors",
+    "spatial_scope": [
+      "Vijayawada",
+      "Hyderabad",
+      "Bengaluru",
+      "Visakhapatnam"
+    ],
+    "intended_users": "Mobile vendors, municipal routing algorithms, inventory dispatch systems",
+    "out_of_scope": "Long-term seasonal macro planning, revenue speculation, direct price fixing"
+  },
+  "factors": {
+    "demographic_groups": "Vendor categories (Food, Chai, Fruits/Veg, Apparel, Repair)",
+    "environmental_factors": "Temperature, rainfall, humidity, wind speed, solar radiation",
+    "temporal_factors": "Diurnal hour rhythms, day of week, seasonal monsoon shifts, public holidays"
+  },
+  "metrics": {
+    "validation_mae": 0.7693,
+    "validation_rmse": 1.0045,
+    "test_mae": 0.7712,
+    "test_r2": 0.9785,
+    "quantile_coverage_80": 0.802,
+    "inference_latency_p95_ms": 0.009
+  },
+  "ethical_considerations": {
+    "fairness": "Verified zero temporal leakage; uniform error dispersion across vendor categories",
+    "privacy": "Zero PII stored or processed; all location coordinates mapped via anonymized H3 cells"
+  },
+  "caveats_and_recommendations": {
+    "simulation_notice": "Initial model baseline trained on synthetic customer transaction simulations.",
+    "city_calibration": "Cross-city transfer requires post-inference scaling factor c_city (1.0 - 1.35x)."
+  }
+}

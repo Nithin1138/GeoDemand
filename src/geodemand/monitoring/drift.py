@@ -74,14 +74,15 @@ NON_NEGATIVE_FEATURE_PREFIXES = (
 class DriftThresholds:
     """Configurable thresholds for feature drift and schema validation."""
 
-    psi_threshold: float = 0.20  # PSI >= 0.20 indicates significant drift
-    psi_moderate_threshold: float = 0.10  # 0.10 <= PSI < 0.20 indicates moderate drift
+    psi_threshold: float = 0.15  # Roadmap trigger: PSI >= 0.15 indicates critical drift
+    psi_moderate_threshold: float = 0.10  # 0.10 <= PSI < 0.15 indicates moderate drift
     ks_alpha: float = 0.05  # Significance level for KS test
     ks_stat_threshold: float = 0.10  # Minimum KS statistic (effect size) to avoid false alarms with large N
     chi2_alpha: float = 0.05  # Significance level for categorical Chi-square test
     multiple_comparison_method: str = "benjamini-hochberg"  # "benjamini-hochberg", "bonferroni", or "none"
     missing_value_rate_threshold: float = 0.05  # Maximum acceptable null rate per feature (5%)
     min_sample_size: int = 20  # Minimum observations required for statistical significance tests
+    wasserstein_threshold: float = 0.25  # Threshold for normalized earth mover's distance
 
 
 @dataclass
@@ -103,6 +104,7 @@ class FeatureDriftResult:
     n_ref: int
     n_current: int
     message: str
+    wasserstein_distance: Optional[float] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return asdict(self)
@@ -338,29 +340,39 @@ class FeatureDriftDetector:
 
     def __init__(
         self,
-        reference_profile: Union[ReferenceDistributionProfile, Path, str, pd.DataFrame],
+        reference_profile: Optional[Union[ReferenceDistributionProfile, Path, str, pd.DataFrame]] = None,
         thresholds: Optional[DriftThresholds] = None,
         categorical_columns: Optional[List[str]] = None,
         reference_dataset_id: str = "training_reference",
     ):
         self.thresholds = thresholds or DriftThresholds()
 
-        if isinstance(reference_profile, ReferenceDistributionProfile):
+        if reference_profile is None:
+            self.profile = None
+            self.feature_columns = []
+            self.categorical_columns = []
+            self.continuous_columns = []
+        elif isinstance(reference_profile, ReferenceDistributionProfile):
             self.profile = reference_profile
+            self.feature_columns = self.profile.feature_columns
+            self.categorical_columns = self.profile.categorical_columns
+            self.continuous_columns = self.profile.continuous_columns
         elif isinstance(reference_profile, (str, Path)):
             self.profile = ReferenceDistributionProfile.load(reference_profile)
+            self.feature_columns = self.profile.feature_columns
+            self.categorical_columns = self.profile.categorical_columns
+            self.continuous_columns = self.profile.continuous_columns
         elif isinstance(reference_profile, pd.DataFrame):
             self.profile = ReferenceDistributionProfile.from_dataframe(
                 df=reference_profile,
                 dataset_id=reference_dataset_id,
                 categorical_columns=categorical_columns,
             )
+            self.feature_columns = self.profile.feature_columns
+            self.categorical_columns = self.profile.categorical_columns
+            self.continuous_columns = self.profile.continuous_columns
         else:
             raise TypeError(f"Unsupported reference_profile type: {type(reference_profile)}")
-
-        self.feature_columns = self.profile.feature_columns
-        self.categorical_columns = self.profile.categorical_columns
-        self.continuous_columns = self.profile.continuous_columns
 
     def validate_schema(
         self,
@@ -479,6 +491,8 @@ class FeatureDriftDetector:
         psi_val = np.sum((act_props - exp_props) * np.log(act_props / exp_props))
         return float(np.maximum(0.0, psi_val))
 
+    calculate_psi = calculate_psi_continuous
+
     @staticmethod
     def calculate_psi_categorical(
         expected_props: Dict[str, float],
@@ -501,6 +515,26 @@ class FeatureDriftDetector:
 
         psi_val = np.sum((act_props - exp_props) * np.log(act_props / exp_props))
         return float(np.maximum(0.0, psi_val))
+
+    @staticmethod
+    def calculate_wasserstein_distance(
+        ref_vals: Union[List[float], np.ndarray],
+        current_vals: Union[List[float], np.ndarray],
+    ) -> float:
+        """
+        Calculate first Wasserstein distance (Earth Mover's Distance) between 1D continuous distributions.
+        Used to measure physical shift magnitude independent of binning.
+        """
+        ref_arr = np.asarray(ref_vals, dtype=float)
+        cur_arr = np.asarray(current_vals, dtype=float)
+        ref_clean = ref_arr[np.isfinite(ref_arr)]
+        cur_clean = cur_arr[np.isfinite(cur_arr)]
+        if len(ref_clean) == 0 or len(cur_clean) == 0:
+            return 0.0
+        try:
+            return float(stats.wasserstein_distance(ref_clean, cur_clean))
+        except Exception:
+            return 0.0
 
     @staticmethod
     def adjust_p_values(
@@ -541,13 +575,22 @@ class FeatureDriftDetector:
 
         raise ValueError(f"Unknown multiple comparison method: {method}")
 
-    def detect_drift(self, current_df: pd.DataFrame) -> DriftReport:
+    def detect_drift(
+        self,
+        current_df: pd.DataFrame,
+        reference_profile: Optional[ReferenceDistributionProfile] = None,
+        timestamp: Optional[str] = None,
+    ) -> DriftReport:
         """
         Execute comprehensive feature drift detection comparing current_df against reference.
         """
+        profile = reference_profile or self.profile
+        if profile is None:
+            raise ValueError("Reference profile must be provided either at detector initialization or to detect_drift()")
+
         n_current = len(current_df)
-        n_ref = self.profile.n_samples
-        now_iso = datetime.now(timezone.utc).isoformat()
+        n_ref = profile.n_samples
+        now_iso = timestamp or datetime.now(timezone.utc).isoformat()
 
         # Step 1: Schema and value validation
         schema_res = self.validate_schema(current_df)
@@ -560,7 +603,7 @@ class FeatureDriftDetector:
         continuous_eval_order: List[str] = []
         raw_p_values: List[float] = []
 
-        for col in self.continuous_columns:
+        for col in profile.continuous_columns:
             if col not in current_df.columns:
                 continue
 
@@ -568,7 +611,7 @@ class FeatureDriftDetector:
             if len(series) < 2:
                 continue
 
-            ref_sample = self.profile.reference_samples.get(col)
+            ref_sample = profile.reference_samples.get(col)
             if not ref_sample or len(ref_sample) < 2:
                 continue
 
@@ -585,21 +628,22 @@ class FeatureDriftDetector:
         adj_p_dict = dict(zip(continuous_eval_order, adj_p_values))
 
         # Evaluate continuous features
-        for col in self.continuous_columns:
+        for col in profile.continuous_columns:
             if col not in current_df.columns:
                 continue
 
             series = pd.to_numeric(current_df[col], errors="coerce").dropna()
             current_vals = series.to_numpy() if len(series) > 0 else np.array([])
-            col_stats = self.profile.continuous_stats.get(col, {})
+            col_stats = profile.continuous_stats.get(col, {})
             bin_edges = col_stats.get("bin_edges", [])
             bin_props = col_stats.get("bin_proportions")
 
             # Compute PSI
             psi = self.calculate_psi_continuous(bin_edges, current_vals, expected_proportions=bin_props)
 
-            # Compute KS statistic and p-values
-            ref_sample = self.profile.reference_samples.get(col, [])
+            # Compute KS statistic, p-values, and Wasserstein distance
+            ref_sample = profile.reference_samples.get(col, [])
+            wd_stat = self.calculate_wasserstein_distance(ref_sample, current_vals)
             if len(current_vals) >= 2 and len(ref_sample) >= 2:
                 ks_res = stats.ks_2samp(np.array(ref_sample), current_vals)
                 ks_stat = float(ks_res.statistic)
@@ -618,10 +662,10 @@ class FeatureDriftDetector:
 
             msg = "Stable"
             if pract_sig:
-                msg = f"Critical drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, adj_p={adj_p:.4f})"
+                msg = f"Critical drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, WD={wd_stat:.3f}, adj_p={adj_p:.4f})"
                 critical_drift_features.append(col)
             elif moderate_sig:
-                msg = f"Moderate drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, adj_p={adj_p:.4f})"
+                msg = f"Moderate drift detected (PSI={psi:.3f}, KS={ks_stat:.3f}, WD={wd_stat:.3f}, adj_p={adj_p:.4f})"
                 moderate_drift_features.append(col)
 
             feature_results[col] = FeatureDriftResult(
@@ -640,15 +684,16 @@ class FeatureDriftDetector:
                 n_ref=n_ref,
                 n_current=len(current_vals),
                 message=msg,
+                wasserstein_distance=round(wd_stat, 4),
             )
 
         # Evaluate categorical features
-        for col in self.categorical_columns:
+        for col in profile.categorical_columns:
             if col not in current_df.columns:
                 continue
 
             series = current_df[col].dropna()
-            cat_stats = self.profile.categorical_stats.get(col, {})
+            cat_stats = profile.categorical_stats.get(col, {})
             exp_props = cat_stats.get("proportions", {})
 
             psi_cat = self.calculate_psi_categorical(exp_props, series)
@@ -707,7 +752,7 @@ class FeatureDriftDetector:
 
         return DriftReport(
             timestamp=now_iso,
-            reference_dataset_id=self.profile.dataset_id,
+            reference_dataset_id=profile.dataset_id,
             n_reference_samples=n_ref,
             n_current_samples=n_current,
             schema_validation=schema_res,
@@ -725,3 +770,45 @@ class FeatureDriftDetector:
                 "multiple_comparison_method": self.thresholds.multiple_comparison_method,
             },
         )
+
+
+def calculate_psi(
+    reference: Union[List[float], np.ndarray],
+    current: Union[List[float], np.ndarray],
+    num_bins: int = 10,
+    epsilon: float = 1e-4,
+) -> float:
+    """Convenience function to compute Population Stability Index (PSI) between two 1D continuous samples."""
+    ref_arr = np.asarray(reference, dtype=float)
+    cur_arr = np.asarray(current, dtype=float)
+    ref_clean = ref_arr[np.isfinite(ref_arr)]
+    cur_clean = cur_arr[np.isfinite(cur_arr)]
+    if len(ref_clean) == 0 or len(cur_clean) == 0:
+        return 0.0
+
+    deciles = np.percentile(ref_clean, np.linspace(0, 100, num_bins + 1))
+    edges = sorted(list(set(deciles)))
+    if len(edges) < 2:
+        edges = [deciles[0] - 1.0, deciles[0] + 1.0]
+
+    edges_arr = np.array(edges, dtype=float)
+    edges_arr[0] = -np.inf
+    edges_arr[-1] = np.inf
+    ref_counts, _ = np.histogram(ref_clean, bins=edges_arr)
+    expected_props = (ref_counts / np.sum(ref_counts)).tolist()
+
+    return FeatureDriftDetector.calculate_psi_continuous(
+        bin_edges=edges,
+        actual_values=cur_clean,
+        expected_proportions=expected_props,
+        epsilon=epsilon,
+    )
+
+
+def calculate_wasserstein_distance(
+    reference: Union[List[float], np.ndarray],
+    current: Union[List[float], np.ndarray],
+) -> float:
+    """Convenience function to compute Wasserstein Distance (Earth Mover's Distance)."""
+    return FeatureDriftDetector.calculate_wasserstein_distance(reference, current)
+

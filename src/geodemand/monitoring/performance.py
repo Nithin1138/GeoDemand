@@ -50,6 +50,23 @@ class SlicePerformance:
 
 
 @dataclass
+class RollingPerformanceAssessment:
+    """7-day rolling window MAE monitoring and degradation assessment."""
+
+    baseline_mae: float
+    current_7d_mae: float
+    degradation_pct: float
+    degradation_threshold_pct: float = 20.0  # Roadmap proposed trigger: 7-day MAE degradation > 20%
+    degradation_alert: bool = False
+    window_days: int = 7
+    sample_count: int = 0
+    message: str = ""
+
+    def to_dict(self) -> Dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass
 class ErrorDistribution:
     """Detailed summary of the prediction error distribution (y_pred - y_true)."""
 
@@ -254,4 +271,55 @@ class PerformanceMonitor:
             quantile_coverage_80=core["coverage_80"],
             mean_interval_width=core["mean_width"],
             slices=slices_result,
+        )
+
+    def assess_rolling_degradation(
+        self,
+        baseline_mae: float,
+        recent_y_true: Union[List[float], np.ndarray],
+        recent_y_pred: Union[List[float], np.ndarray],
+        degradation_threshold_pct: float = 20.0,
+        min_samples: int = 20,
+    ) -> RollingPerformanceAssessment:
+        """
+        Evaluate 7-day rolling MAE against champion baseline.
+        Triggers alert if 7-day MAE degradation exceeds threshold (default 20%).
+        """
+        y_t = np.asarray(recent_y_true, dtype=float)
+        y_p = np.asarray(recent_y_pred, dtype=float)
+
+        if len(y_t) != len(y_p):
+            raise ValueError(f"Mismatch: len(y_true)={len(y_t)} vs len(y_pred)={len(y_p)}")
+
+        if len(y_t) < min_samples:
+            return RollingPerformanceAssessment(
+                baseline_mae=round(baseline_mae, 4),
+                current_7d_mae=0.0,
+                degradation_pct=0.0,
+                degradation_threshold_pct=degradation_threshold_pct,
+                degradation_alert=False,
+                sample_count=len(y_t),
+                message=f"Insufficient sample count ({len(y_t)} < {min_samples}) for reliable 7-day rolling assessment.",
+            )
+
+        current_mae = float(np.mean(np.abs(y_t - y_p)))
+        if baseline_mae > 0:
+            deg_pct = ((current_mae - baseline_mae) / baseline_mae) * 100.0
+        else:
+            deg_pct = 0.0
+
+        alert = bool(deg_pct >= degradation_threshold_pct)
+        if alert:
+            msg = f"CRITICAL: 7-day MAE degraded by {deg_pct:.2f}% (Current: {current_mae:.4f} vs Baseline: {baseline_mae:.4f}, Threshold: +{degradation_threshold_pct}%)."
+        else:
+            msg = f"Stable: 7-day MAE change is {deg_pct:+.2f}% (Current: {current_mae:.4f} vs Baseline: {baseline_mae:.4f})."
+
+        return RollingPerformanceAssessment(
+            baseline_mae=round(baseline_mae, 4),
+            current_7d_mae=round(current_mae, 4),
+            degradation_pct=round(deg_pct, 2),
+            degradation_threshold_pct=degradation_threshold_pct,
+            degradation_alert=alert,
+            sample_count=len(y_t),
+            message=msg,
         )

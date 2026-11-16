@@ -1,0 +1,131 @@
+{
+  "categorical_columns": [
+    "weekday",
+    "season",
+    "vendor_category"
+  ],
+  "categorical_mappings": {
+    "season": [
+      "monsoon",
+      "summer",
+      "winter"
+    ],
+    "vendor_category": [
+      "food",
+      "fruits",
+      "repair",
+      "salon"
+    ],
+    "weekday": [
+      "Friday",
+      "Monday",
+      "Saturday",
+      "Sunday",
+      "Thursday",
+      "Tuesday",
+      "Wednesday"
+    ]
+  },
+  "domain_constraints": {
+    "commercial_ratio": {
+      "max": 1.0,
+      "min": 0.0
+    },
+    "expected_customer_count": {
+      "allow_negative": false,
+      "max": 50000,
+      "min": 0
+    },
+    "hour": {
+      "max": 23,
+      "min": 0
+    },
+    "is_holiday": {
+      "allowed_values": [
+        0,
+        1
+      ]
+    },
+    "is_weekend": {
+      "allowed_values": [
+        0,
+        1
+      ]
+    },
+    "rainfall": {
+      "max": 500.0,
+      "min": 0.0
+    },
+    "residential_ratio": {
+      "max": 1.0,
+      "min": 0.0
+    },
+    "temperature": {
+      "max": 60.0,
+      "min": -10.0
+    }
+  },
+  "feature_columns": [
+    "average_order_value",
+    "building_density",
+    "bus_stop_count",
+    "cloud_cover",
+    "college_count",
+    "commercial_ratio",
+    "competition_score",
+    "day_cos",
+    "day_sin",
+    "event_importance",
+    "hospital_count",
+    "hour",
+    "hour_cos",
+    "hour_sin",
+    "humidity",
+    "industrial_ratio",
+    "inventory_capacity",
+    "is_holiday",
+    "is_weekend",
+    "mall_count",
+    "metro_station_count",
+    "month",
+    "month_cos",
+    "month_sin",
+    "office_count",
+    "park_count",
+    "parking_count",
+    "population_density",
+    "preparation_time",
+    "pressure",
+    "quarter",
+    "railway_station_count",
+    "rainfall",
+    "residential_ratio",
+    "restaurant_count",
+    "road_density",
+    "school_count",
+    "school_vacation",
+    "season",
+    "temperature",
+    "uv_index",
+    "vendor_category",
+    "visibility",
+    "weekday",
+    "wind_speed"
+  ],
+  "forbidden_columns": [
+    "vendor_id",
+    "h3_cell_id",
+    "decision_timestamp",
+    "target_timestamp",
+    "profit",
+    "revenue",
+    "decision",
+    "demand_score",
+    "recommendation_score"
+  ],
+  "frozen_timestamp": "2026-11-16T08:25:15.093691+00:00",
+  "schema_version": "v2.2-canonical",
+  "target_column": "expected_customer_count",
+  "target_contract": "expected_customer_count_next_hour",
+  "total_features": 45
+}

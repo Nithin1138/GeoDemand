@@ -386,3 +386,47 @@ def test_mlflow_monitoring_integration(detector, synthetic_reference_df):
     perf_run_id = mlflow_logger.log_performance_report(perf_rep, run_name="test_perf_run")
     if HAS_MLFLOW:
         assert perf_run_id is not None or not mlflow_logger._configured
+
+
+def test_wasserstein_distance_calculation(detector):
+    """Test 1D Wasserstein distance (earth mover's distance) metric."""
+    u = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    v = np.array([1.0, 2.0, 3.0, 4.0, 5.0])
+    # Identical distributions should have distance 0.0
+    wd_zero = detector.calculate_wasserstein_distance(u, v)
+    assert wd_zero == 0.0
+
+    # Shifted distribution
+    v_shifted = u + 3.0
+    wd_shifted = detector.calculate_wasserstein_distance(u, v_shifted)
+    assert np.isclose(wd_shifted, 3.0, atol=1e-3)
+
+
+def test_rolling_7day_mae_degradation():
+    """Test 7-day rolling window MAE monitoring and 20% degradation trigger."""
+    perf_mon = PerformanceMonitor()
+    baseline_mae = 1.00
+
+    # Stable predictions (error ~ 1.05, 5% change)
+    y_true = np.ones(100) * 10.0
+    y_pred_stable = y_true + 1.05
+    stable_assessment = perf_mon.assess_rolling_degradation(
+        baseline_mae=baseline_mae,
+        recent_y_true=y_true,
+        recent_y_pred=y_pred_stable,
+        degradation_threshold_pct=20.0,
+    )
+    assert not stable_assessment.degradation_alert
+    assert stable_assessment.degradation_pct == 5.0
+
+    # Degraded predictions (error ~ 1.30, 30% degradation > 20% trigger)
+    y_pred_degraded = y_true + 1.30
+    degraded_assessment = perf_mon.assess_rolling_degradation(
+        baseline_mae=baseline_mae,
+        recent_y_true=y_true,
+        recent_y_pred=y_pred_degraded,
+        degradation_threshold_pct=20.0,
+    )
+    assert degraded_assessment.degradation_alert
+    assert degraded_assessment.degradation_pct == 30.0
+    assert "CRITICAL" in degraded_assessment.message
