@@ -23,9 +23,20 @@ from src.geodemand.monitoring.drift import (
     FeatureDriftResult,
     ReferenceDistributionProfile,
     SchemaValidationResult,
+    calculate_psi,
+    calculate_wasserstein_distance,
+)
+from src.geodemand.monitoring.evidently_adapter import (
+    EvidentlyMonitoringAdapter,
+    FallbackEvidentlyReport,
+    HAS_EVIDENTLY,
 )
 from src.geodemand.monitoring.mlflow_logger import (
     MLflowMonitoringLogger,
+)
+from src.geodemand.monitoring.model_health import (
+    ModelHealthProvider,
+    ModelHealthReport,
 )
 from src.geodemand.monitoring.performance import (
     ErrorDistribution,
@@ -34,6 +45,11 @@ from src.geodemand.monitoring.performance import (
     RollingPerformanceAssessment,
     SIMULATION_DATA_DISCLAIMER,
     SlicePerformance,
+)
+from src.geodemand.monitoring.prediction_drift import (
+    PredictionDriftDetector,
+    PredictionDriftReport,
+    PredictionDriftResult,
 )
 from src.geodemand.monitoring.prediction_quality import (
     PredictionQualityError,
@@ -49,6 +65,19 @@ __all__ = [
     "FeatureDriftResult",
     "ReferenceDistributionProfile",
     "SchemaValidationResult",
+    "calculate_psi",
+    "calculate_wasserstein_distance",
+    # Prediction Drift
+    "PredictionDriftDetector",
+    "PredictionDriftReport",
+    "PredictionDriftResult",
+    # Evidently Adapter
+    "EvidentlyMonitoringAdapter",
+    "FallbackEvidentlyReport",
+    "HAS_EVIDENTLY",
+    # Model Health
+    "ModelHealthProvider",
+    "ModelHealthReport",
     # Prediction Quality
     "PredictionQualityError",
     "PredictionQualityReport",

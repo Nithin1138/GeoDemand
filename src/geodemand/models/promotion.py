@@ -63,6 +63,7 @@ class ModelPromotionPolicy:
     # Contract constraints
     require_monotonic_quantiles: bool = True
     max_quantile_inversion_rate: float = 0.001  # Max acceptable raw quantile crossing rate (0.1%)
+    min_empirical_coverage_80: float = 0.70  # Min empirical coverage for 80% prediction interval
     require_shap_support: bool = True
     require_exact_schema_match: bool = True
     require_non_negative_outputs: bool = True
@@ -158,9 +159,11 @@ class ModelPromotionGate:
         self,
         policy: Optional[ModelPromotionPolicy] = None,
         models_dir: Optional[Path] = None,
+        champion_dir: Optional[Path] = None,
     ):
         self.policy = policy or ModelPromotionPolicy()
-        self.models_dir = Path(models_dir) if models_dir else MODELS_DIR
+        effective_dir = models_dir or champion_dir
+        self.models_dir = Path(effective_dir) if effective_dir else MODELS_DIR
         self.champion_bundle_path = self.models_dir / "demand_model.pkl"
         self.champion_meta_path = self.models_dir / "demand_model_meta.json"
         self.champion_dir = self.models_dir / "lgbm_v1"
@@ -564,7 +567,8 @@ class ModelPromotionGate:
 
         try:
             # Merge candidate bundle meta with promotion report metadata
-            merged_meta = {**candidate_bundle.get("meta", {}), **candidate_meta}
+            meta_dict = candidate_meta.to_dict() if hasattr(candidate_meta, "to_dict") else (candidate_meta or {})
+            merged_meta = {**candidate_bundle.get("meta", {}), **meta_dict}
 
             # 1. Write bundle to temporary staging file
             temp_bundle_path = self.models_dir / "demand_model.pkl.tmp"
