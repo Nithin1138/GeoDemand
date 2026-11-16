@@ -20,7 +20,7 @@ import logging
 import sys
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT))
@@ -101,10 +101,42 @@ async def lifespan(app: FastAPI):
     logger.info("GeoDemand AI API shutting down...")
 
 
+OPENAPI_TAGS = [
+    {
+        "name": "System",
+        "description": "System liveness, public client config, and data source health & freshness telemetry.",
+    },
+    {
+        "name": "Location",
+        "description": "Geospatial resolution, H3 indexing (res 8), local timezone, and water exclusion check.",
+    },
+    {
+        "name": "Demand Forecasting",
+        "description": "Point-in-time demand estimation with calibrated quantiles (P10, P50, P90) and unit economics.",
+    },
+    {
+        "name": "Recommendations",
+        "description": "Real-time candidate ranking, travel-aware realized net uplift, and strategic relocation decisions.",
+    },
+    {
+        "name": "Scenario Simulation",
+        "description": "Sensitivity analysis exploring price, weather, and operational counterfactuals.",
+    },
+    {
+        "name": "Routing",
+        "description": "Real street network navigation geometry from OpenStreetMap OSRM.",
+    },
+    {
+        "name": "Shift Optimization",
+        "description": "Multi-stop daily shift planning and VRPTW itinerary optimization using Google OR-Tools.",
+    },
+]
+
 app = FastAPI(
     title="GeoDemand AI",
-    description="Production-grade geospatial demand intelligence for mobile vendors",
+    description="Production-grade geospatial demand intelligence for mobile vendors in urban India.",
     version="2.1.0",
+    openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
 
@@ -168,57 +200,39 @@ def _load_model():
 
 
 # ---------------------------------------------------------------------------
-# Pydantic Schemas
+# Pydantic Request & Response Schemas (Imported & Re-exported from api.schemas)
 # ---------------------------------------------------------------------------
 
-class LocationRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-
-
-class RecommendationRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_id: Optional[str] = Field(None, json_schema_extra={"example": "V_001"})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    vendor_name: Optional[str] = None
-    average_order_value: float = Field(DEFAULT_AOV_INR, gt=0)
-    variable_cost_rate: float = Field(DEFAULT_VARIABLE_COST_RATE, gt=0, lt=1)
-    fixed_cost_per_day: float = Field(DEFAULT_FIXED_COST_PER_DAY_INR, gt=0)
-    inventory_capacity: int = Field(200, gt=0)
-    preparation_time: float = Field(5.0, gt=0)
-    search_radius_km: float = Field(3.0, gt=0, le=10)
-    top_n: int = Field(5, ge=1, le=10)
-    timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
-
-
-class PredictDemandRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    average_order_value: float = Field(DEFAULT_AOV_INR, gt=0)
-    variable_cost_rate: float = Field(DEFAULT_VARIABLE_COST_RATE, gt=0, lt=1)
-    fixed_cost_per_day: float = Field(DEFAULT_FIXED_COST_PER_DAY_INR, gt=0)
-    timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
-
-
-
-class RecommendZonesRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    search_radius_km: float = Field(3.0, gt=0, le=10)
-    top_n: int = Field(5, ge=1, le=10)
-
-
-class ScenarioSimulateRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    baseline_aov: float = Field(DEFAULT_AOV_INR, gt=0)
-    simulated_aov: float = Field(DEFAULT_AOV_INR * 1.5, gt=0)
-    simulated_weather_condition: Optional[str] = Field(None, json_schema_extra={"example": "rainy"})
-    simulated_hour: Optional[int] = Field(None, ge=0, le=23, json_schema_extra={"example": 13})
+from api.schemas import (
+    LocationRequest,
+    RecommendationRequest,
+    PredictDemandRequest,
+    BatchPredictDemandRequest,
+    RecommendZonesRequest,
+    ScenarioSimulateRequest,
+    RoutingRequest,
+    PingResponse,
+    SystemConfigResponse,
+    DataHealthResponse,
+    LocationContextResponse,
+    PredictDemandResponse,
+    BatchPredictDemandResponse,
+    ScenarioSimulateResponse,
+    LiveRecommendationsResponse,
+    OverallDecisionResponse,
+    RecommendationItem,
+    DemandHeatmapItem,
+    BusinessEconomicsResponse,
+    APICacheStatsResponse,
+    StreetRouteResponse,
+    ShiftPlanRequest,
+    ShiftPlanResponse,
+    DecisionVerdict,
+)
+from api.cache import api_response_cache, generate_cache_key
+from api.scenario_simulation import ScenarioSimulator
+from api.business_economics import FUEL_PRICE_INR_PER_LITRE
+from optimization.shift_optimizer import ShiftOptimizer
 
 
 
@@ -228,7 +242,7 @@ class ScenarioSimulateRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def dashboard():
     index = DASHBOARD_DIR / "index.html"
     if index.exists():
@@ -236,13 +250,13 @@ async def dashboard():
     return JSONResponse({"message": "GeoDemand AI v2.1 — POST /v1/recommendations/live to begin"})
 
 
-@app.get("/v1/system/ping")
+@app.get("/v1/system/ping", response_model=PingResponse, tags=["System"], summary="Operational liveness ping")
 async def ping():
     return {"status": "ok", "service": "GeoDemand AI", "version": "2.1.0",
             "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
-@app.get("/v1/system/config")
+@app.get("/v1/system/config", response_model=SystemConfigResponse, tags=["System"], summary="Public client configuration")
 async def system_config():
     """Returns public client configuration like Mapbox token and default coordinates."""
     import os
@@ -256,7 +270,7 @@ async def system_config():
     }
 
 
-@app.get("/v1/system/data-health")
+@app.get("/v1/system/data-health", response_model=DataHealthResponse, tags=["System"], summary="Data source health and freshness telemetry")
 async def data_health():
     """Returns provenance and freshness status for all data sources."""
     competition, traffic, events, _ = _get_providers()
@@ -299,26 +313,92 @@ async def data_health():
     }
 
 
-@app.get("/v1/routing/route")
-@app.post("/v1/routing/route")
+@app.get("/v1/system/cache-stats", response_model=APICacheStatsResponse, tags=["System"], summary="API response cache health and telemetry")
+async def cache_stats():
+    """Inspect memory cache size, hits, misses, and hit ratio."""
+    return api_response_cache.get_stats()
+
+
+@app.post("/v1/system/cache-clear", tags=["System"], summary="Clear API response cache")
+async def cache_clear(api_key: str = Depends(verify_api_key)):
+    """Evict all items from the API response cache."""
+    api_response_cache.clear()
+    return {"status": "ok", "message": "API response cache cleared successfully."}
+
+
+@app.get("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (GET)")
+@app.post("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (POST)")
 async def get_street_route(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float):
     """Returns real street road navigation route coordinates [[lat, lng], ...] for map rendering."""
     provider = RoutingProviderFactory.get_provider()
     return provider.get_route_geometry(origin_lat, origin_lng, dest_lat, dest_lng)
 
 
-@app.post("/v1/location/context")
+@app.post("/v1/routes/shift-plan", response_model=ShiftPlanResponse, tags=["Shift Optimization"], summary="Multi-stop daily shift planning and VRPTW itinerary optimization")
+async def shift_plan(req: ShiftPlanRequest, api_key: str = Depends(verify_api_key)):
+    """
+    Generate an optimal multi-stop itinerary for an 8–12 hour vendor shift using Google OR-Tools:
+    - Enforces shift start and end times
+    - Enforces minimum dwell times and commercial time windows
+    - Accounts for travel time, distance, fuel expenses, and setup/teardown overhead
+    - Maximizes expected shift net profit over staying put
+    """
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    cache_key = generate_cache_key("shift_plan", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
+
+    # Generate candidate zones around origin
+    rec_req = RecommendationRequest(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        search_radius_km=req.search_radius_km,
+        top_n=10,
+    )
+    rec_res = await recommendations_live(rec_req, api_key=api_key)
+    candidates = rec_res.get("recommendations", [])
+
+    optimizer = ShiftOptimizer()
+    plan = optimizer.optimize_shift(
+        origin_lat=req.latitude,
+        origin_lng=req.longitude,
+        candidates=candidates,
+        vendor_category=req.vendor_category,
+        shift_start_time=req.shift_start_time,
+        shift_duration_hours=req.shift_duration_hours,
+        max_relocation_stops=req.max_relocation_stops,
+        min_dwell_time_minutes=req.min_dwell_time_minutes,
+        setup_time_minutes=req.setup_time_minutes,
+        teardown_time_minutes=req.teardown_time_minutes,
+        average_order_value=req.average_order_value,
+        fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+    )
+
+    api_response_cache.set(cache_key, plan, ttl_seconds=60)
+    return plan
+
+
+@app.post("/v1/location/context", response_model=LocationContextResponse, tags=["Location"], summary="GPS location context and H3 cell")
 async def location_context(req: LocationRequest):
     """GPS → H3 cell, timestamp, and location context."""
     ctx = get_location_context(req.latitude, req.longitude)
     return ctx.to_dict()
 
 
-@app.post("/v1/predict/demand")
+@app.post("/v1/predict/demand", response_model=PredictDemandResponse, tags=["Demand Forecasting"], summary="Demand prediction and unit economics")
 async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verify_api_key)):
     """Predict customer demand and business economics for a single location."""
     if _model_health["status"] not in ("loaded",):
         raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    cache_key = generate_cache_key("predict", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
 
     loc_ctx = get_location_context(req.latitude, req.longitude)
     weather_client = _get_weather_client()
@@ -336,6 +416,8 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
         "average_order_value": req.average_order_value,
         "variable_cost_rate": req.variable_cost_rate,
         "fixed_cost_per_day": req.fixed_cost_per_day,
+        "inventory_capacity": getattr(req, "inventory_capacity", 200),
+        "preparation_time": getattr(req, "preparation_time", 5.0),
     }
 
     assembler = _get_assembler()
@@ -347,6 +429,8 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
         event=event,
         decision_timestamp=now,
     )
+    if hasattr(assembler, "validate_features"):
+        assembler.validate_features(features)
 
     model = DemandModel.get()
     raw_uncertainty = model.predict_with_uncertainty(features)
@@ -374,7 +458,10 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
         fixed_cost_per_day=req.fixed_cost_per_day,
     )
 
-    return {
+    model_ver = model.meta.get("model_version", "v2.1.0")
+    model_arch = model.meta.get("model_type", "lightgbm")
+
+    res = {
         "location": {
             "latitude": req.latitude,
             "longitude": req.longitude,
@@ -382,16 +469,74 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
             "is_water": loc_ctx.is_water,
         },
         "vendor_category": req.vendor_category,
+        "prediction_timestamp": now.isoformat(),
+        "model_version": model_ver,
+        "model_type": model_arch,
         "prediction": {
             "expected_customers": expected_customers,
+            "p10": uncertainty["p10"],
+            "p50": uncertainty["p50"],
+            "p90": uncertainty["p90"],
             "confidence_interval": uncertainty,
+            "prediction_interval": uncertainty,
+            "category_affinity": category_affinity,
+            "prediction_timestamp": now.isoformat(),
+            "model_version": model_ver,
         },
         "economics": biz,
         "data_freshness": freshness,
     }
+    api_response_cache.set(cache_key, res, ttl_seconds=60)
+    return res
 
 
-@app.post("/v1/recommend/zones")
+@app.post("/v1/predict/batch", response_model=BatchPredictDemandResponse, tags=["Demand Forecasting"], summary="Batch demand prediction and unit economics")
+async def predict_batch(req: BatchPredictDemandRequest, api_key: str = Depends(verify_api_key)):
+    """Evaluate customer demand and unit economics for multiple vendor locations or profiles in batch (up to 50 items)."""
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    now = datetime.now(timezone.utc)
+    results = []
+    total_customers = 0
+    total_revenue = 0.0
+    total_profit = 0.0
+    best_idx = 0
+    best_profit = float("-inf")
+
+    for i, item in enumerate(req.items):
+        item_res = await predict_demand(item, api_key=api_key)
+        results.append(item_res)
+        cust = item_res["prediction"]["expected_customers"]
+        rev = item_res["economics"]["expected_revenue_inr"]
+        prof = item_res["economics"]["expected_profit_inr"]
+        total_customers += cust
+        total_revenue += rev
+        total_profit += prof
+        if prof > best_profit:
+            best_profit = prof
+            best_idx = i
+
+    avg_profit = round(total_profit / len(req.items), 2)
+
+    return {
+        "batch_id": f"batch_{now.strftime('%Y%m%d%H%M%S')}_{len(req.items)}",
+        "processed_at": now.isoformat(),
+        "count": len(results),
+        "results": results,
+        "summary": {
+            "total_locations": len(req.items),
+            "total_expected_customers": total_customers,
+            "total_expected_revenue_inr": round(total_revenue, 2),
+            "total_expected_profit_inr": round(total_profit, 2),
+            "average_profit_per_location_inr": avg_profit,
+            "best_location_index": best_idx,
+            "best_location_profit_inr": round(best_profit if best_profit != float("-inf") else 0.0, 2),
+        },
+    }
+
+
+@app.post("/v1/recommend/zones", response_model=LiveRecommendationsResponse, tags=["Recommendations"], summary="Target candidate zones within search radius")
 async def recommend_zones(req: RecommendZonesRequest, api_key: str = Depends(verify_api_key)):
     """Target high-demand candidate zones within radius."""
     rec_req = RecommendationRequest(
@@ -401,58 +546,53 @@ async def recommend_zones(req: RecommendZonesRequest, api_key: str = Depends(ver
         search_radius_km=req.search_radius_km,
         top_n=req.top_n,
     )
-    return await recommendations_live(rec_req)
+    return await recommendations_live(rec_req, api_key=api_key)
 
 
-@app.post("/v1/scenario/simulate")
+@app.post("/v1/scenario/simulate", response_model=ScenarioSimulateResponse, tags=["Scenario Simulation"], summary="Simulate business impact under varied conditions")
 async def scenario_simulate(req: ScenarioSimulateRequest, api_key: str = Depends(verify_api_key)):
-    """Simulate business impact under varied AOV or weather scenario."""
-    base_res = await predict_demand(
-        PredictDemandRequest(
-            latitude=req.latitude,
-            longitude=req.longitude,
-            vendor_category=req.vendor_category,
-            average_order_value=req.baseline_aov,
-        ),
-        api_key=api_key,
+    """Simulate business impact under varied AOV, rainfall, competitor density, fuel price, category, or hour scenario without retraining."""
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    cache_key = generate_cache_key("scenario", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
+
+    simulator = ScenarioSimulator(
+        model=DemandModel.get(),
+        assembler=_get_assembler(),
     )
-    sim_res = await predict_demand(
-        PredictDemandRequest(
-            latitude=req.latitude,
-            longitude=req.longitude,
-            vendor_category=req.vendor_category,
-            average_order_value=req.simulated_aov,
-        ),
-        api_key=api_key,
+    comp_prov, traffic_prov, event_prov, fuel_prov = _get_providers()
+    weather_client = _get_weather_client()
+
+    res = simulator.simulate(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        baseline_aov=req.baseline_aov,
+        simulated_aov=req.simulated_aov,
+        simulated_rainfall_mm=req.simulated_rainfall_mm,
+        simulated_is_rain=req.simulated_is_rain,
+        simulated_weather_condition=req.simulated_weather_condition,
+        simulated_competitor_count_delta=req.simulated_competitor_count_delta,
+        simulated_competition_score=req.simulated_competition_score,
+        simulated_fuel_price_inr=req.simulated_fuel_price_inr,
+        simulated_vendor_category=req.simulated_vendor_category,
+        simulated_hour=req.simulated_hour,
+        distance_km=req.distance_km if req.distance_km is not None else 1.5,
+        weather_client=weather_client,
+        competition_provider=comp_prov,
+        event_provider=event_prov,
+        fuel_provider=fuel_prov,
     )
-
-    base_profit = base_res["economics"]["expected_profit_inr"]
-    sim_profit = sim_res["economics"]["expected_profit_inr"]
-    profit_delta = round(sim_profit - base_profit, 2)
-    pct_change = round((profit_delta / max(abs(base_profit), 1)) * 100, 1)
-
-    return {
-        "baseline": {
-            "aov": req.baseline_aov,
-            "expected_customers": base_res["prediction"]["expected_customers"],
-            "expected_profit_inr": base_profit,
-        },
-        "scenario": {
-            "aov": req.simulated_aov,
-            "expected_customers": sim_res["prediction"]["expected_customers"],
-            "expected_profit_inr": sim_profit,
-        },
-        "simulation_delta": {
-            "profit_delta_inr": profit_delta,
-            "percentage_change": pct_change,
-        },
-        "explanation": f"Simulating an AOV shift from ₹{req.baseline_aov} to ₹{req.simulated_aov} results in a profit change of ₹{profit_delta:+.2f}/hr ({pct_change:+.1f}%).",
-    }
+    api_response_cache.set(cache_key, res, ttl_seconds=60)
+    return res
 
 
-
-@app.post("/v1/recommendations/live")
-async def recommendations_live(req: RecommendationRequest):
+@app.post("/v1/recommendations/live", response_model=LiveRecommendationsResponse, tags=["Recommendations"], summary="Full live vendor recommendation pipeline")
+async def recommendations_live(req: RecommendationRequest, api_key: str = Depends(verify_api_key)):
     """
     Full live recommendation pipeline:
     GPS → H3 → candidates → features → inference → business metrics → Top N
@@ -466,6 +606,11 @@ async def recommendations_live(req: RecommendationRequest):
                 "model_status": _model_health,
             }
         )
+
+    cache_key = generate_cache_key("recommendations", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
 
     now = req.timestamp or datetime.now(timezone.utc)
     competition_prov, traffic_prov, event_prov, fuel_prov = _get_providers()
@@ -656,32 +801,22 @@ async def recommendations_live(req: RecommendationRequest):
         c["profit_improvement_inr"] = realized_net_uplift
         c["profit_improvement_pct"] = improv_pct
 
-        # Multi-factor strategic classification (Net Realized Uplift + Destination Demand Superiority)
-        raw_profit_diff = cand_pred_profit - current_profit
-        lm_disp = c.get("landmark_display") or c.get("landmark_name") or "this spot"
+        # Multi-factor strategic classification via Decision Engine
+        from api.decision_engine import evaluate_decision
+        dec = evaluate_decision(c, current_cell_data)
 
-        if realized_net_uplift >= 40.0 or (raw_profit_diff >= 60.0 and realized_net_uplift >= -20.0):
-            c["decision_verdict"] = "RECOMMENDED_MOVE"
-            c["decision_action"] = "RECOMMENDED MOVE"
-            reason = f"Strong recommendation to relocate to {lm_disp} (+₹{realized_net_uplift:.0f}/hr net uplift, ~{travel_min} min drive)."
-        elif realized_net_uplift >= -10.0 or raw_profit_diff > 15.0:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER MOVE"
-            reason = f"Positive opportunity at {lm_disp} (+₹{realized_net_uplift:.0f}/hr net gain, ~{travel_min} min drive)."
-        else:
-            c["decision_verdict"] = "STAY_PUT"
-            c["decision_action"] = "STAY HERE"
-            reason = f"Staying put is comparable (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive)."
-
-        c["decision_rationale"] = reason
-        c["decision_reason"] = reason
-        c["decision"] = c["decision_verdict"]
-        c["reason"] = reason
-        c["current_profit"] = current_profit
-        c["recommended_profit"] = relocation_adjusted_realized_profit
-        c["profit_uplift"] = realized_net_uplift
-        c["travel_time"] = travel_min
-        c["distance"] = dist_km
+        c["decision_verdict"] = dec.decision_verdict
+        c["decision_action"] = dec.decision_action
+        c["decision_rationale"] = dec.decision_reason
+        c["decision_reason"] = dec.decision_reason
+        c["decision"] = dec.decision_verdict
+        c["reason"] = dec.decision_reason
+        c["current_profit"] = dec.current_profit
+        c["recommended_profit"] = dec.recommended_profit
+        c["profit_uplift"] = dec.realized_net_uplift_inr
+        c["travel_time"] = dec.travel_time_min
+        c["distance"] = dec.distance_km
+        c["is_move_recommended"] = dec.is_move_recommended
 
         valid_destinations.append(c)
 
@@ -847,7 +982,7 @@ async def recommendations_live(req: RecommendationRequest):
         "profit": "derived",
     }
 
-    return {
+    res = {
         "request_id": f"rec_{now.strftime('%Y%m%d%H%M%S')}",
         "generated_at": now.isoformat(),
         "search_radius_km": req.search_radius_km,
@@ -893,3 +1028,5 @@ async def recommendations_live(req: RecommendationRequest):
             "note": "Demand is an ML estimate based on real-world contextual signals — not a live sensor count.",
         },
     }
+    api_response_cache.set(cache_key, res, ttl_seconds=60)
+    return res

@@ -20,7 +20,13 @@ from typing import List, Optional, Dict
 import h3
 import pandas as pd
 
-from api.spatial_filter import is_water_location, is_water_cell, is_suitable_vendor_cell
+from api.spatial_filter import (
+    is_water_location,
+    is_water_cell,
+    is_suitable_vendor_cell,
+    is_valid_coordinate,
+    is_accessible_location,
+)
 
 H3_RESOLUTION = 8
 
@@ -70,6 +76,11 @@ class CandidateCell:
     is_current_cell: bool = False
     is_water: bool = False
     ring_distance: int = 0
+    landmark_name: Optional[str] = None
+    landmark_type: Optional[str] = None
+    is_college: bool = False
+    landmark_emoji: Optional[str] = None
+    landmark_display: Optional[str] = None
 
     def to_dict(self) -> dict:
         return self.__dict__.copy()
@@ -77,7 +88,7 @@ class CandidateCell:
 
 def gps_to_h3(lat: float, lng: float, resolution: int = H3_RESOLUTION) -> str:
     """Convert GPS coordinates to H3 cell index with validation."""
-    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+    if not is_valid_coordinate(lat, lng):
         raise ValueError(f"Invalid GPS coordinates: lat={lat}, lng={lng}")
     cell = h3.latlng_to_cell(lat, lng, resolution)
     if not h3.is_valid_cell(cell):
@@ -87,7 +98,7 @@ def gps_to_h3(lat: float, lng: float, resolution: int = H3_RESOLUTION) -> str:
 
 def h3_centroid(h3_cell: str) -> tuple[float, float]:
     """Get (lat, lng) centroid of an H3 cell."""
-    if not h3.is_valid_cell(h3_cell):
+    if not h3_cell or not h3.is_valid_cell(h3_cell):
         raise ValueError(f"Invalid H3 cell index: {h3_cell}")
     lat, lng = h3.cell_to_latlng(h3_cell)
     return lat, lng
@@ -113,12 +124,14 @@ def estimate_travel_min(distance_km: float, avg_speed_kmh: float = 20.0) -> floa
 def generate_candidates(
     origin_lat: float,
     origin_lng: float,
-    h3_cell: str,
+    h3_cell: Optional[str] = None,
     search_radius_km: float = 3.0,
     resolution: int = H3_RESOLUTION,
     avg_speed_kmh: float = 20.0,
+    exclude_current: bool = False,
     exclude_water: bool = True,
     exclude_unsuitable: bool = True,
+    resolve_pois: bool = True,
 ) -> list[CandidateCell]:
     """
     Generate nearby H3 candidate cells within search_radius_km of the origin.
@@ -131,34 +144,60 @@ def generate_candidates(
       Distance Filter (haversine <= search_radius_km)
           ↓
       Valid Candidate Cells (exclude water & invalid/unsuitable areas)
+          ↓
+      POI Landmark Resolution & Metadata Enrichment
     """
-    if not (-90.0 <= origin_lat <= 90.0 and -180.0 <= origin_lng <= 180.0):
+    if not is_valid_coordinate(origin_lat, origin_lng):
         raise ValueError(f"Invalid origin coordinates: lat={origin_lat}, lng={origin_lng}")
 
-    if search_radius_km <= 0:
+    if search_radius_km is None or math.isnan(search_radius_km) or search_radius_km <= 0:
         raise ValueError(f"search_radius_km must be > 0, got {search_radius_km}")
 
     # Validate or fallback current H3 cell
-    if not h3.is_valid_cell(h3_cell):
+    if not h3_cell or not h3.is_valid_cell(h3_cell):
         h3_cell = gps_to_h3(origin_lat, origin_lng, resolution)
 
     candidates: dict[str, CandidateCell] = {}
+    static_cache = _get_static_features_cache()
+
+    poi_resolver = None
+    if resolve_pois:
+        try:
+            from api.poi_resolver import POIResolver
+            poi_resolver = POIResolver.get()
+        except Exception:
+            poi_resolver = None
 
     # Current cell anchor
     cur_lat, cur_lng = h3_centroid(h3_cell)
     cur_is_water = is_water_location(cur_lat, cur_lng) or is_water_cell(h3_cell)
-    candidates[h3_cell] = CandidateCell(
-        h3_cell=h3_cell,
-        centroid_lat=round(cur_lat, 6),
-        centroid_lng=round(cur_lng, 6),
-        distance_km=round(haversine_km(origin_lat, origin_lng, cur_lat, cur_lng), 3),
-        estimated_travel_min=0.0,
-        is_current_cell=True,
-        is_water=cur_is_water,
-        ring_distance=0,
-    )
+    cur_dist = 0.0
 
-    static_cache = _get_static_features_cache()
+    cur_poi: dict = {}
+    if poi_resolver:
+        try:
+            cur_feat = static_cache.get(h3_cell)
+            cur_pref = (cur_feat.get("college_count", 0) > 0) if cur_feat else False
+            cur_poi = poi_resolver.resolve_landmark(cur_lat, cur_lng, h3_cell=h3_cell, prefer_college=cur_pref)
+        except Exception:
+            cur_poi = {}
+
+    if not exclude_current:
+        candidates[h3_cell] = CandidateCell(
+            h3_cell=h3_cell,
+            centroid_lat=round(cur_lat, 6),
+            centroid_lng=round(cur_lng, 6),
+            distance_km=cur_dist,
+            estimated_travel_min=0.0,
+            is_current_cell=True,
+            is_water=cur_is_water,
+            ring_distance=0,
+            landmark_name=cur_poi.get("landmark_name"),
+            landmark_type=cur_poi.get("landmark_type"),
+            is_college=bool(cur_poi.get("is_college", False)),
+            landmark_emoji=cur_poi.get("emoji"),
+            landmark_display=cur_poi.get("landmark_display"),
+        )
 
     # Expand neighbor H3 rings until all cells in ring exceed search_radius_km
     for k in range(1, 25):
@@ -187,6 +226,16 @@ def generate_candidates(
                 if exclude_unsuitable and cell_unsuitable:
                     continue
 
+                poi_info: dict = {}
+                if poi_resolver:
+                    try:
+                        college_count = cell_feat.get("college_count", 0) if cell_feat else 0
+                        poi_info = poi_resolver.resolve_landmark(
+                            c_lat, c_lng, h3_cell=cell, prefer_college=(college_count > 0)
+                        )
+                    except Exception:
+                        poi_info = {}
+
                 candidates[cell] = CandidateCell(
                     h3_cell=cell,
                     centroid_lat=round(c_lat, 6),
@@ -196,6 +245,11 @@ def generate_candidates(
                     is_current_cell=False,
                     is_water=cell_in_water,
                     ring_distance=k,
+                    landmark_name=poi_info.get("landmark_name"),
+                    landmark_type=poi_info.get("landmark_type"),
+                    is_college=bool(poi_info.get("is_college", False)),
+                    landmark_emoji=poi_info.get("emoji"),
+                    landmark_display=poi_info.get("landmark_display"),
                 )
 
         # Stop expanding only when all cells in the ring are strictly beyond the search radius
@@ -205,7 +259,7 @@ def generate_candidates(
     # Strictly filter all candidate cells
     valid_candidates = [
         c for c in candidates.values()
-        if c.is_current_cell or (
+        if (c.is_current_cell and not exclude_current) or (
             c.distance_km <= search_radius_km
             and (not exclude_water or not c.is_water)
             and (not exclude_unsuitable or is_suitable_vendor_cell(c.centroid_lat, c.centroid_lng, h3_cell=c.h3_cell, static_features=static_cache.get(c.h3_cell)))
@@ -213,22 +267,29 @@ def generate_candidates(
     ]
 
     # Fallback if in sparse area and all destination candidates were rejected
-    if exclude_unsuitable and not [c for c in valid_candidates if not c.is_current_cell]:
+    dest_candidates = [c for c in valid_candidates if not c.is_current_cell]
+    if exclude_unsuitable and not dest_candidates and candidates:
         valid_candidates = [
             c for c in candidates.values()
-            if c.is_current_cell or (
+            if (c.is_current_cell and not exclude_current) or (
                 c.distance_km <= search_radius_km
                 and (not exclude_water or not c.is_water)
                 and is_suitable_vendor_cell(c.centroid_lat, c.centroid_lng, h3_cell=c.h3_cell, static_features=None)
             )
         ]
 
-    return sorted(valid_candidates, key=lambda c: c.distance_km)
+    # Deduplicate strictly by h3_cell while preserving order
+    unique_cells: dict[str, CandidateCell] = {}
+    for c in valid_candidates:
+        if c.h3_cell not in unique_cells:
+            unique_cells[c.h3_cell] = c
+
+    return sorted(unique_cells.values(), key=lambda c: (0 if c.is_current_cell else 1, c.distance_km))
 
 
 def get_location_context(lat: float, lng: float, resolution: int = H3_RESOLUTION) -> LocationContext:
     """Convert GPS coordinates to a full location context object."""
-    if not (-90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0):
+    if not is_valid_coordinate(lat, lng):
         raise ValueError(f"Invalid GPS coordinates: lat={lat}, lng={lng}")
     h3_cell = gps_to_h3(lat, lng, resolution)
     c_lat, c_lng = h3_centroid(h3_cell)
