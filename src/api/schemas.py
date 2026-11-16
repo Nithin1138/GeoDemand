@@ -778,3 +778,18 @@ class FleetDispatchResponse(BaseModel):
     cluster_dispersion_ratio: float = Field(..., description="Ratio of unique zones to dispatched vendors (1.0 = perfect dispersion)")
     dispatch_explanation: str = Field(..., description="Fleet dispatch summary explanation")
 
+
+# ===========================================================================
+# Webhook & Ingestion Schemas
+# ===========================================================================
+
+class DeadLetterRetryRequest(BaseModel):
+    dlq_id: str = Field(..., min_length=2, max_length=64, description="Unique Dead-Letter event identifier to retry")
+
+
+class VendorChannelRegisterRequest(BaseModel):
+    vendor_id: str = Field(..., min_length=1, max_length=64, description="Registered vendor identifier")
+    phone: Optional[str] = Field(default=None, description="Vendor WhatsApp phone number with country code")
+    telegram_id: Optional[str] = Field(default=None, description="Vendor Telegram user ID or username")
+
+

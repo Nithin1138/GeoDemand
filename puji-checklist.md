@@ -214,6 +214,38 @@
   - Fleet test suite: `tests/test_fleet_manager.py` (11/11 passed).
   - Fleet manager report: `docs/fleet_manager_report.md` & brain artifact.
 
+### 11. Phase 3.5D: Payment Webhook Adapters, Messaging Ingestion & Dead-Letter Recovery (Completed)
+- [x] **Payment Gateway Webhook Adapters (`src/api/webhooks/payment_adapters.py`):**
+  - Integrated Razorpay events (`payment.captured`, `order.paid`, `refund.processed`, `payment.failed`) with HMAC-SHA256 signature verification via `X-Razorpay-Signature`.
+  - Integrated Paytm callbacks (`TXN_SUCCESS`, `TXN_FAILURE`, `REFUND_SUCCESS`) with SHA256 checksum signature verification.
+  - Integrated PhonePe server-to-server callbacks with Base64 payload decoding and SHA256 + salt key & index `X-VERIFY` header calculation.
+  - Normalized paise-to-INR currency amounts, transaction IDs, payment methods, and lifecycle status.
+- [x] **Conversational Messaging Adapters (`src/api/webhooks/messaging_adapters.py`):**
+  - Integrated WhatsApp Business API with Meta verification challenge handshake (`hub.challenge`) and HMAC-SHA256 signature verification.
+  - Integrated Telegram Bot API with secret token header authentication (`X-Telegram-Bot-Api-Secret-Token`).
+  - Parsed conversational sales reports from text (e.g., `"SALE 450 INR 3 items"` or `"/sale 250"`) into canonical `TransactionRecord`s.
+  - Parsed live GPS location pins from WhatsApp and Telegram, automatically updating vendor spatial coordinates.
+  - Implemented `VendorChannelRegistry` mapping vendor identities to mobile phone numbers and Telegram user IDs.
+- [x] **Security, Freshness & Sensitive Data Sanitization (`src/api/webhooks/security.py`):**
+  - Validated event timestamp freshness ($< 5\text{m}$ future tolerance, $< 24\text{h}$ max age) to eliminate replay attacks.
+  - Recursively masked sensitive payment credentials, tokens, secrets, card numbers, and CVVs via `mask_sensitive_payload()`.
+- [x] **Idempotency & Dead-Letter Queue (DLQ) (`src/api/webhooks/dead_letter.py`):**
+  - Built thread-safe idempotency store tracking `(provider, transaction_id)`. Duplicate deliveries safely return `status="DUPLICATE_IGNORED"`.
+  - Built Dead-Letter Queue storing unparseable or unauthenticated events with credential sanitization and failure telemetry.
+  - Implemented dead-letter replay recovery (`POST /v1/webhooks/dead-letter/retry`).
+- [x] **Pipeline Forwarding & Integration (`src/api/webhooks/service.py`):**
+  - Forwarded all normalized transactions directly to Member 1's `TransactionIngestionPipeline`.
+  - Synchronized location updates with `FleetManager`.
+- [x] **Deliverables Completed:**
+  - Security module: `src/api/webhooks/security.py`
+  - Payment adapters: `src/api/webhooks/payment_adapters.py`
+  - Messaging adapters: `src/api/webhooks/messaging_adapters.py`
+  - Dead-letter store: `src/api/webhooks/dead_letter.py`
+  - Ingestion service: `src/api/webhooks/service.py`
+  - FastAPI endpoints: `src/api/app.py`
+  - Webhook integration test suite: `tests/test_payment_webhooks.py` (12/12 passed).
+  - Webhook report: `docs/payment_webhooks_report.md` & brain artifact.
+
 ---
 
 ## 🏆 Completed Previously (V1 / Foundation)

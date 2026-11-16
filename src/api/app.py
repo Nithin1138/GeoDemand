@@ -36,7 +36,7 @@ load_dotenv(ROOT / ".env", override=False)
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Header, Depends, status
+from fastapi import FastAPI, HTTPException, Header, Depends, status, Request, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -134,6 +134,10 @@ OPENAPI_TAGS = [
     {
         "name": "Fleet Management",
         "description": "Multi-vendor fleet dispatch, cell capacity tracking, and atomic H3 reservations.",
+    },
+    {
+        "name": "Webhooks & Ingestion",
+        "description": "Payment webhook adapters (Razorpay, Paytm, PhonePe) and messaging channels (WhatsApp, Telegram) with dead-letter recovery.",
     },
 ]
 
@@ -240,6 +244,8 @@ from api.schemas import (
     FleetDispatchRequest,
     FleetDispatchResponse,
     FleetDispatchVendorItem,
+    DeadLetterRetryRequest,
+    VendorChannelRegisterRequest,
     DecisionVerdict,
 )
 from api.cache import api_response_cache, generate_cache_key
@@ -247,6 +253,12 @@ from api.scenario_simulation import ScenarioSimulator
 from api.business_economics import FUEL_PRICE_INR_PER_LITRE
 from optimization.shift_optimizer import ShiftOptimizer
 from fleet.fleet_manager import FleetManager, Vendor, VendorStatus, ReservationStatus
+from api.webhooks import (
+    webhook_service,
+    dead_letter_queue,
+    vendor_channel_registry,
+    WHATSAPP_VERIFY_TOKEN,
+)
 
 
 
@@ -523,6 +535,162 @@ async def fleet_list_vendors(fleet_id: Optional[str] = None, status: Optional[st
             pass
     vendors = fleet_manager.list_vendors(fleet_id=fleet_id, status=stat_enum)
     return [v.to_dict() for v in vendors]
+
+
+# ---------------------------------------------------------------------------
+# Payment & Messaging Webhook Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/webhooks/payments/razorpay", tags=["Webhooks & Ingestion"], summary="Razorpay payment webhook callback")
+async def webhook_razorpay(request: Request):
+    """
+    Ingest real-time Razorpay payment events (payment.captured, order.paid, refund.processed).
+    - Validates HMAC-SHA256 signature via X-Razorpay-Signature
+    - Implements idempotency to safely ignore duplicate webhook retries
+    - Forwards sanitized transaction record to Member 1's ingestion pipeline
+    """
+    raw_body = await request.body()
+    headers = dict(request.headers)
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    result = webhook_service.process_payment_webhook("razorpay", raw_body, headers, parsed_json)
+    if result.get("status") == "REJECTED" and result.get("error") == "SIGNATURE_VERIFICATION_FAILED":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/v1/webhooks/payments/paytm", tags=["Webhooks & Ingestion"], summary="Paytm payment webhook callback")
+async def webhook_paytm(request: Request):
+    """
+    Ingest real-time Paytm payment callbacks (TXN_SUCCESS, TXN_FAILURE).
+    - Validates Paytm checksum signature
+    - Implements idempotency protection against duplicate delivery
+    - Forwards sanitized record to Member 1's ingestion pipeline
+    """
+    raw_body = await request.body()
+    headers = dict(request.headers)
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    result = webhook_service.process_payment_webhook("paytm", raw_body, headers, parsed_json)
+    if result.get("status") == "REJECTED" and result.get("error") == "SIGNATURE_VERIFICATION_FAILED":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/v1/webhooks/payments/phonepe", tags=["Webhooks & Ingestion"], summary="PhonePe payment webhook callback")
+async def webhook_phonepe(request: Request):
+    """
+    Ingest PhonePe server-to-server transaction callbacks.
+    - Validates X-VERIFY checksum signature (Base64 + SHA256 + Salt Key & Index)
+    - Implements idempotency protection
+    - Forwards sanitized record to Member 1's ingestion pipeline
+    """
+    raw_body = await request.body()
+    headers = dict(request.headers)
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    result = webhook_service.process_payment_webhook("phonepe", raw_body, headers, parsed_json)
+    if result.get("status") == "REJECTED" and result.get("error") == "SIGNATURE_VERIFICATION_FAILED":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/v1/webhooks/whatsapp", tags=["Webhooks & Ingestion"], summary="WhatsApp Business webhook verification challenge")
+async def webhook_whatsapp_verify(
+    hub_mode: Optional[str] = Query(None, alias="hub.mode"),
+    hub_challenge: Optional[str] = Query(None, alias="hub.challenge"),
+    hub_verify_token: Optional[str] = Query(None, alias="hub.verify_token"),
+):
+    """Handles Meta WhatsApp Business webhook subscription verification challenge."""
+    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+        return Response(content=hub_challenge or "", media_type="text/plain")
+    raise HTTPException(status_code=403, detail="WhatsApp verification challenge token mismatch")
+
+
+@app.post("/v1/webhooks/whatsapp", tags=["Webhooks & Ingestion"], summary="WhatsApp vendor sales reporting & GPS location webhook")
+async def webhook_whatsapp_event(request: Request):
+    """
+    Processes WhatsApp Business messages:
+    - Accepts text sales reports (e.g. 'SALE 350 INR 5 dosa')
+    - Accepts vendor live location pins
+    - Validates vendor identity mapped to WhatsApp sender number
+    - Ingests sales into pipeline and updates vendor location
+    """
+    raw_body = await request.body()
+    sig = request.headers.get("x-hub-signature-256")
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    return webhook_service.process_whatsapp_webhook(raw_body, sig, parsed_json)
+
+
+@app.post("/v1/webhooks/telegram", tags=["Webhooks & Ingestion"], summary="Telegram Bot vendor sales & location pin webhook")
+async def webhook_telegram_event(request: Request):
+    """
+    Processes Telegram Bot API updates:
+    - Accepts sales commands (e.g. '/sale 250')
+    - Accepts vendor location pins
+    - Validates vendor identity via Telegram user ID or username
+    """
+    token_header = request.headers.get("x-telegram-bot-api-secret-token")
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    return webhook_service.process_telegram_webhook(token_header, parsed_json)
+
+
+@app.get("/v1/webhooks/dead-letter", tags=["Webhooks & Ingestion"], summary="List Dead-Letter Queue unrecoverable webhook events")
+async def webhook_list_dead_letters(
+    provider: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    api_key: str = Depends(verify_api_key),
+):
+    """Inspects failed, unparseable, or unauthenticated webhook events stored in the Dead-Letter Queue."""
+    records = dead_letter_queue.list_records(provider=provider, status=status, limit=limit)
+    return [r.to_dict() for r in records]
+
+
+@app.post("/v1/webhooks/dead-letter/retry", tags=["Webhooks & Ingestion"], summary="Retry a failed event from the Dead-Letter Queue")
+async def webhook_retry_dead_letter(
+    req: DeadLetterRetryRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Replays and retries a failed webhook event from the Dead-Letter Queue."""
+    return webhook_service.retry_dead_letter_event(req.dlq_id)
+
+
+@app.post("/v1/webhooks/register-vendor-channel", tags=["Webhooks & Ingestion"], summary="Link WhatsApp phone number or Telegram ID to vendor identity")
+async def webhook_register_vendor_channel(
+    req: VendorChannelRegisterRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Pairs a vendor ID with a WhatsApp mobile phone number or Telegram user identity."""
+    vendor_channel_registry.register(
+        vendor_id=req.vendor_id,
+        phone=req.phone,
+        telegram_id=req.telegram_id,
+    )
+    return {
+        "status": "REGISTERED",
+        "vendor_id": req.vendor_id,
+        "phone": req.phone,
+        "telegram_id": req.telegram_id,
+        "message": f"Channel successfully linked to vendor {req.vendor_id}",
+    }
 
 
 @app.post("/v1/location/context", response_model=LocationContextResponse, tags=["Location"], summary="GPS location context and H3 cell")
