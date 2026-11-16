@@ -46,6 +46,10 @@ from src.geodemand.models.promotion import (
     ModelPromotionPolicy,
     PromotionEvaluationReport,
 )
+from src.geodemand.models.release_manager import (
+    ModelReleaseManager,
+    ReleaseManifest,
+)
 
 __all__ = [
     "DemandModelPredictor",
@@ -79,6 +83,8 @@ __all__ = [
     "CityBoundaryError",
     "CitySelectionResult",
     "NonGeneralizableFeaturesReport",
+    "ModelReleaseManager",
+    "ReleaseManifest",
     "train_pipeline",
     "load_and_validate",
     "prepare_features",
