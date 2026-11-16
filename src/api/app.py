@@ -18,6 +18,7 @@ from __future__ import annotations
 
 import logging
 import sys
+import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional, List, Dict, Any
@@ -97,9 +98,21 @@ async def lifespan(app: FastAPI):
         _get_assembler()
     except Exception as e:
         logger.warning(f"Feature assembler init warning: {e}")
+    try:
+        from src.ingestion.event_broker import event_gateway
+        event_gateway.broker.start()
+        logger.info("Event Gateway and Broker consumers started.")
+    except Exception as e:
+        logger.warning(f"Failed to start Event Gateway broker: {e}")
     logger.info("Startup complete.")
     yield
     logger.info("GeoDemand AI API shutting down...")
+    try:
+        from src.ingestion.event_broker import event_gateway
+        event_gateway.broker.stop()
+        logger.info("Event Gateway and Broker consumers stopped.")
+    except Exception as e:
+        logger.warning(f"Error stopping Event Gateway broker: {e}")
 
 
 OPENAPI_TAGS = [
@@ -138,6 +151,10 @@ OPENAPI_TAGS = [
     {
         "name": "Webhooks & Ingestion",
         "description": "Payment webhook adapters (Razorpay, Paytm, PhonePe) and messaging channels (WhatsApp, Telegram) with dead-letter recovery.",
+    },
+    {
+        "name": "Event Broker",
+        "description": "Stream/event ingestion gateway, RabbitMQ/In-Memory broker status, and throughput sizing.",
     },
 ]
 
@@ -246,6 +263,8 @@ from api.schemas import (
     FleetDispatchVendorItem,
     DeadLetterRetryRequest,
     VendorChannelRegisterRequest,
+    BrokerPublishTestRequest,
+    BrokerStatusResponse,
     DecisionVerdict,
 )
 from api.cache import api_response_cache, generate_cache_key
@@ -258,6 +277,11 @@ from api.webhooks import (
     dead_letter_queue,
     vendor_channel_registry,
     WHATSAPP_VERIFY_TOKEN,
+)
+from src.ingestion.event_broker import (
+    calculate_broker_sizing,
+    event_gateway,
+    BrokerSizingProfile,
 )
 
 
@@ -350,6 +374,82 @@ async def cache_clear(api_key: str = Depends(verify_api_key)):
     """Evict all items from the API response cache."""
     api_response_cache.clear()
     return {"status": "ok", "message": "API response cache cleared successfully."}
+
+
+@app.get(
+    "/v1/system/broker-status",
+    response_model=BrokerStatusResponse,
+    tags=["System", "Event Broker"],
+    summary="Event Ingestion Gateway status, sizing benchmark, and broker metrics",
+)
+async def get_broker_status(
+    active_vendors: int = Query(3000, description="Hypothetical active vendors for sizing calculation"),
+    tx_per_vendor: float = Query(20.0, description="Avg transactions per vendor shift"),
+    shift_hours: float = Query(10.0, description="Shift duration in hours"),
+    telemetry_interval: float = Query(30.0, description="GPS telemetry interval in seconds"),
+):
+    """
+    Returns live broker gateway status, active AMQP/In-Memory broker telemetry,
+    and the volume measurement sizing evaluation comparing RabbitMQ vs. Kafka.
+    """
+    sizing = calculate_broker_sizing(
+        active_vendors=active_vendors,
+        tx_per_vendor_day=tx_per_vendor,
+        shift_hours=shift_hours,
+        telemetry_interval_sec=telemetry_interval,
+    )
+    status_data = event_gateway.get_status()
+    status_data["sizing_profile"] = sizing.to_dict()
+    return status_data
+
+
+@app.post(
+    "/v1/system/broker-publish-test",
+    tags=["System", "Event Broker"],
+    summary="Publish a test event into the broker gateway",
+)
+async def publish_test_event(
+    req: BrokerPublishTestRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Publishes a test transaction or telemetry ping to the ingestion gateway,
+    demonstrating event publication, asynchronous consumption, and idempotency.
+    """
+    if req.event_type == "telemetry":
+        success = event_gateway.publish_telemetry(
+            vendor_id=req.vendor_id,
+            latitude=req.latitude or 16.5062,
+            longitude=req.longitude or 80.6480,
+        )
+        return {
+            "status": "PUBLISHED" if success else "FAILED",
+            "event_type": "telemetry",
+            "vendor_id": req.vendor_id,
+            "broker_metrics": event_gateway.broker.get_metrics(),
+        }
+    else:
+        from src.ingestion.schema import TransactionRecord, TransactionLocation, PaymentMethod, TransactionStatus
+        tx_id = f"TEST-TX-{uuid.uuid4().hex[:8].upper()}"
+        rec = TransactionRecord(
+            transaction_id=tx_id,
+            vendor_id=req.vendor_id,
+            customer_id=f"CUST-{req.vendor_id}",
+            event_timestamp=datetime.now(timezone.utc),
+            amount_inr=req.amount_inr or 250.0,
+            payment_method=PaymentMethod.UPI,
+            status=TransactionStatus.COMPLETED,
+            location=TransactionLocation(latitude=req.latitude or 16.5062, longitude=req.longitude or 80.6480),
+            source="test:broker_publish_test",
+        )
+        success = event_gateway.publish_transaction(rec, idempotency_key=f"test:{tx_id}")
+        return {
+            "status": "PUBLISHED" if success else "FAILED",
+            "event_type": "transaction",
+            "transaction_id": tx_id,
+            "vendor_id": req.vendor_id,
+            "broker_metrics": event_gateway.broker.get_metrics(),
+        }
 
 
 @app.get("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (GET)")

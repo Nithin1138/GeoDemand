@@ -53,6 +53,10 @@ from api.webhooks.messaging_adapters import (
     TelegramMessageEvent,
 )
 from api.webhooks.dead_letter import dead_letter_queue, DeadLetterRecord
+try:
+    from src.ingestion.event_broker import event_gateway
+except ImportError:
+    from ingestion.event_broker import event_gateway
 
 logger = logging.getLogger(__name__)
 
@@ -211,6 +215,15 @@ class WebhookIngestionService:
         dead_letter_queue.mark_processed(provider_clean, record.transaction_id)
         final_record = ingestion_res.record or record
 
+        # Forward event to streaming event broker (RabbitMQ / In-Memory)
+        try:
+            event_gateway.publish_transaction(
+                final_record,
+                idempotency_key=f"{provider_clean}:{final_record.transaction_id}",
+            )
+        except Exception as e:
+            logger.warning(f"Failed to publish transaction to event gateway: {e}")
+
         # Update FleetManager vendor status/telemetry if known
         v = self._fleet_manager.get_vendor(final_record.vendor_id)
         if v and final_record.location and final_record.location.latitude:
@@ -292,6 +305,10 @@ class WebhookIngestionService:
                 v.current_lat = lat
                 v.current_lng = lng
                 v.last_heartbeat = datetime.now(timezone.utc)
+            try:
+                event_gateway.publish_telemetry(wa_event.vendor_id, lat, lng)
+            except Exception as e:
+                logger.warning(f"Failed to publish telemetry to event gateway: {e}")
             return {
                 "status": "LOCATION_UPDATED",
                 "vendor_id": wa_event.vendor_id,
@@ -326,6 +343,10 @@ class WebhookIngestionService:
 
             res = self._pipeline.ingest_transaction(record)
             dead_letter_queue.mark_processed("whatsapp", tx_id)
+            try:
+                event_gateway.publish_transaction(record, idempotency_key=f"whatsapp:{tx_id}")
+            except Exception as e:
+                logger.warning(f"Failed to publish transaction to event gateway: {e}")
 
             return {
                 "status": "INGESTED",
@@ -395,6 +416,10 @@ class WebhookIngestionService:
                 v.current_lat = lat
                 v.current_lng = lng
                 v.last_heartbeat = datetime.now(timezone.utc)
+            try:
+                event_gateway.publish_telemetry(tg_event.vendor_id, lat, lng)
+            except Exception as e:
+                logger.warning(f"Failed to publish telemetry to event gateway: {e}")
             return {
                 "status": "LOCATION_UPDATED",
                 "vendor_id": tg_event.vendor_id,
@@ -428,6 +453,10 @@ class WebhookIngestionService:
 
             res = self._pipeline.ingest_transaction(record)
             dead_letter_queue.mark_processed("telegram", tx_id)
+            try:
+                event_gateway.publish_transaction(record, idempotency_key=f"telegram:{tx_id}")
+            except Exception as e:
+                logger.warning(f"Failed to publish transaction to event gateway: {e}")
 
             return {
                 "status": "INGESTED",

@@ -793,3 +793,24 @@ class VendorChannelRegisterRequest(BaseModel):
     telegram_id: Optional[str] = Field(default=None, description="Vendor Telegram user ID or username")
 
 
+# ===========================================================================
+# Event Broker Schemas
+# ===========================================================================
+
+class BrokerPublishTestRequest(BaseModel):
+    event_type: str = Field(default="transaction", description="'transaction' or 'telemetry'")
+    vendor_id: str = Field(default="VND-001", description="Vendor identifier")
+    amount_inr: Optional[float] = Field(default=250.0, ge=1.0, description="Amount if transaction")
+    latitude: Optional[float] = Field(default=16.5062, ge=-90.0, le=90.0, description="Latitude")
+    longitude: Optional[float] = Field(default=80.6480, ge=-180.0, le=180.0, description="Longitude")
+    items_count: Optional[int] = Field(default=2, ge=1, description="Item count")
+
+
+class BrokerStatusResponse(BaseModel):
+    gateway_status: str = Field(..., description="Gateway operational state")
+    active_broker: str = Field(..., description="Active broker client (RabbitMQ or InMemory)")
+    sizing_profile: Dict[str, Any] = Field(..., description="Volume sizing benchmark and sizing justification")
+    telemetry: Dict[str, Any] = Field(..., description="Runtime broker delivery and queue metrics")
+
+
+

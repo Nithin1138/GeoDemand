@@ -246,6 +246,36 @@
   - Webhook integration test suite: `tests/test_payment_webhooks.py` (12/12 passed).
   - Webhook report: `docs/payment_webhooks_report.md` & brain artifact.
 
+### 12. Stream & Event Ingestion Gateway & Broker Subsystem (Completed)
+- [x] **Workload Telemetry & Sizing Calculation (`src/ingestion/event_broker.py`):**
+  - Formulated mathematical throughput models for Vijayawada pilot (1,500 carts $\approx 51\text{ events/sec}$), full deployment (3,000 carts $\approx 102\text{ events/sec}$), and 10-city statewide expansion (25,000 carts $\approx 848\text{ events/sec}$).
+  - Evaluated delivery semantics, per-message ACKs/NACKs, dead-letter routing (DLX), head-of-line blocking, operational memory overhead, and latency profiles.
+  - Formally selected RabbitMQ (AMQP 0-9-1) over Apache Kafka, documenting why Kafka is architectural overkill ($< 25\text{k events/sec}$ threshold) with severe head-of-line blocking on partitioned commit logs.
+- [x] **Abstract Broker Interface & In-Memory Stream Engine (`src/ingestion/event_broker.py`):**
+  - Defined `EventBroker` ABC (`publish`, `subscribe`, `start`, `stop`, `get_metrics`).
+  - Implemented high-throughput thread-safe `InMemoryEventBroker` with worker thread pools, exact AMQP queue semantics, exponential backoff retries, and dead-letter routing.
+- [x] **Production RabbitMQ AMQP Broker Client (`src/ingestion/event_broker.py`):**
+  - Built `RabbitMQEventBroker` using `pika` (AMQP 0-9-1).
+  - Declared durable direct exchanges (`geodemand.events.direct`), dead-letter exchanges (`geodemand.events.dlx`), and durable queues (`geodemand.events.transactions`, `geodemand.events.telemetry`, `geodemand.events.dead_letter`).
+  - Implemented automatic, graceful fallback to `InMemoryEventBroker` when the AMQP daemon is offline.
+- [x] **EventGateway Orchestrator (`src/ingestion/event_broker.py`):**
+  - Connected background consumers for normalized transactions (forwarding to Member 1's `TransactionIngestionPipeline`) and GPS telemetry pings (updating `FleetManager` coordinates).
+  - Implemented dead-letter queue consumer persisting unrecoverable events to `dead_letter_queue`.
+- [x] **Webhook Integration (`src/api/webhooks/service.py`):**
+  - Wired up `event_gateway.publish_transaction()` and `event_gateway.publish_telemetry()` into payment and messaging adapters.
+- [x] **FastAPI Broker Telemetry & Sizing Endpoints (`src/api/app.py`):**
+  - `GET /v1/system/broker-status`: Returns live broker telemetry and dynamic sizing benchmark calculations.
+  - `POST /v1/system/broker-publish-test`: Operator test endpoint publishing transaction or telemetry events.
+  - Managed broker lifecycle (`broker.start()` / `broker.stop()`) within FastAPI `lifespan`.
+- [x] **Deliverables Completed:**
+  - Broker engine: `src/ingestion/event_broker.py`
+  - Ingestion exports: `src/ingestion/__init__.py`
+  - Schemas: `src/api/schemas.py`
+  - API routes: `src/api/app.py`
+  - Webhook integration: `src/api/webhooks/service.py`
+  - Comprehensive unit & integration test suite: `tests/test_event_broker.py` (11/11 passed).
+  - Architecture report: `docs/event_broker_report.md` & brain artifact.
+
 ---
 
 ## 🏆 Completed Previously (V1 / Foundation)
