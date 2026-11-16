@@ -447,6 +447,15 @@ class ModelRollbackTracker:
 
         # 2. Backup Status
         backup_exists = backup_file.exists()
+        if not backup_exists and champ_file.exists():
+            try:
+                from src.geodemand.models.promotion import ModelPromotionGate
+                gate = ModelPromotionGate(models_dir=self.models_dir)
+                gate.backup_current_champion()
+                backup_exists = backup_file.exists()
+            except Exception as e:
+                logger.warning(f"Failed to auto-seed champion backup snapshot: {e}")
+
         backup_ver = None
         backup_hash = self._file_hash(backup_file) if backup_exists else None
         backup_loadable = False

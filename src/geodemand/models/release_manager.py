@@ -411,7 +411,7 @@ class ModelReleaseManager:
         if not backup_exists:
             # Initialize backup snapshot from current champion if absent
             gate = ModelPromotionGate(models_dir=self.models_dir)
-            gate._backup_active_champion()
+            gate.backup_current_champion()
             backup_exists = backup_file.exists()
 
         assert backup_exists, f"Backup champion missing at {backup_file}"

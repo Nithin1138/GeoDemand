@@ -1,7 +1,7 @@
 # GeoDemand AI — Multi-Horizon Advanced ML Benchmark Report (Phase 13.2)
 
 > [!NOTE]
-> Benchmark executed on **2026-11-16T08:24:54.924166+00:00** using canonical dataset version `test-dataset-v1`.
+> Benchmark executed on **2026-11-16T16:44:47.873590+00:00** using canonical dataset version `test-dataset-v1`.
 > Evaluated on 200 training samples and 100 validation samples.
 
 ## 1. Candidate Models Evaluated
@@ -16,11 +16,11 @@
 
 | Model Architecture | H=1 MAE | H=2 MAE | H=4 MAE | H=8 MAE | 80% Quantile Coverage | Mean Interval Width | Latency (ms) | Peak RAM (MB) | Latency Budget Met |
 | :--- | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: | :---: |
-| `Approved_LightGBM_v2.1.0` | **4.2176** | 4.3444 | 4.6840 | 5.5553 | 14.0% | 3.60 | **0.02 ms** | 1.5 MB | PASSED |
-| `Recursive_Autoregressive_LightGBM` | **4.2176** | 6.6254 | 8.8643 | 9.7258 | 14.0% | 3.60 | **0.15 ms** | 1.5 MB | PASSED |
-| `Temporal_Fusion_Transformer_TFT` | **3.9572** | 4.1137 | 4.4314 | 5.0856 | 25.0% | 4.57 | **0.01 ms** | 0.7 MB | PASSED |
-| `N_HiTS_Hierarchical_Synthesis` | **4.5610** | 4.7434 | 5.1083 | 5.8380 | 52.0% | 9.47 | **0.01 ms** | 0.5 MB | PASSED |
-| `PatchTST_Patch_Transformer` | **4.4249** | 4.5783 | 4.8882 | 5.5164 | 66.0% | 10.87 | **0.01 ms** | 0.3 MB | PASSED |
+| `Approved_LightGBM_v2.1.0` | **3.1065** | 3.2430 | 3.6030 | 4.5728 | 29.0% | 3.60 | **0.02 ms** | 1.5 MB | PASSED |
+| `Recursive_Autoregressive_LightGBM` | **3.1065** | 5.0646 | 8.1449 | 9.4780 | 29.0% | 3.60 | **0.14 ms** | 1.5 MB | PASSED |
+| `Temporal_Fusion_Transformer_TFT` | **4.6841** | 4.8644 | 5.2340 | 5.9831 | 28.0% | 4.71 | **0.01 ms** | 0.7 MB | PASSED |
+| `N_HiTS_Hierarchical_Synthesis` | **4.5400** | 4.7216 | 5.0847 | 5.8111 | 47.0% | 9.35 | **0.01 ms** | 0.5 MB | PASSED |
+| `PatchTST_Patch_Transformer` | **4.3105** | 4.4607 | 4.7663 | 5.3861 | 65.0% | 10.59 | **0.01 ms** | 0.3 MB | PASSED |
 
 ## 3. Operational Trade-Off Analysis
 
