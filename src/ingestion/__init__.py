@@ -13,6 +13,20 @@ from src.ingestion.validator import (
     IngestionResult,
     TransactionIngestionPipeline,
 )
+from src.ingestion.event_broker import (
+    BrokerSizingProfile,
+    EventBroker,
+    EventGateway,
+    InMemoryEventBroker,
+    RabbitMQEventBroker,
+    calculate_broker_sizing,
+    event_gateway,
+    QUEUE_TRANSACTIONS,
+    QUEUE_TELEMETRY,
+    QUEUE_DEAD_LETTER,
+    EXCHANGE_DIRECT,
+    EXCHANGE_DLX,
+)
 
 __all__ = [
     "PaymentMethod",
@@ -22,4 +36,16 @@ __all__ = [
     "TransactionStatus",
     "IngestionResult",
     "TransactionIngestionPipeline",
+    "BrokerSizingProfile",
+    "EventBroker",
+    "EventGateway",
+    "InMemoryEventBroker",
+    "RabbitMQEventBroker",
+    "calculate_broker_sizing",
+    "event_gateway",
+    "QUEUE_TRANSACTIONS",
+    "QUEUE_TELEMETRY",
+    "QUEUE_DEAD_LETTER",
+    "EXCHANGE_DIRECT",
+    "EXCHANGE_DLX",
 ]

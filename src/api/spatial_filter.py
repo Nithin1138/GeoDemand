@@ -21,11 +21,17 @@ Detection Architecture:
 from __future__ import annotations
 
 import logging
-from typing import List, Tuple
+import math
+from typing import List, Tuple, Optional
 import requests
 import h3
 
 logger = logging.getLogger(__name__)
+
+# OSRM availability circuit-breaker for offline/sandboxed environments
+_OSRM_AVAILABLE: bool = True
+_OSRM_CONSECUTIVE_FAILURES: int = 0
+MAX_OSRM_FAILURES: int = 2
 
 # ---------------------------------------------------------------------------
 # Regional Geometric Acceleration Cache
@@ -86,6 +92,30 @@ ALL_WATER_POLYGONS = [
 
 # In-memory evaluation cache for coordinates: (lat_round, lng_round) -> is_water
 _WATER_LOCATION_CACHE: dict[tuple[float, float], bool] = {}
+# In-memory evaluation cache for H3 cells: h3_cell -> is_water
+_WATER_CELL_CACHE: dict[str, bool] = {}
+
+
+def reset_spatial_filter_cache() -> None:
+    """Clear memory caches and reset network circuit breakers."""
+    global _OSRM_AVAILABLE, _OSRM_CONSECUTIVE_FAILURES
+    _WATER_LOCATION_CACHE.clear()
+    _WATER_CELL_CACHE.clear()
+    _OSRM_AVAILABLE = True
+    _OSRM_CONSECUTIVE_FAILURES = 0
+
+
+def is_valid_coordinate(lat: float, lng: float) -> bool:
+    """Validate latitude and longitude ranges and numeric validity."""
+    try:
+        if lat is None or lng is None:
+            return False
+        lat, lng = float(lat), float(lng)
+        if math.isnan(lat) or math.isnan(lng) or math.isinf(lat) or math.isinf(lng):
+            return False
+        return -90.0 <= lat <= 90.0 and -180.0 <= lng <= 180.0
+    except (TypeError, ValueError):
+        return False
 
 
 def point_in_polygon(lat: float, lng: float, polygon: List[Tuple[float, float]]) -> bool:
@@ -119,6 +149,11 @@ def is_water_location(lat: float, lng: float, timeout_s: float = 1.5) -> bool:
          away (or road lookup returns unroutable/error), the location is physically inside
          a body of water (ocean, river, lake, reservoir, swamp) or inaccessible terrain.
     """
+    global _OSRM_AVAILABLE, _OSRM_CONSECUTIVE_FAILURES
+
+    if not is_valid_coordinate(lat, lng):
+        return True
+
     key = (round(lat, 4), round(lng, 4))
     if key in _WATER_LOCATION_CACHE:
         return _WATER_LOCATION_CACHE[key]
@@ -130,16 +165,22 @@ def is_water_location(lat: float, lng: float, timeout_s: float = 1.5) -> bool:
             return True
 
     # Layer 2: Algorithmic road proximity & navigability check (works anywhere on Earth)
-    try:
-        url = f"https://router.project-osrm.org/nearest/v1/driving/{lng:.5f},{lat:.5f}"
-        resp = requests.get(url, timeout=timeout_s).json()
-        if resp.get("code") == "Ok" and resp.get("waypoints"):
-            dist = float(resp["waypoints"][0].get("distance", 0.0))
-            is_unroutable = dist > 180.0
-            _WATER_LOCATION_CACHE[key] = is_unroutable
-            return is_unroutable
-    except Exception as e:
-        logger.debug(f"Algorithmic road check skipped for ({lat}, {lng}): {e}")
+    if _OSRM_AVAILABLE:
+        try:
+            url = f"https://router.project-osrm.org/nearest/v1/driving/{lng:.5f},{lat:.5f}"
+            resp = requests.get(url, timeout=timeout_s).json()
+            if resp.get("code") == "Ok" and resp.get("waypoints"):
+                dist = float(resp["waypoints"][0].get("distance", 0.0))
+                is_unroutable = dist > 180.0
+                _WATER_LOCATION_CACHE[key] = is_unroutable
+                _OSRM_CONSECUTIVE_FAILURES = 0
+                return is_unroutable
+        except Exception as e:
+            _OSRM_CONSECUTIVE_FAILURES += 1
+            if _OSRM_CONSECUTIVE_FAILURES >= MAX_OSRM_FAILURES:
+                _OSRM_AVAILABLE = False
+                logger.debug("OSRM endpoint unreachable; switching to fast offline geometric mode.")
+            logger.debug(f"Algorithmic road check skipped for ({lat}, {lng}): {e}")
 
     _WATER_LOCATION_CACHE[key] = False
     return False
@@ -151,19 +192,51 @@ def is_water_cell(h3_cell: str) -> bool:
     Checks centroid and majority boundary vertices to prevent water cells
     while avoiding false-positives for waterfront urban commercial districts.
     """
+    if not h3_cell or not h3.is_valid_cell(h3_cell):
+        return True
+
+    if h3_cell in _WATER_CELL_CACHE:
+        return _WATER_CELL_CACHE[h3_cell]
+
     try:
         lat, lng = h3.cell_to_latlng(h3_cell)
         if is_water_location(lat, lng):
+            _WATER_CELL_CACHE[h3_cell] = True
             return True
 
         boundary = h3.cell_to_boundary(h3_cell)
         water_vertex_count = sum(1 for b_lat, b_lng in boundary if is_water_location(b_lat, b_lng))
         # If majority (4 or more out of 6) vertices are in water, reject as water cell
-        if water_vertex_count >= 4:
-            return True
+        is_water = water_vertex_count >= 4
+        _WATER_CELL_CACHE[h3_cell] = is_water
+        return is_water
     except Exception:
         pass
+    _WATER_CELL_CACHE[h3_cell] = False
     return False
+
+
+def is_accessible_location(
+    lat: float,
+    lng: float,
+    h3_cell: Optional[str] = None,
+    static_features: Optional[dict] = None,
+) -> bool:
+    """
+    Validate that a candidate location is accessible via navigable road infrastructure.
+    Checks that the location is not in water and has sufficient road connectivity.
+    """
+    if not is_valid_coordinate(lat, lng):
+        return False
+    if is_water_location(lat, lng):
+        return False
+    if h3_cell and is_water_cell(h3_cell):
+        return False
+    if static_features:
+        road_density = float(static_features.get("road_density", 0.5))
+        if road_density < 0.10:
+            return False
+    return True
 
 
 def is_suitable_vendor_cell(

@@ -22,3 +22,11 @@ holidays>=0.40
 
 # Environment
 python-dotenv>=1.0.0
+
+# Optimization & Distributed Messaging
+ortools>=9.8.0
+pika>=1.3.0
+
+# Testing & Client
+pytest>=8.0.0
+httpx>=0.27.0

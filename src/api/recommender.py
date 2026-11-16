@@ -67,14 +67,16 @@ FEATURE_FRIENDLY_NAMES = {
 
 
 class DemandModel:
-    """Wrapper around trained LightGBM model and calibrated Quantile heads."""
+    """Wrapper around Member 2's approved DemandModelPredictor and calibrated Quantile heads."""
     _instance: Optional["DemandModel"] = None
 
     def __init__(self):
+        self._predictor = None
         self._model = None
         self._p10_model = None
         self._p90_model = None
         self._feature_cols: list[str] = []
+        self._label_encoders: dict = {}
         self._meta: dict = {}
         self._loaded = False
 
@@ -87,19 +89,48 @@ class DemandModel:
         return cls._instance
 
     def _load(self):
-        model_path = MODELS_DIR / "demand_model.pkl"
-        if not model_path.exists():
+        # 1. Primary: Load Member 2's approved DemandModelPredictor (champion LGBM + Quantiles)
+        model_dir = MODELS_DIR / "lgbm_v1"
+        bundle_path = MODELS_DIR / "demand_model.pkl"
+
+        try:
+            from src.geodemand.models.inference import DemandModelPredictor
+            if (model_dir / "model.joblib").exists() or bundle_path.exists():
+                self._predictor = DemandModelPredictor(
+                    model_dir=model_dir if (model_dir / "model.joblib").exists() else None,
+                    bundle_path=bundle_path if bundle_path.exists() else None,
+                    validate_predictions=False,
+                )
+                self._model = self._predictor.model
+                self._p10_model = self._predictor.p10_model
+                self._p90_model = self._predictor.p90_model
+                self._feature_cols = self._predictor.feature_cols
+                self._label_encoders = self._predictor.label_encoders
+                self._meta = dict(self._predictor.metadata) if self._predictor.metadata else {"model_type": "lightgbm", "shap_enabled": True}
+                if "model_type" not in self._meta:
+                    self._meta["model_type"] = "lightgbm"
+                self._loaded = True
+                logger.info(
+                    f"DemandModel loaded successfully via DemandModelPredictor: "
+                    f"{self._meta.get('model_type', 'lightgbm')} with {len(self._feature_cols)} features."
+                )
+                return
+        except Exception as exc:
+            logger.warning(f"DemandModelPredictor initialization fallback: {exc}")
+
+        # 2. Fallback: Load raw demand_model.pkl bundle
+        if not bundle_path.exists():
             raise FileNotFoundError(
-                f"Trained model bundle not found at {model_path}. "
-                "Run: python3 src/models/train_demand_model.py"
+                f"Trained model bundle not found at {bundle_path} or {model_dir}. "
+                "Run: python scripts/train_model.py"
             )
 
         try:
-            with open(model_path, "rb") as f:
+            with open(bundle_path, "rb") as f:
                 bundle = pickle.load(f)
         except Exception:
             import joblib
-            bundle = joblib.load(model_path)
+            bundle = joblib.load(bundle_path)
 
         if isinstance(bundle, dict) and "model" in bundle:
             self._model = bundle["model"]
@@ -109,7 +140,6 @@ class DemandModel:
             self._label_encoders = bundle.get("label_encoders", {})
             self._meta = bundle.get("meta", {})
         else:
-            # Fallback legacy single model
             self._model = bundle
             self._feature_cols = [
                 "office_count", "college_count", "school_count", "hospital_count",
@@ -145,6 +175,9 @@ class DemandModel:
 
     def predict_batch(self, feature_rows: list[dict]) -> np.ndarray:
         """Predict expected_customer_count for a batch of feature dicts."""
+        if self._predictor is not None:
+            preds = self._predictor.predict(feature_rows)
+            return np.clip(np.round(preds), 0, 100).astype(int)
         X = self._build_feature_matrix(feature_rows)
         preds = self._model.predict(X)
         return np.clip(np.round(preds), 0, 100).astype(int)
@@ -154,6 +187,25 @@ class DemandModel:
         Calculate rigorous quantile intervals (P10, P50, P90).
         Uses dedicated quantile regression heads if available.
         """
+        if self._predictor is not None:
+            intervals = self._predictor.predict_with_interval([feature_row])
+            if intervals:
+                res = intervals[0]
+                p10 = max(0, int(round(res["p10"])))
+                p50 = max(p10, int(round(res["p50"])))
+                p90 = max(p50, int(round(res["p90"])))
+                spread = p90 - p10
+                uncertainty_level = "LOW" if spread <= 15 else "MODERATE" if spread <= 30 else "HIGH"
+                return {
+                    "p10": p10,
+                    "p50": p50,
+                    "p90": p90,
+                    "interval_spread": spread,
+                    "uncertainty_level": uncertainty_level,
+                    "certainty_level": uncertainty_level.capitalize(),
+                    "uncertainty_method": "quantile_regression" if self._p10_model is not None else "approximation",
+                }
+
         X = self._build_feature_matrix([feature_row])
         p50 = float(self._model.predict(X)[0])
         
@@ -239,68 +291,16 @@ class DemandModel:
 # Business Economics
 # ---------------------------------------------------------------------------
 
-def calculate_business_metrics(
-    expected_customers: int,
-    aov: float = DEFAULT_AOV_INR,
-    variable_cost_rate: float = DEFAULT_VARIABLE_COST_RATE,
-    fixed_cost_per_day: float = DEFAULT_FIXED_COST_PER_DAY_INR,
-    hours_per_day: float = DEFAULT_OPERATING_HOURS_PER_DAY,
-    fuel_cost: float = 0.0,
-    travel_time_minutes: float = 0.0,
-) -> dict:
-    """
-    Derive expected revenue, expected operating costs, and net expected hourly profit
-    from customer predictions based on configurable business assumptions.
-
-    Includes travel time operating window reduction & relocation-adjusted realized profit calculation:
-      travel_fraction = max(0.0, (60.0 - travel_time_minutes) / 60.0)
-      relocation_adjusted_realized_profit = candidate_predicted_profit * travel_fraction - fuel_cost
-    """
-    aov = float(aov) if aov is not None else DEFAULT_AOV_INR
-    variable_cost_rate = float(variable_cost_rate) if variable_cost_rate is not None else DEFAULT_VARIABLE_COST_RATE
-    fixed_cost_per_day = float(fixed_cost_per_day) if fixed_cost_per_day is not None else DEFAULT_FIXED_COST_PER_DAY_INR
-    hours_per_day = float(hours_per_day) if hours_per_day and hours_per_day > 0 else DEFAULT_OPERATING_HOURS_PER_DAY
-    travel_time_minutes = max(0.0, float(travel_time_minutes)) if travel_time_minutes is not None else 0.0
-    fuel_cost = max(0.0, float(fuel_cost)) if fuel_cost is not None else 0.0
-
-    # Step 1: Expected Revenue = Expected Customers * Average Spend (AOV)
-    revenue = round(expected_customers * aov, 2)
-
-    # Step 2: Expected Base Operating Costs = Variable COGS + Hourly Fixed Overhead
-    ingredient_cost = round(revenue * variable_cost_rate, 2)
-    hourly_fixed = round(fixed_cost_per_day / hours_per_day, 2)
-    base_operating_cost = round(ingredient_cost + hourly_fixed, 2)
-    total_operating_cost = round(base_operating_cost + fuel_cost, 2)
-
-    # Step 3: Candidate Predicted Profit = Expected Revenue - Base Operating Cost
-    candidate_predicted_profit = round(revenue - base_operating_cost, 2)
-    net_predicted_profit = round(revenue - total_operating_cost, 2)
-
-    # Step 4: Travel Fraction & Relocation-Adjusted Realized Profit Approximation
-    travel_fraction = round(max(0.0, (60.0 - travel_time_minutes) / 60.0), 4)
-    relocation_adjusted_realized_profit = round(candidate_predicted_profit * travel_fraction - fuel_cost, 2)
-
-    return {
-        "expected_customers": expected_customers,
-        "average_spend_inr": aov,
-        "average_order_value_inr": aov,
-        "expected_revenue_inr": revenue,
-        "expected_costs_inr": total_operating_cost,
-        "expected_operating_cost_inr": total_operating_cost,
-        "base_operating_cost_inr": base_operating_cost,
-        "expected_profit_inr": net_predicted_profit,
-        "candidate_predicted_profit_inr": candidate_predicted_profit,
-        "ingredient_cost_inr": ingredient_cost,
-        "fixed_cost_per_hour_inr": hourly_fixed,
-        "fuel_cost_inr": fuel_cost,
-        "travel_time_minutes": travel_time_minutes,
-        "travel_fraction": travel_fraction,
-        "relocation_adjusted_realized_profit_inr": relocation_adjusted_realized_profit,
-        "realized_next_hour_profit_inr": relocation_adjusted_realized_profit,
-        "variable_cost_rate": variable_cost_rate,
-        "fixed_cost_per_day_inr": fixed_cost_per_day,
-        "operating_hours_per_day": hours_per_day,
-    }
+from api.business_economics import (
+    calculate_business_metrics,
+    calculate_effective_demand,
+    calculate_revenue,
+    calculate_stock_cost,
+    calculate_hourly_fixed_cost,
+    calculate_fuel_cost,
+    calculate_travel_opportunity_cost,
+    evaluate_relocation_decision,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -422,68 +422,11 @@ def calculate_category_demand(raw_p50: int, vendor_category: str, features: dict
 
 
 # ---------------------------------------------------------------------------
-# Ranking
+# Ranking & Strategic Decision Engine
 # ---------------------------------------------------------------------------
 
-def _normalize(values: list[float]) -> list[float]:
-    if not values:
-        return values
-    mn, mx = min(values), max(values)
-    if mx == mn:
-        return [0.5] * len(values)
-    return [(v - mn) / (mx - mn) for v in values]
-
-
-def rank_candidates(candidates: list[dict], vendor_category: str = "food") -> list[dict]:
-    """
-    Multi-factor candidate ranking score:
-    When candidate category_affinity is present:
-      Score = 0.45 * profit_norm + 0.20 * demand_norm + 0.25 * affinity_norm - 0.10 * distance_norm - 0.05 * competition_norm
-    When candidate category_affinity is not present (e.g. synthetic test mocks):
-      Score = 0.60 * profit_norm + 0.25 * demand_norm - 0.10 * distance_norm - 0.05 * competition_norm
-    """
-    if not candidates:
-        return candidates
-
-    profits = [
-        c.get("relocation_adjusted_realized_profit_inr", c.get("realized_next_hour_profit_inr", c.get("expected_profit_inr", 0)))
-        for c in candidates
-    ]
-    demands = [c.get("expected_customers", 0) for c in candidates]
-    distances = [c.get("distance_km", 0) for c in candidates]
-    comp_scores = [c.get("competition_score", 0.3) for c in candidates]
-
-    p_norm = _normalize(profits)
-    d_norm = _normalize(demands)
-    dist_norm = _normalize(distances)
-    comp_norm = comp_scores
-
-    has_affinities = any("category_affinity" in c for c in candidates)
-    if has_affinities:
-        aff_norm = _normalize([c.get("category_affinity", 1.0) for c in candidates])
-        for i, c in enumerate(candidates):
-            c["recommendation_score"] = round(
-                0.45 * p_norm[i]
-                + 0.20 * d_norm[i]
-                + 0.25 * aff_norm[i]
-                - 0.10 * dist_norm[i]
-                - 0.05 * comp_norm[i],
-                4
-            )
-    else:
-        for i, c in enumerate(candidates):
-            c["recommendation_score"] = round(
-                0.60 * p_norm[i]
-                + 0.25 * d_norm[i]
-                - 0.10 * dist_norm[i]
-                - 0.05 * comp_norm[i],
-                4
-            )
-
-    ranked = sorted(candidates, key=lambda x: x["recommendation_score"], reverse=True)
-    for i, c in enumerate(ranked):
-        c["rank"] = i + 1
-    return ranked
+from api.ranking_engine import rank_candidates
+from api.decision_engine import evaluate_decision, select_top_recommendations
 
 
 # ---------------------------------------------------------------------------

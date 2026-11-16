@@ -18,9 +18,10 @@ from __future__ import annotations
 
 import logging
 import sys
-from datetime import datetime, timezone
+import uuid
+from datetime import datetime, timezone, timedelta
 from pathlib import Path
-from typing import Optional
+from typing import Optional, List, Dict, Any
 
 ROOT = Path(__file__).parent.parent.parent
 sys.path.insert(0, str(ROOT))
@@ -28,6 +29,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "data"))
 sys.path.insert(0, str(ROOT / "src" / "features"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
+sys.path.insert(0, str(ROOT / "src" / "fleet"))
 
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env", override=False)
@@ -35,7 +37,7 @@ load_dotenv(ROOT / ".env", override=False)
 
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException, Header, Depends, status
+from fastapi import FastAPI, HTTPException, Header, Depends, status, Request, Query, Response
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
@@ -72,19 +74,89 @@ from config.settings import (
 )
 import h3
 
+import hmac
+import os
+import time
+from fastapi.exceptions import RequestValidationError
+from api.security.errors import (
+    ErrorCode,
+    ERROR_CODE_METADATA,
+    StandardErrorResponse,
+    GeoDemandAPIError,
+    AuthenticationError,
+    ForbiddenError,
+    RateLimitExceededError,
+    ResourceNotFoundError,
+    ConflictError,
+    ProviderTimeoutError,
+    CircuitOpenError,
+)
+from api.reliability.logging import (
+    setup_structured_logging,
+    correlation_id_ctx,
+    request_id_ctx,
+    user_id_ctx,
+    vendor_id_ctx,
+    route_ctx,
+    get_correlation_id,
+    get_request_id,
+    sanitize_log_message,
+)
+from api.reliability.circuit_breaker import (
+    CircuitBreaker,
+    CircuitState,
+    global_circuit_breaker_registry,
+)
+from api.reliability.metrics import (
+    global_metrics_collector,
+    format_prometheus_metrics,
+)
+from api.security.rate_limiter import (
+    global_rate_limiter,
+)
+from api.security.auth import (
+    Role,
+    UserContext,
+    global_api_key_registry,
+    get_user_context,
+    require_role,
+    verify_reservation_ownership,
+)
+
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 logger = logging.getLogger(__name__)
 
 
-def verify_api_key(x_api_key: Optional[str] = Header(None, alias="X-API-Key")):
-    """Security helper to validate API key header if enabled."""
-    if REQUIRE_API_KEY:
-        if not x_api_key or (API_KEY and x_api_key != API_KEY):
+def verify_api_key(
+    x_api_key: Optional[str] = Header(None, alias="X-API-Key"),
+    authorization: Optional[str] = Header(None, alias="Authorization"),
+):
+    """Security helper to validate API key header timing-safely."""
+    candidate_key = x_api_key if isinstance(x_api_key, str) else None
+    auth_str = authorization if isinstance(authorization, str) else None
+    if not candidate_key and auth_str and auth_str.startswith("Bearer "):
+        candidate_key = auth_str[7:].strip()
+
+    req_api_key = os.getenv("REQUIRE_API_KEY", "false").lower() == "true" or REQUIRE_API_KEY
+    active_api_key = os.getenv("API_KEY") or API_KEY
+
+    if req_api_key:
+        if not candidate_key:
             raise HTTPException(
                 status_code=status.HTTP_401_UNAUTHORIZED,
-                detail="Invalid or missing API key. Provide a valid X-API-Key header.",
+                detail="Invalid or missing API key. Provide a valid X-API-Key or Authorization Bearer header.",
             )
-    return x_api_key
+        is_valid = False
+        if active_api_key and hmac.compare_digest(candidate_key, active_api_key):
+            is_valid = True
+        elif global_api_key_registry.validate_key(candidate_key) is not None:
+            is_valid = True
+        if not is_valid:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Invalid API key provided.",
+            )
+    return candidate_key
 
 
 
@@ -96,15 +168,91 @@ async def lifespan(app: FastAPI):
         _get_assembler()
     except Exception as e:
         logger.warning(f"Feature assembler init warning: {e}")
+    try:
+        from src.ingestion.event_broker import event_gateway
+        event_gateway.broker.start()
+        logger.info("Event Gateway and Broker consumers started.")
+    except Exception as e:
+        logger.warning(f"Failed to start Event Gateway broker: {e}")
+    try:
+        from api.providers.competition import competitor_refresh_scheduler
+        competitor_refresh_scheduler.start()
+        logger.info("Competitor refresh scheduler started.")
+    except Exception as e:
+        logger.warning(f"Failed to start competitor refresh scheduler: {e}")
     logger.info("Startup complete.")
     yield
     logger.info("GeoDemand AI API shutting down...")
+    try:
+        from api.providers.competition import competitor_refresh_scheduler
+        competitor_refresh_scheduler.stop()
+        logger.info("Competitor refresh scheduler stopped.")
+    except Exception as e:
+        logger.warning(f"Error stopping competitor refresh scheduler: {e}")
+    try:
+        from src.ingestion.event_broker import event_gateway
+        event_gateway.broker.stop()
+        logger.info("Event Gateway and Broker consumers stopped.")
+    except Exception as e:
+        logger.warning(f"Error stopping Event Gateway broker: {e}")
 
+
+OPENAPI_TAGS = [
+    {
+        "name": "System",
+        "description": "System liveness, public client config, and data source health & freshness telemetry.",
+    },
+    {
+        "name": "Location",
+        "description": "Geospatial resolution, H3 indexing (res 8), local timezone, and water exclusion check.",
+    },
+    {
+        "name": "Demand Forecasting",
+        "description": "Point-in-time demand estimation with calibrated quantiles (P10, P50, P90) and unit economics.",
+    },
+    {
+        "name": "Recommendations",
+        "description": "Real-time candidate ranking, travel-aware realized net uplift, and strategic relocation decisions.",
+    },
+    {
+        "name": "Scenario Simulation",
+        "description": "Sensitivity analysis exploring price, weather, and operational counterfactuals.",
+    },
+    {
+        "name": "Routing",
+        "description": "Real street network navigation geometry from OpenStreetMap OSRM.",
+    },
+    {
+        "name": "Shift Optimization",
+        "description": "Multi-stop daily shift planning and VRPTW itinerary optimization using Google OR-Tools.",
+    },
+    {
+        "name": "Fleet Management",
+        "description": "Multi-vendor fleet dispatch, cell capacity tracking, and atomic H3 reservations.",
+    },
+    {
+        "name": "Webhooks & Ingestion",
+        "description": "Payment webhook adapters (Razorpay, Paytm, PhonePe) and messaging channels (WhatsApp, Telegram) with dead-letter recovery.",
+    },
+    {
+        "name": "Event Broker",
+        "description": "Stream/event ingestion gateway, RabbitMQ/In-Memory broker status, and throughput sizing.",
+    },
+    {
+        "name": "Competition",
+        "description": "Category-aware competitor intelligence, Google Places & OSM Overpass providers, and spatial H3 aggregation.",
+    },
+    {
+        "name": "Notifications",
+        "description": "Notification trigger service, impending-rain alerts, event alerts, demand spikes, and multi-channel delivery (FCM, WhatsApp).",
+    },
+]
 
 app = FastAPI(
     title="GeoDemand AI",
-    description="Production-grade geospatial demand intelligence for mobile vendors",
+    description="Production-grade geospatial demand intelligence for mobile vendors in urban India.",
     version="2.1.0",
+    openapi_tags=OPENAPI_TAGS,
     lifespan=lifespan,
 )
 
@@ -114,6 +262,190 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Security, Rate Limiting & Observability Middleware
+# ---------------------------------------------------------------------------
+
+@app.middleware("http")
+async def security_and_observability_middleware(request: Request, call_next):
+    correlation_id = (
+        request.headers.get("X-Correlation-ID")
+        or request.headers.get("X-Request-ID")
+        or f"corr_{uuid.uuid4().hex[:12]}"
+    )
+    request_id = request.headers.get("X-Request-ID") or f"req_{uuid.uuid4().hex[:10]}"
+
+    token_c = correlation_id_ctx.set(correlation_id)
+    token_r = request_id_ctx.set(request_id)
+    token_rt = route_ctx.set(request.url.path)
+
+    # Resolve client identity for rate limiting & metrics
+    auth_header = request.headers.get("Authorization") or ""
+    api_key_hdr = request.headers.get("X-API-Key") or ""
+    candidate_key = None
+    if auth_header.startswith("Bearer "):
+        candidate_key = auth_header[7:].strip()
+    elif api_key_hdr:
+        candidate_key = api_key_hdr.strip()
+
+    client_id = candidate_key or (request.client.host if request.client else "127.0.0.1")
+
+    # Determine rate limiting tier
+    tier = "anonymous"
+    if "/v1/webhooks/" in request.url.path:
+        tier = "webhook"
+    elif candidate_key:
+        meta = global_api_key_registry.validate_key(candidate_key)
+        if meta:
+            tier = meta.get("role", Role.ANONYMOUS).value
+
+    default_enable_rl = "false" if ("PYTEST_CURRENT_TEST" in os.environ or "pytest" in sys.modules) else "true"
+    enable_rl = os.getenv("ENABLE_RATE_LIMITING", default_enable_rl).lower() == "true"
+    is_whitelisted_path = (
+        request.url.path.startswith("/static")
+        or request.url.path in ("/v1/system/ping", "/docs", "/openapi.json", "/favicon.ico")
+    )
+
+    allowed = True
+    remaining = 60
+    reset_s = 60
+    limit = 60
+
+    if enable_rl and not is_whitelisted_path:
+        allowed, remaining, reset_s = global_rate_limiter.check_rate_limit(client_id=client_id, role=tier)
+        limit = global_rate_limiter.get_limit_for_role(tier)
+        if not allowed:
+            global_metrics_collector.record_request(request.url.path, request.method, 429, 0.5)
+            err_resp = StandardErrorResponse(
+                error=ErrorCode.RATE_LIMIT_EXCEEDED.value,
+                message=f"Rate limit exceeded for tier '{tier}'. Maximum {limit} requests per minute.",
+                status_code=429,
+                correlation_id=correlation_id,
+                details={"tier": tier, "limit": limit, "retry_after_seconds": reset_s},
+            )
+            return JSONResponse(
+                status_code=429,
+                content=err_resp.model_dump(),
+                headers={
+                    "Retry-After": str(reset_s),
+                    "X-RateLimit-Limit": str(limit),
+                    "X-RateLimit-Remaining": "0",
+                    "X-RateLimit-Reset": str(reset_s),
+                    "X-Correlation-ID": correlation_id,
+                    "X-Request-ID": request_id,
+                },
+            )
+
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        global_metrics_collector.record_request(request.url.path, request.method, response.status_code, duration_ms)
+        response.headers["X-Correlation-ID"] = correlation_id
+        response.headers["X-Request-ID"] = request_id
+        if enable_rl and not is_whitelisted_path:
+            response.headers["X-RateLimit-Limit"] = str(limit)
+            response.headers["X-RateLimit-Remaining"] = str(max(0, remaining))
+            response.headers["X-RateLimit-Reset"] = str(reset_s)
+        return response
+    except Exception as exc:
+        duration_ms = (time.perf_counter() - start_time) * 1000.0
+        global_metrics_collector.record_request(request.url.path, request.method, 500, duration_ms)
+        raise exc
+    finally:
+        correlation_id_ctx.reset(token_c)
+        request_id_ctx.reset(token_r)
+        route_ctx.reset(token_rt)
+
+
+# ---------------------------------------------------------------------------
+# Standard Exception Handlers
+# ---------------------------------------------------------------------------
+
+@app.exception_handler(GeoDemandAPIError)
+async def geodemand_api_error_handler(request: Request, exc: GeoDemandAPIError):
+    cid = get_correlation_id()
+    resp = exc.to_response(correlation_id=cid)
+    headers = {"X-Correlation-ID": cid, "X-Request-ID": get_request_id()}
+    if isinstance(exc, RateLimitExceededError):
+        headers["Retry-After"] = str(exc.retry_after)
+    return JSONResponse(status_code=exc.status_code, content=resp.model_dump(), headers=headers)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    cid = get_correlation_id()
+    err_resp = StandardErrorResponse(
+        error=ErrorCode.VALIDATION_ERROR.value,
+        message="Request payload validation failed.",
+        status_code=422,
+        correlation_id=cid,
+        details={"validation_errors": exc.errors()},
+    )
+    return JSONResponse(
+        status_code=422,
+        content=err_resp.model_dump(),
+        headers={"X-Correlation-ID": cid, "X-Request-ID": get_request_id()},
+    )
+
+
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request: Request, exc: HTTPException):
+    cid = get_correlation_id()
+    code_map = {
+        400: ErrorCode.BAD_REQUEST,
+        401: ErrorCode.AUTH_UNAUTHORIZED,
+        403: ErrorCode.AUTH_FORBIDDEN,
+        404: ErrorCode.RESOURCE_NOT_FOUND,
+        409: ErrorCode.CONFLICT,
+        422: ErrorCode.VALIDATION_ERROR,
+        429: ErrorCode.RATE_LIMIT_EXCEEDED,
+        502: ErrorCode.PROVIDER_UNAVAILABLE,
+        503: ErrorCode.CIRCUIT_BREAKER_OPEN,
+        504: ErrorCode.PROVIDER_TIMEOUT,
+    }
+    err_code = code_map.get(exc.status_code, ErrorCode.INTERNAL_ERROR).value
+    if isinstance(exc.detail, dict):
+        msg = exc.detail.get("message") or exc.detail.get("error") or str(exc.detail)
+        det = exc.detail
+    else:
+        msg = str(exc.detail)
+        det = str(exc.detail)
+
+    content = {
+        "error_code": err_code,
+        "error": err_code,
+        "message": msg,
+        "detail": det,
+        "status_code": exc.status_code,
+        "correlation_id": cid,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=content,
+        headers={"X-Correlation-ID": cid, "X-Request-ID": get_request_id()},
+    )
+
+
+@app.exception_handler(Exception)
+async def generic_exception_handler(request: Request, exc: Exception):
+    cid = get_correlation_id()
+    logger.error(f"Unhandled exception [correlation_id={cid}]: {exc}", exc_info=True)
+    err_resp = StandardErrorResponse(
+        error=ErrorCode.INTERNAL_ERROR.value,
+        message="An unexpected server error occurred. Please contact support with the correlation ID.",
+        status_code=500,
+        correlation_id=cid,
+        details={"path": request.url.path},
+    )
+    return JSONResponse(
+        status_code=500,
+        content=err_resp.model_dump(),
+        headers={"X-Correlation-ID": cid, "X-Request-ID": get_request_id()},
+    )
 
 # Serve dashboard
 DASHBOARD_DIR = ROOT / "dashboard"
@@ -178,57 +510,84 @@ def _load_model():
 
 
 # ---------------------------------------------------------------------------
-# Pydantic Schemas
+# Pydantic Request & Response Schemas (Imported & Re-exported from api.schemas)
 # ---------------------------------------------------------------------------
 
-class LocationRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-
-
-class RecommendationRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_id: Optional[str] = Field(None, json_schema_extra={"example": "V_001"})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    vendor_name: Optional[str] = None
-    average_order_value: float = Field(DEFAULT_AOV_INR, gt=0)
-    variable_cost_rate: float = Field(DEFAULT_VARIABLE_COST_RATE, gt=0, lt=1)
-    fixed_cost_per_day: float = Field(DEFAULT_FIXED_COST_PER_DAY_INR, gt=0)
-    inventory_capacity: int = Field(200, gt=0)
-    preparation_time: float = Field(5.0, gt=0)
-    search_radius_km: float = Field(3.0, gt=0, le=10)
-    top_n: int = Field(5, ge=1, le=10)
-    timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
-
-
-class PredictDemandRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    average_order_value: float = Field(DEFAULT_AOV_INR, gt=0)
-    variable_cost_rate: float = Field(DEFAULT_VARIABLE_COST_RATE, gt=0, lt=1)
-    fixed_cost_per_day: float = Field(DEFAULT_FIXED_COST_PER_DAY_INR, gt=0)
-    timestamp: Optional[datetime] = Field(None, json_schema_extra={"example": "2026-10-05T12:00:00Z"})
-
-
-
-class RecommendZonesRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    search_radius_km: float = Field(3.0, gt=0, le=10)
-    top_n: int = Field(5, ge=1, le=10)
-
-
-class ScenarioSimulateRequest(BaseModel):
-    latitude: float = Field(..., ge=-90, le=90, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180, le=180, json_schema_extra={"example": 80.6480})
-    vendor_category: str = Field("food", json_schema_extra={"example": "food"})
-    baseline_aov: float = Field(DEFAULT_AOV_INR, gt=0)
-    simulated_aov: float = Field(DEFAULT_AOV_INR * 1.5, gt=0)
-    simulated_weather_condition: Optional[str] = Field(None, json_schema_extra={"example": "rainy"})
-    simulated_hour: Optional[int] = Field(None, ge=0, le=23, json_schema_extra={"example": 13})
+from api.schemas import (
+    LocationRequest,
+    RecommendationRequest,
+    PredictDemandRequest,
+    BatchPredictDemandRequest,
+    RecommendZonesRequest,
+    ScenarioSimulateRequest,
+    RoutingRequest,
+    PingResponse,
+    SystemConfigResponse,
+    DataHealthResponse,
+    LocationContextResponse,
+    PredictDemandResponse,
+    BatchPredictDemandResponse,
+    ScenarioSimulateResponse,
+    LiveRecommendationsResponse,
+    OverallDecisionResponse,
+    RecommendationItem,
+    DemandHeatmapItem,
+    BusinessEconomicsResponse,
+    APICacheStatsResponse,
+    StreetRouteResponse,
+    ShiftPlanRequest,
+    ShiftPlanResponse,
+    FleetReserveCellRequest,
+    FleetReserveCellResponse,
+    FleetCancelReservationRequest,
+    FleetCancelReservationResponse,
+    CellOccupancyResponse,
+    FleetDispatchRequest,
+    FleetDispatchResponse,
+    FleetDispatchVendorItem,
+    DeadLetterRetryRequest,
+    VendorChannelRegisterRequest,
+    BrokerPublishTestRequest,
+    BrokerStatusResponse,
+    DecisionVerdict,
+    CompetitorItemResponse,
+    CellCompetitionResponse,
+    CompetitorRefreshRequest,
+    CompetitorRefreshResponse,
+    NotificationPreferencesRequest,
+    NotificationPreferencesResponse,
+    NotificationTriggerCheckRequest,
+    NotificationTriggerCheckResponse,
+    NotificationDispatchRequest,
+    NotificationDispatchResponse,
+)
+from notifications.notification_engine import notification_service
+from notifications.models import (
+    NotificationPreferences,
+    NotificationMessage,
+    NotificationChannel,
+    DeliveryStatus,
+    AlertType,
+    AlertSeverity,
+    RelocationDetails,
+    ForecastFreshnessMetadata,
+)
+from api.cache import api_response_cache, generate_cache_key
+from api.scenario_simulation import ScenarioSimulator
+from api.business_economics import FUEL_PRICE_INR_PER_LITRE
+from optimization.shift_optimizer import ShiftOptimizer
+from fleet.fleet_manager import FleetManager, Vendor, VendorStatus, ReservationStatus
+from api.webhooks import (
+    webhook_service,
+    dead_letter_queue,
+    vendor_channel_registry,
+    WHATSAPP_VERIFY_TOKEN,
+)
+from src.ingestion.event_broker import (
+    calculate_broker_sizing,
+    event_gateway,
+    BrokerSizingProfile,
+)
 
 
 
@@ -238,7 +597,7 @@ class ScenarioSimulateRequest(BaseModel):
 # Endpoints
 # ---------------------------------------------------------------------------
 
-@app.get("/")
+@app.get("/", include_in_schema=False)
 async def dashboard():
     index = DASHBOARD_DIR / "index.html"
     if index.exists():
@@ -246,13 +605,13 @@ async def dashboard():
     return JSONResponse({"message": "GeoDemand AI v2.1 — POST /v1/recommendations/live to begin"})
 
 
-@app.get("/v1/system/ping")
+@app.get("/v1/system/ping", response_model=PingResponse, tags=["System"], summary="Operational liveness ping")
 async def ping():
     return {"status": "ok", "service": "GeoDemand AI", "version": "2.1.0",
             "timestamp": datetime.now(timezone.utc).isoformat()}
 
 
-@app.get("/v1/system/config")
+@app.get("/v1/system/config", response_model=SystemConfigResponse, tags=["System"], summary="Public client configuration")
 async def system_config():
     """Returns public client configuration like Mapbox token and default coordinates."""
     import os
@@ -266,8 +625,8 @@ async def system_config():
     }
 
 
-@app.get("/v1/system/model-health")
-@app.get("/v1/model/health")
+@app.get("/v1/system/model-health", tags=["System"], summary="ML model health and drift telemetry")
+@app.get("/v1/model/health", tags=["System"], include_in_schema=False)
 async def model_health():
     """Returns complete ML model health, drift metrics, 7-day rolling performance, and retraining triggers."""
     from src.geodemand.monitoring.model_health import ModelHealthProvider
@@ -276,7 +635,7 @@ async def model_health():
     return rep.to_dict()
 
 
-@app.get("/v1/system/data-health")
+@app.get("/v1/system/data-health", response_model=DataHealthResponse, tags=["System"], summary="Data source health and freshness telemetry")
 async def data_health():
     """Returns provenance and freshness status for all data sources."""
     competition, traffic, events, _ = _get_providers()
@@ -319,26 +678,745 @@ async def data_health():
     }
 
 
-@app.get("/v1/routing/route")
-@app.post("/v1/routing/route")
+@app.get("/v1/system/cache-stats", response_model=APICacheStatsResponse, tags=["System"], summary="API response cache health and telemetry")
+async def cache_stats():
+    """Inspect memory cache size, hits, misses, and hit ratio."""
+    return api_response_cache.get_stats()
+
+
+@app.get("/v1/system/metrics", tags=["System"], summary="API latency rolling percentiles and Prometheus telemetry")
+async def system_metrics(
+    format: Optional[str] = Query(None, description="Export format: 'prometheus' or 'json'"),
+    request: Request = None,
+):
+    """
+    Returns API operational latency percentiles (p50, p90, p95, p99), error rates,
+    and throughput metrics in standard JSON or Prometheus format.
+    """
+    accept = request.headers.get("accept", "") if request else ""
+    if format == "prometheus" or "text/plain" in accept:
+        return Response(content=format_prometheus_metrics(), media_type="text/plain; version=0.0.4; charset=utf-8")
+    return global_metrics_collector.get_metrics_summary()
+
+
+@app.get("/v1/system/circuit-breakers", tags=["System"], summary="Circuit breaker states, failure counters, and cooldowns")
+async def system_circuit_breakers():
+    """Returns active states (CLOSED, OPEN, HALF_OPEN) and trip metrics for all registered circuit breakers."""
+    return global_circuit_breaker_registry.get_all_metrics()
+
+
+@app.get("/v1/system/error-catalog", tags=["System"], summary="Catalogue of standardized error codes, causes, and recovery actions")
+async def system_error_catalog():
+    """Returns the comprehensive catalogue of standardized backend error codes and resolution guidance."""
+    return {
+        "catalog_version": "2.1.0",
+        "total_error_codes": len(ErrorCode),
+        "error_codes": {
+            code.value: ERROR_CODE_METADATA.get(code, {"description": "Standard API error"})
+            for code in ErrorCode
+        },
+    }
+
+
+@app.post("/v1/system/cache-clear", tags=["System"], summary="Clear API response cache")
+async def cache_clear(api_key: str = Depends(verify_api_key)):
+    """Evict all items from the API response cache."""
+    api_response_cache.clear()
+    return {"status": "ok", "message": "API response cache cleared successfully."}
+
+
+@app.get(
+    "/v1/system/broker-status",
+    response_model=BrokerStatusResponse,
+    tags=["System", "Event Broker"],
+    summary="Event Ingestion Gateway status, sizing benchmark, and broker metrics",
+)
+async def get_broker_status(
+    active_vendors: int = Query(3000, description="Hypothetical active vendors for sizing calculation"),
+    tx_per_vendor: float = Query(20.0, description="Avg transactions per vendor shift"),
+    shift_hours: float = Query(10.0, description="Shift duration in hours"),
+    telemetry_interval: float = Query(30.0, description="GPS telemetry interval in seconds"),
+):
+    """
+    Returns live broker gateway status, active AMQP/In-Memory broker telemetry,
+    and the volume measurement sizing evaluation comparing RabbitMQ vs. Kafka.
+    """
+    sizing = calculate_broker_sizing(
+        active_vendors=active_vendors,
+        tx_per_vendor_day=tx_per_vendor,
+        shift_hours=shift_hours,
+        telemetry_interval_sec=telemetry_interval,
+    )
+    status_data = event_gateway.get_status()
+    status_data["sizing_profile"] = sizing.to_dict()
+    return status_data
+
+
+@app.post(
+    "/v1/system/broker-publish-test",
+    tags=["System", "Event Broker"],
+    summary="Publish a test event into the broker gateway",
+)
+async def publish_test_event(
+    req: BrokerPublishTestRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Publishes a test transaction or telemetry ping to the ingestion gateway,
+    demonstrating event publication, asynchronous consumption, and idempotency.
+    """
+    if req.event_type == "telemetry":
+        success = event_gateway.publish_telemetry(
+            vendor_id=req.vendor_id,
+            latitude=req.latitude or 16.5062,
+            longitude=req.longitude or 80.6480,
+        )
+        return {
+            "status": "PUBLISHED" if success else "FAILED",
+            "event_type": "telemetry",
+            "vendor_id": req.vendor_id,
+            "broker_metrics": event_gateway.broker.get_metrics(),
+        }
+    else:
+        from src.ingestion.schema import TransactionRecord, TransactionLocation, PaymentMethod, TransactionStatus
+        tx_id = f"TEST-TX-{uuid.uuid4().hex[:8].upper()}"
+        rec = TransactionRecord(
+            transaction_id=tx_id,
+            vendor_id=req.vendor_id,
+            customer_id=f"CUST-{req.vendor_id}",
+            event_timestamp=datetime.now(timezone.utc),
+            amount_inr=req.amount_inr or 250.0,
+            payment_method=PaymentMethod.UPI,
+            status=TransactionStatus.COMPLETED,
+            location=TransactionLocation(latitude=req.latitude or 16.5062, longitude=req.longitude or 80.6480),
+            source="test:broker_publish_test",
+        )
+        success = event_gateway.publish_transaction(rec, idempotency_key=f"test:{tx_id}")
+        return {
+            "status": "PUBLISHED" if success else "FAILED",
+            "event_type": "transaction",
+            "transaction_id": tx_id,
+            "vendor_id": req.vendor_id,
+            "broker_metrics": event_gateway.broker.get_metrics(),
+        }
+
+
+@app.get("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (GET)")
+@app.post("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (POST)")
 async def get_street_route(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float):
     """Returns real street road navigation route coordinates [[lat, lng], ...] for map rendering."""
     provider = RoutingProviderFactory.get_provider()
     return provider.get_route_geometry(origin_lat, origin_lng, dest_lat, dest_lng)
 
 
-@app.post("/v1/location/context")
+@app.post("/v1/routes/shift-plan", response_model=ShiftPlanResponse, tags=["Shift Optimization"], summary="Multi-stop daily shift planning and VRPTW itinerary optimization")
+async def shift_plan(req: ShiftPlanRequest, api_key: str = Depends(verify_api_key)):
+    """
+    Generate an optimal multi-stop itinerary for an 8–12 hour vendor shift using Google OR-Tools:
+    - Enforces shift start and end times
+    - Enforces minimum dwell times and commercial time windows
+    - Accounts for travel time, distance, fuel expenses, and setup/teardown overhead
+    - Maximizes expected shift net profit over staying put
+    """
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    cache_key = generate_cache_key("shift_plan", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
+
+    # Generate candidate zones around origin
+    rec_req = RecommendationRequest(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        search_radius_km=req.search_radius_km,
+        top_n=10,
+    )
+    rec_res = await recommendations_live(rec_req, api_key=api_key)
+    candidates = rec_res.get("recommendations", [])
+
+    optimizer = ShiftOptimizer()
+    plan = optimizer.optimize_shift(
+        origin_lat=req.latitude,
+        origin_lng=req.longitude,
+        candidates=candidates,
+        vendor_category=req.vendor_category,
+        shift_start_time=req.shift_start_time,
+        shift_duration_hours=req.shift_duration_hours,
+        max_relocation_stops=req.max_relocation_stops,
+        min_dwell_time_minutes=req.min_dwell_time_minutes,
+        setup_time_minutes=req.setup_time_minutes,
+        teardown_time_minutes=req.teardown_time_minutes,
+        average_order_value=req.average_order_value,
+        fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+    )
+
+    api_response_cache.set(cache_key, plan, ttl_seconds=60)
+    return plan
+
+
+# ---------------------------------------------------------------------------
+# Fleet Management Endpoints
+# ---------------------------------------------------------------------------
+
+fleet_manager = FleetManager()
+
+
+@app.post("/v1/fleet/reserve-cell", response_model=FleetReserveCellResponse, tags=["Fleet Management"], summary="Reserve an H3 cell with capacity enforcement")
+async def fleet_reserve_cell(req: FleetReserveCellRequest, api_key: str = Depends(verify_api_key)):
+    """
+    Atomically reserve a trading spot in an H3 cell.
+    - Enforces total cell physical capacity and category limits
+    - Supports soft reservations with TTL auto-expiration or hard confirmed reservations
+    - Prevents double-booking and concurrent conflict races
+    """
+    ok, res, msg = fleet_manager.reserve_cell(
+        vendor_id=req.vendor_id,
+        h3_cell=req.h3_cell,
+        vendor_category=req.vendor_category,
+        duration_minutes=req.duration_minutes,
+        is_soft=req.is_soft,
+        ttl_minutes=req.ttl_minutes,
+        deposit_amount_inr=req.deposit_amount_inr,
+        fleet_id=req.fleet_id,
+    )
+    if not ok or not res:
+        return {
+            "status": "REJECTED",
+            "reservation_id": None,
+            "vendor_id": req.vendor_id,
+            "h3_cell": req.h3_cell,
+            "vendor_category": req.vendor_category,
+            "is_soft": req.is_soft,
+            "expires_at": None,
+            "slot_start": None,
+            "slot_end": None,
+            "message": msg,
+            "rejection_reason": msg,
+        }
+
+    return {
+        "status": "CONFIRMED",
+        "reservation_id": res.reservation_id,
+        "vendor_id": res.vendor_id,
+        "h3_cell": res.h3_cell,
+        "vendor_category": res.category,
+        "is_soft": res.is_soft,
+        "expires_at": res.expires_at.isoformat(),
+        "slot_start": res.slot_start.isoformat(),
+        "slot_end": res.slot_end.isoformat(),
+        "message": msg,
+        "rejection_reason": None,
+    }
+
+
+@app.post("/v1/fleet/cancel-reservation", response_model=FleetCancelReservationResponse, tags=["Fleet Management"], summary="Cancel an active or pending reservation")
+async def fleet_cancel_reservation(
+    req: FleetCancelReservationRequest,
+    api_key: str = Depends(verify_api_key),
+    user_ctx: UserContext = Depends(get_user_context),
+):
+    """Cancels a reservation and immediately frees up cell capacity with ownership validation."""
+    # Enforce role-based access control and reservation ownership
+    res = fleet_manager.get_reservation(req.reservation_id)
+    eff_ctx = user_ctx if isinstance(user_ctx, UserContext) else None
+    if res and eff_ctx and eff_ctx.api_key:
+        if eff_ctx.role not in (Role.FLEET_MANAGER, Role.ADMIN):
+            target_vid = eff_ctx.vendor_id or req.vendor_id
+            if target_vid and res.vendor_id != target_vid:
+                raise ForbiddenError(
+                    message=f"Vendor '{target_vid}' is not authorized to cancel reservation '{req.reservation_id}' belonging to '{res.vendor_id}'.",
+                    error_code=ErrorCode.AUTH_RESERVATION_OWNERSHIP_VIOLATION,
+                    details={"reservation_id": req.reservation_id, "owner_vendor_id": res.vendor_id},
+                )
+
+    ok, msg, cell = fleet_manager.cancel_reservation(
+        reservation_id=req.reservation_id,
+        vendor_id=req.vendor_id,
+    )
+    return {
+        "status": "CANCELLED" if ok else "ERROR",
+        "reservation_id": req.reservation_id,
+        "released_h3_cell": cell,
+        "message": msg,
+    }
+
+
+@app.get("/v1/fleet/cell-occupancy", response_model=CellOccupancyResponse, tags=["Fleet Management"], summary="Get H3 cell occupancy, capacity, and demand multipliers")
+async def fleet_cell_occupancy(h3_cell: str, vendor_category: Optional[str] = None):
+    """Returns active capacity, current occupancies, and competition multipliers for an H3 cell."""
+    if not h3.is_valid_cell(h3_cell):
+        raise HTTPException(status_code=400, detail=f"Invalid H3 cell: {h3_cell}")
+    return fleet_manager.get_cell_occupancy(h3_cell, vendor_category)
+
+
+@app.post("/v1/fleet/dispatch", response_model=FleetDispatchResponse, tags=["Fleet Management"], summary="Coordinate multi-vendor dispatch minimizing clustering")
+async def fleet_dispatch(
+    req: FleetDispatchRequest,
+    api_key: str = Depends(verify_api_key),
+    user_ctx: UserContext = Depends(get_user_context),
+):
+    """
+    Coordinate dispatch across multiple vendors:
+    - Maximizes fleet-wide total net profit
+    - Applies non-linear demand cannibalization penalty D_eff = D_base / (1 + lambda * N)
+    - Minimizes unnecessary clustering across commercial zones
+    - Automatically creates soft reservations for dispatched spots
+    """
+    eff_ctx = user_ctx if isinstance(user_ctx, UserContext) else None
+    if eff_ctx and eff_ctx.api_key and eff_ctx.role not in (Role.FLEET_MANAGER, Role.ADMIN):
+        raise ForbiddenError(
+            message=f"Role '{eff_ctx.role.value}' is not authorized for fleet dispatch operations. Requires 'fleet_manager' or 'admin'.",
+            error_code=ErrorCode.AUTH_FORBIDDEN,
+        )
+    vendor_objs: List[Vendor] = []
+    for vi in req.vendors:
+        v = Vendor(
+            vendor_id=vi.vendor_id,
+            category=vi.vendor_category,
+            current_lat=vi.latitude,
+            current_lng=vi.longitude,
+            current_h3=vi.current_h3_cell or "",
+            status=VendorStatus(vi.status) if vi.status in [s.value for s in VendorStatus] else VendorStatus.IDLE,
+            average_order_value=vi.average_order_value,
+            fuel_efficiency_km_l=vi.fuel_efficiency_km_l,
+            speed_km_h=vi.speed_km_h,
+            fleet_id=req.fleet_id,
+        )
+        vendor_objs.append(v)
+
+    res = fleet_manager.dispatch_fleet(
+        vendors=vendor_objs,
+        candidate_cells=req.candidate_cells,
+        fleet_id=req.fleet_id,
+        search_radius_km=req.search_radius_km,
+        max_travel_km=req.max_travel_km,
+        fuel_price_inr=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+        auto_reserve_soft=req.auto_reserve_soft,
+        soft_reservation_ttl_minutes=req.soft_reservation_ttl_minutes,
+    )
+    return res
+
+
+@app.get("/v1/fleet/vendors", tags=["Fleet Management"], summary="List registered fleet vendors")
+async def fleet_list_vendors(fleet_id: Optional[str] = None, status: Optional[str] = None, api_key: str = Depends(verify_api_key)):
+    """Lists registered vendors with status and active reservation references."""
+    stat_enum = None
+    if status:
+        try:
+            stat_enum = VendorStatus(status.upper())
+        except ValueError:
+            pass
+    vendors = fleet_manager.list_vendors(fleet_id=fleet_id, status=stat_enum)
+    return [v.to_dict() for v in vendors]
+
+
+# ---------------------------------------------------------------------------
+# Competitor Intelligence Endpoints
+# ---------------------------------------------------------------------------
+
+@app.get("/v1/competitors/cell/{h3_cell}", response_model=CellCompetitionResponse, tags=["Competition"], summary="Get competitor intelligence and breakdown for an H3 cell")
+async def get_cell_competitors(
+    h3_cell: str,
+    vendor_category: Optional[str] = Query("food", description="Target vendor category to evaluate"),
+    provider: Optional[str] = Query(None, description="Optional override: 'google_places', 'osm_overpass', 'osm', or 'synthetic'"),
+):
+    """
+    Retrieves commercial competitors mapped to an H3 cell:
+    - Resolves competitors via Google Places, OSM Overpass, or local OSM snapshot
+    - Parses operating hours, daytime/nighttime availability, and category
+    - Aggregates competitor density and computes normalized competition score
+    - Returns data provenance and cache freshness metadata
+    """
+    if not h3.is_valid_cell(h3_cell):
+        raise HTTPException(status_code=400, detail=f"Invalid H3 cell index: {h3_cell}")
+
+    comp_prov = CompetitionProviderFactory.get_provider(provider) if provider else _get_providers()[0]
+    return comp_prov.get_cell_competition(h3_cell, vendor_category or "food")
+
+
+@app.post("/v1/competitors/refresh", response_model=CompetitorRefreshResponse, tags=["Competition"], summary="Trigger scheduled or on-demand competitor intelligence refresh")
+async def refresh_competitors(
+    req: CompetitorRefreshRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Refreshes competitor counts and operating hours across monitored H3 deployment zones or target cells.
+    """
+    from api.providers.competition import competitor_refresh_scheduler
+    res = competitor_refresh_scheduler.refresh_cells(h3_cells=req.h3_cells, force=req.force)
+    return res
+
+
+@app.get("/v1/competitors/scheduler-status", tags=["Competition"], summary="Get competitor background refresh scheduler status")
+async def get_competitor_scheduler_status(api_key: str = Depends(verify_api_key)):
+    """
+    Returns the operational state, refresh intervals, and monitored zone statistics of the competitor refresh engine.
+    """
+    from api.providers.competition import competitor_refresh_scheduler
+    return competitor_refresh_scheduler.get_status()
+
+
+# ---------------------------------------------------------------------------
+# Notification Trigger & Delivery Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/notifications/preferences", response_model=NotificationPreferencesResponse, tags=["Notifications"], summary="Register or update vendor notification preferences")
+async def update_notification_preferences(
+    req: NotificationPreferencesRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Registers or updates vendor alert delivery preferences:
+    - Opt-in / Opt-out settings
+    - Channels (FCM, WhatsApp)
+    - Device FCM registration token & WhatsApp phone number
+    - Impending rain, event surge, and demand spike toggles
+    - Minimum profit uplift threshold and quiet-hours window
+    """
+    channels_enum = []
+    for c in req.channels:
+        try:
+            channels_enum.append(NotificationChannel(c.upper()))
+        except ValueError:
+            pass
+
+    prefs = NotificationPreferences(
+        vendor_id=req.vendor_id,
+        opt_out=req.opt_out,
+        channels=channels_enum or [NotificationChannel.FCM, NotificationChannel.WHATSAPP],
+        fcm_token=req.fcm_token,
+        whatsapp_phone=req.whatsapp_phone,
+        alert_impending_rain=req.alert_impending_rain,
+        alert_event_demand=req.alert_event_demand,
+        alert_demand_spike=req.alert_demand_spike,
+        min_profit_uplift_inr=req.min_profit_uplift_inr,
+        quiet_hours_start=req.quiet_hours_start,
+        quiet_hours_end=req.quiet_hours_end,
+    )
+    saved = notification_service.update_preferences(prefs)
+    return {
+        "status": "UPDATED",
+        "preferences": saved.to_dict(),
+    }
+
+
+@app.get("/v1/notifications/preferences/{vendor_id}", tags=["Notifications"], summary="Get vendor notification preferences")
+async def get_notification_preferences(vendor_id: str, api_key: str = Depends(verify_api_key)):
+    """Returns the current alert preferences, quiet hours, and channel tokens for a vendor."""
+    prefs = notification_service.get_preferences(vendor_id)
+    return prefs.to_dict()
+
+
+@app.post("/v1/notifications/trigger-check", response_model=NotificationTriggerCheckResponse, tags=["Notifications"], summary="Evaluate alerts and trigger vendor notifications")
+async def check_notification_triggers(
+    req: NotificationTriggerCheckRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Evaluates real-time external signals for a vendor location:
+    - Impending-rain detection with physical canopy/shelter relocation guidance
+    - Event-demand spikes with footfall crowd attendance
+    - Customer demand surges with validated profit uplift
+    - Enforces forecast freshness and reliability safety invariants
+    """
+    # Evaluate live recommendations around location to supply candidate zones
+    rec_req = RecommendationRequest(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        top_n=5,
+        search_radius_km=3.0,
+    )
+    candidates: List[Dict[str, Any]] = []
+    try:
+        rec_res = await recommendations_live(rec_req, api_key=api_key)
+        candidates = rec_res.get("recommendations", [])
+    except Exception as e:
+        logger.debug(f"Candidate generation for notification trigger fallback: {e}")
+
+    result = notification_service.evaluate_and_trigger(
+        vendor_id=req.vendor_id,
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        candidate_zones=candidates,
+    )
+    return result
+
+
+@app.post("/v1/notifications/dispatch", response_model=NotificationDispatchResponse, tags=["Notifications"], summary="Directly dispatch an alert notification to a vendor")
+async def dispatch_notification(
+    req: NotificationDispatchRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Dispatches a structured alert message to a vendor via FCM and/or WhatsApp:
+    - Validates relocation parameters (departure time, arrival time, profit uplift)
+    - Verifies forecast freshness
+    - Enforces deduplication and quiet-hours filters
+    """
+    now = datetime.now(timezone.utc)
+    notif_id = f"NOTIF-{uuid.uuid4().hex[:8].upper()}"
+
+    relocation = None
+    if req.destination_h3_cell:
+        freshness = ForecastFreshnessMetadata(
+            source_type="real_live",
+            source_name="open_meteo",
+            is_reliable=True,
+            reliability_reason="Verified live forecast",
+        )
+        t_min = req.travel_time_minutes or 6
+        relocation = RelocationDetails(
+            destination_h3_cell=req.destination_h3_cell,
+            destination_name=req.destination_name or "Target Commercial Zone",
+            distance_km=req.distance_km or 1.2,
+            travel_time_minutes=t_min,
+            expected_profit_uplift_inr=req.expected_profit_uplift_inr or 50.0,
+            recommended_departure_time=(now + timedelta(minutes=5)).strftime("%H:%M"),
+            expected_arrival_time=(now + timedelta(minutes=5 + t_min)).strftime("%H:%M"),
+            is_move_recommended=True,
+            forecast_freshness=freshness,
+        )
+
+    override_channel = None
+    if req.channel:
+        try:
+            override_channel = NotificationChannel(req.channel.upper())
+        except ValueError:
+            pass
+
+    try:
+        a_type = AlertType(req.alert_type.upper())
+    except ValueError:
+        a_type = AlertType.GENERAL_ALERT
+
+    try:
+        sev = AlertSeverity(req.severity.upper())
+    except ValueError:
+        sev = AlertSeverity.INFO
+
+    message = NotificationMessage(
+        notification_id=notif_id,
+        vendor_id=req.vendor_id,
+        alert_type=a_type,
+        severity=sev,
+        title=req.title,
+        body=req.body,
+        relocation=relocation,
+        created_at=now,
+        expires_at=now + timedelta(minutes=45),
+        idempotency_key=f"{req.vendor_id}:{a_type.value}:{req.destination_h3_cell or 'none'}:{now.strftime('%Y%m%d%H')}",
+    )
+
+    records = notification_service.dispatch_notification(
+        message=message,
+        override_channel=override_channel,
+        force=req.force,
+    )
+
+    return {
+        "status": "DISPATCHED" if any(r.status == DeliveryStatus.DELIVERED for r in records) else "PROCESSED",
+        "notification_id": notif_id,
+        "vendor_id": req.vendor_id,
+        "records": [r.to_dict() for r in records],
+    }
+
+
+@app.get("/v1/notifications/history/{vendor_id}", tags=["Notifications"], summary="Get vendor notification delivery history")
+async def get_vendor_notification_history(
+    vendor_id: str,
+    limit: int = Query(50, ge=1, le=200),
+    api_key: str = Depends(verify_api_key),
+):
+    """Returns past alert dispatches, channels, recipients, and delivery statuses for a vendor."""
+    records = notification_service.get_vendor_history(vendor_id, limit=limit)
+    return [r.to_dict() for r in records]
+
+
+@app.get("/v1/notifications/delivery-status/{notification_id}", tags=["Notifications"], summary="Track notification delivery status")
+async def get_notification_delivery_status(notification_id: str, api_key: str = Depends(verify_api_key)):
+    """Tracks multi-channel delivery records for a specific notification ID."""
+    records = notification_service.get_notification_status(notification_id)
+    return [r.to_dict() for r in records]
+
+
+# ---------------------------------------------------------------------------
+# Payment & Messaging Webhook Endpoints
+# ---------------------------------------------------------------------------
+
+@app.post("/v1/webhooks/payments/razorpay", tags=["Webhooks & Ingestion"], summary="Razorpay payment webhook callback")
+async def webhook_razorpay(request: Request):
+    """
+    Ingest real-time Razorpay payment events (payment.captured, order.paid, refund.processed).
+    - Validates HMAC-SHA256 signature via X-Razorpay-Signature
+    - Implements idempotency to safely ignore duplicate webhook retries
+    - Forwards sanitized transaction record to Member 1's ingestion pipeline
+    """
+    raw_body = await request.body()
+    headers = dict(request.headers)
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    result = webhook_service.process_payment_webhook("razorpay", raw_body, headers, parsed_json)
+    if result.get("status") == "REJECTED" and result.get("error") == "SIGNATURE_VERIFICATION_FAILED":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/v1/webhooks/payments/paytm", tags=["Webhooks & Ingestion"], summary="Paytm payment webhook callback")
+async def webhook_paytm(request: Request):
+    """
+    Ingest real-time Paytm payment callbacks (TXN_SUCCESS, TXN_FAILURE).
+    - Validates Paytm checksum signature
+    - Implements idempotency protection against duplicate delivery
+    - Forwards sanitized record to Member 1's ingestion pipeline
+    """
+    raw_body = await request.body()
+    headers = dict(request.headers)
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    result = webhook_service.process_payment_webhook("paytm", raw_body, headers, parsed_json)
+    if result.get("status") == "REJECTED" and result.get("error") == "SIGNATURE_VERIFICATION_FAILED":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.post("/v1/webhooks/payments/phonepe", tags=["Webhooks & Ingestion"], summary="PhonePe payment webhook callback")
+async def webhook_phonepe(request: Request):
+    """
+    Ingest PhonePe server-to-server transaction callbacks.
+    - Validates X-VERIFY checksum signature (Base64 + SHA256 + Salt Key & Index)
+    - Implements idempotency protection
+    - Forwards sanitized record to Member 1's ingestion pipeline
+    """
+    raw_body = await request.body()
+    headers = dict(request.headers)
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    result = webhook_service.process_payment_webhook("phonepe", raw_body, headers, parsed_json)
+    if result.get("status") == "REJECTED" and result.get("error") == "SIGNATURE_VERIFICATION_FAILED":
+        return JSONResponse(status_code=400, content=result)
+    return result
+
+
+@app.get("/v1/webhooks/whatsapp", tags=["Webhooks & Ingestion"], summary="WhatsApp Business webhook verification challenge")
+async def webhook_whatsapp_verify(
+    hub_mode: Optional[str] = Query(None, alias="hub.mode"),
+    hub_challenge: Optional[str] = Query(None, alias="hub.challenge"),
+    hub_verify_token: Optional[str] = Query(None, alias="hub.verify_token"),
+):
+    """Handles Meta WhatsApp Business webhook subscription verification challenge."""
+    if hub_mode == "subscribe" and hub_verify_token == WHATSAPP_VERIFY_TOKEN:
+        return Response(content=hub_challenge or "", media_type="text/plain")
+    raise HTTPException(status_code=403, detail="WhatsApp verification challenge token mismatch")
+
+
+@app.post("/v1/webhooks/whatsapp", tags=["Webhooks & Ingestion"], summary="WhatsApp vendor sales reporting & GPS location webhook")
+async def webhook_whatsapp_event(request: Request):
+    """
+    Processes WhatsApp Business messages:
+    - Accepts text sales reports (e.g. 'SALE 350 INR 5 dosa')
+    - Accepts vendor live location pins
+    - Validates vendor identity mapped to WhatsApp sender number
+    - Ingests sales into pipeline and updates vendor location
+    """
+    raw_body = await request.body()
+    sig = request.headers.get("x-hub-signature-256")
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    return webhook_service.process_whatsapp_webhook(raw_body, sig, parsed_json)
+
+
+@app.post("/v1/webhooks/telegram", tags=["Webhooks & Ingestion"], summary="Telegram Bot vendor sales & location pin webhook")
+async def webhook_telegram_event(request: Request):
+    """
+    Processes Telegram Bot API updates:
+    - Accepts sales commands (e.g. '/sale 250')
+    - Accepts vendor location pins
+    - Validates vendor identity via Telegram user ID or username
+    """
+    token_header = request.headers.get("x-telegram-bot-api-secret-token")
+    try:
+        parsed_json = await request.json()
+    except Exception:
+        parsed_json = {}
+
+    return webhook_service.process_telegram_webhook(token_header, parsed_json)
+
+
+@app.get("/v1/webhooks/dead-letter", tags=["Webhooks & Ingestion"], summary="List Dead-Letter Queue unrecoverable webhook events")
+async def webhook_list_dead_letters(
+    provider: Optional[str] = None,
+    status: Optional[str] = None,
+    limit: int = Query(50, ge=1, le=200),
+    api_key: str = Depends(verify_api_key),
+):
+    """Inspects failed, unparseable, or unauthenticated webhook events stored in the Dead-Letter Queue."""
+    records = dead_letter_queue.list_records(provider=provider, status=status, limit=limit)
+    return [r.to_dict() for r in records]
+
+
+@app.post("/v1/webhooks/dead-letter/retry", tags=["Webhooks & Ingestion"], summary="Retry a failed event from the Dead-Letter Queue")
+async def webhook_retry_dead_letter(
+    req: DeadLetterRetryRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Replays and retries a failed webhook event from the Dead-Letter Queue."""
+    return webhook_service.retry_dead_letter_event(req.dlq_id)
+
+
+@app.post("/v1/webhooks/register-vendor-channel", tags=["Webhooks & Ingestion"], summary="Link WhatsApp phone number or Telegram ID to vendor identity")
+async def webhook_register_vendor_channel(
+    req: VendorChannelRegisterRequest,
+    api_key: str = Depends(verify_api_key),
+):
+    """Pairs a vendor ID with a WhatsApp mobile phone number or Telegram user identity."""
+    vendor_channel_registry.register(
+        vendor_id=req.vendor_id,
+        phone=req.phone,
+        telegram_id=req.telegram_id,
+    )
+    return {
+        "status": "REGISTERED",
+        "vendor_id": req.vendor_id,
+        "phone": req.phone,
+        "telegram_id": req.telegram_id,
+        "message": f"Channel successfully linked to vendor {req.vendor_id}",
+    }
+
+
+@app.post("/v1/location/context", response_model=LocationContextResponse, tags=["Location"], summary="GPS location context and H3 cell")
 async def location_context(req: LocationRequest):
     """GPS → H3 cell, timestamp, and location context."""
     ctx = get_location_context(req.latitude, req.longitude)
     return ctx.to_dict()
 
 
-@app.post("/v1/predict/demand")
+@app.post("/v1/predict/demand", response_model=PredictDemandResponse, tags=["Demand Forecasting"], summary="Demand prediction and unit economics")
 async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verify_api_key)):
     """Predict customer demand and business economics for a single location."""
     if _model_health["status"] not in ("loaded",):
         raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    cache_key = generate_cache_key("predict", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
 
     loc_ctx = get_location_context(req.latitude, req.longitude)
     weather_client = _get_weather_client()
@@ -356,6 +1434,8 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
         "average_order_value": req.average_order_value,
         "variable_cost_rate": req.variable_cost_rate,
         "fixed_cost_per_day": req.fixed_cost_per_day,
+        "inventory_capacity": getattr(req, "inventory_capacity", 200),
+        "preparation_time": getattr(req, "preparation_time", 5.0),
     }
 
     assembler = _get_assembler()
@@ -367,6 +1447,8 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
         event=event,
         decision_timestamp=now,
     )
+    if hasattr(assembler, "validate_features"):
+        assembler.validate_features(features)
 
     model = DemandModel.get()
     raw_uncertainty = model.predict_with_uncertainty(features)
@@ -394,7 +1476,10 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
         fixed_cost_per_day=req.fixed_cost_per_day,
     )
 
-    return {
+    model_ver = model.meta.get("model_version", "v2.1.0")
+    model_arch = model.meta.get("model_type", "lightgbm")
+
+    res = {
         "location": {
             "latitude": req.latitude,
             "longitude": req.longitude,
@@ -402,16 +1487,74 @@ async def predict_demand(req: PredictDemandRequest, api_key: str = Depends(verif
             "is_water": loc_ctx.is_water,
         },
         "vendor_category": req.vendor_category,
+        "prediction_timestamp": now.isoformat(),
+        "model_version": model_ver,
+        "model_type": model_arch,
         "prediction": {
             "expected_customers": expected_customers,
+            "p10": uncertainty["p10"],
+            "p50": uncertainty["p50"],
+            "p90": uncertainty["p90"],
             "confidence_interval": uncertainty,
+            "prediction_interval": uncertainty,
+            "category_affinity": category_affinity,
+            "prediction_timestamp": now.isoformat(),
+            "model_version": model_ver,
         },
         "economics": biz,
         "data_freshness": freshness,
     }
+    api_response_cache.set(cache_key, res, ttl_seconds=60)
+    return res
 
 
-@app.post("/v1/recommend/zones")
+@app.post("/v1/predict/batch", response_model=BatchPredictDemandResponse, tags=["Demand Forecasting"], summary="Batch demand prediction and unit economics")
+async def predict_batch(req: BatchPredictDemandRequest, api_key: str = Depends(verify_api_key)):
+    """Evaluate customer demand and unit economics for multiple vendor locations or profiles in batch (up to 50 items)."""
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    now = datetime.now(timezone.utc)
+    results = []
+    total_customers = 0
+    total_revenue = 0.0
+    total_profit = 0.0
+    best_idx = 0
+    best_profit = float("-inf")
+
+    for i, item in enumerate(req.items):
+        item_res = await predict_demand(item, api_key=api_key)
+        results.append(item_res)
+        cust = item_res["prediction"]["expected_customers"]
+        rev = item_res["economics"]["expected_revenue_inr"]
+        prof = item_res["economics"]["expected_profit_inr"]
+        total_customers += cust
+        total_revenue += rev
+        total_profit += prof
+        if prof > best_profit:
+            best_profit = prof
+            best_idx = i
+
+    avg_profit = round(total_profit / len(req.items), 2)
+
+    return {
+        "batch_id": f"batch_{now.strftime('%Y%m%d%H%M%S')}_{len(req.items)}",
+        "processed_at": now.isoformat(),
+        "count": len(results),
+        "results": results,
+        "summary": {
+            "total_locations": len(req.items),
+            "total_expected_customers": total_customers,
+            "total_expected_revenue_inr": round(total_revenue, 2),
+            "total_expected_profit_inr": round(total_profit, 2),
+            "average_profit_per_location_inr": avg_profit,
+            "best_location_index": best_idx,
+            "best_location_profit_inr": round(best_profit if best_profit != float("-inf") else 0.0, 2),
+        },
+    }
+
+
+@app.post("/v1/recommend/zones", response_model=LiveRecommendationsResponse, tags=["Recommendations"], summary="Target candidate zones within search radius")
 async def recommend_zones(req: RecommendZonesRequest, api_key: str = Depends(verify_api_key)):
     """Target high-demand candidate zones within radius."""
     rec_req = RecommendationRequest(
@@ -421,58 +1564,53 @@ async def recommend_zones(req: RecommendZonesRequest, api_key: str = Depends(ver
         search_radius_km=req.search_radius_km,
         top_n=req.top_n,
     )
-    return await recommendations_live(rec_req)
+    return await recommendations_live(rec_req, api_key=api_key)
 
 
-@app.post("/v1/scenario/simulate")
+@app.post("/v1/scenario/simulate", response_model=ScenarioSimulateResponse, tags=["Scenario Simulation"], summary="Simulate business impact under varied conditions")
 async def scenario_simulate(req: ScenarioSimulateRequest, api_key: str = Depends(verify_api_key)):
-    """Simulate business impact under varied AOV or weather scenario."""
-    base_res = await predict_demand(
-        PredictDemandRequest(
-            latitude=req.latitude,
-            longitude=req.longitude,
-            vendor_category=req.vendor_category,
-            average_order_value=req.baseline_aov,
-        ),
-        api_key=api_key,
+    """Simulate business impact under varied AOV, rainfall, competitor density, fuel price, category, or hour scenario without retraining."""
+    if _model_health["status"] not in ("loaded",):
+        raise HTTPException(status_code=503, detail="ML model not loaded")
+
+    cache_key = generate_cache_key("scenario", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
+
+    simulator = ScenarioSimulator(
+        model=DemandModel.get(),
+        assembler=_get_assembler(),
     )
-    sim_res = await predict_demand(
-        PredictDemandRequest(
-            latitude=req.latitude,
-            longitude=req.longitude,
-            vendor_category=req.vendor_category,
-            average_order_value=req.simulated_aov,
-        ),
-        api_key=api_key,
+    comp_prov, traffic_prov, event_prov, fuel_prov = _get_providers()
+    weather_client = _get_weather_client()
+
+    res = simulator.simulate(
+        latitude=req.latitude,
+        longitude=req.longitude,
+        vendor_category=req.vendor_category,
+        baseline_aov=req.baseline_aov,
+        simulated_aov=req.simulated_aov,
+        simulated_rainfall_mm=req.simulated_rainfall_mm,
+        simulated_is_rain=req.simulated_is_rain,
+        simulated_weather_condition=req.simulated_weather_condition,
+        simulated_competitor_count_delta=req.simulated_competitor_count_delta,
+        simulated_competition_score=req.simulated_competition_score,
+        simulated_fuel_price_inr=req.simulated_fuel_price_inr,
+        simulated_vendor_category=req.simulated_vendor_category,
+        simulated_hour=req.simulated_hour,
+        distance_km=req.distance_km if req.distance_km is not None else 1.5,
+        weather_client=weather_client,
+        competition_provider=comp_prov,
+        event_provider=event_prov,
+        fuel_provider=fuel_prov,
     )
-
-    base_profit = base_res["economics"]["expected_profit_inr"]
-    sim_profit = sim_res["economics"]["expected_profit_inr"]
-    profit_delta = round(sim_profit - base_profit, 2)
-    pct_change = round((profit_delta / max(abs(base_profit), 1)) * 100, 1)
-
-    return {
-        "baseline": {
-            "aov": req.baseline_aov,
-            "expected_customers": base_res["prediction"]["expected_customers"],
-            "expected_profit_inr": base_profit,
-        },
-        "scenario": {
-            "aov": req.simulated_aov,
-            "expected_customers": sim_res["prediction"]["expected_customers"],
-            "expected_profit_inr": sim_profit,
-        },
-        "simulation_delta": {
-            "profit_delta_inr": profit_delta,
-            "percentage_change": pct_change,
-        },
-        "explanation": f"Simulating an AOV shift from ₹{req.baseline_aov} to ₹{req.simulated_aov} results in a profit change of ₹{profit_delta:+.2f}/hr ({pct_change:+.1f}%).",
-    }
+    api_response_cache.set(cache_key, res, ttl_seconds=60)
+    return res
 
 
-
-@app.post("/v1/recommendations/live")
-async def recommendations_live(req: RecommendationRequest):
+@app.post("/v1/recommendations/live", response_model=LiveRecommendationsResponse, tags=["Recommendations"], summary="Full live vendor recommendation pipeline")
+async def recommendations_live(req: RecommendationRequest, api_key: str = Depends(verify_api_key)):
     """
     Full live recommendation pipeline:
     GPS → H3 → candidates → features → inference → business metrics → Top N
@@ -486,6 +1624,11 @@ async def recommendations_live(req: RecommendationRequest):
                 "model_status": _model_health,
             }
         )
+
+    cache_key = generate_cache_key("recommendations", req.model_dump())
+    cached_val = api_response_cache.get(cache_key)
+    if cached_val is not None:
+        return cached_val
 
     now = req.timestamp or datetime.now(timezone.utc)
     competition_prov, traffic_prov, event_prov, fuel_prov = _get_providers()
@@ -676,32 +1819,22 @@ async def recommendations_live(req: RecommendationRequest):
         c["profit_improvement_inr"] = realized_net_uplift
         c["profit_improvement_pct"] = improv_pct
 
-        # Multi-factor strategic classification (Net Realized Uplift + Destination Demand Superiority)
-        raw_profit_diff = cand_pred_profit - current_profit
-        lm_disp = c.get("landmark_display") or c.get("landmark_name") or "this spot"
+        # Multi-factor strategic classification via Decision Engine
+        from api.decision_engine import evaluate_decision
+        dec = evaluate_decision(c, current_cell_data)
 
-        if realized_net_uplift >= 40.0 or (raw_profit_diff >= 60.0 and realized_net_uplift >= -20.0):
-            c["decision_verdict"] = "RECOMMENDED_MOVE"
-            c["decision_action"] = "RECOMMENDED MOVE"
-            reason = f"Strong recommendation to relocate to {lm_disp} (+₹{realized_net_uplift:.0f}/hr net uplift, ~{travel_min} min drive)."
-        elif realized_net_uplift >= -10.0 or raw_profit_diff > 15.0:
-            c["decision_verdict"] = "CONSIDER_MOVE"
-            c["decision_action"] = "CONSIDER MOVE"
-            reason = f"Positive opportunity at {lm_disp} (+₹{realized_net_uplift:.0f}/hr net gain, ~{travel_min} min drive)."
-        else:
-            c["decision_verdict"] = "STAY_PUT"
-            c["decision_action"] = "STAY HERE"
-            reason = f"Staying put is comparable (+₹{realized_net_uplift:.0f}/hr net uplift within {travel_min} min drive)."
-
-        c["decision_rationale"] = reason
-        c["decision_reason"] = reason
-        c["decision"] = c["decision_verdict"]
-        c["reason"] = reason
-        c["current_profit"] = current_profit
-        c["recommended_profit"] = relocation_adjusted_realized_profit
-        c["profit_uplift"] = realized_net_uplift
-        c["travel_time"] = travel_min
-        c["distance"] = dist_km
+        c["decision_verdict"] = dec.decision_verdict
+        c["decision_action"] = dec.decision_action
+        c["decision_rationale"] = dec.decision_reason
+        c["decision_reason"] = dec.decision_reason
+        c["decision"] = dec.decision_verdict
+        c["reason"] = dec.decision_reason
+        c["current_profit"] = dec.current_profit
+        c["recommended_profit"] = dec.recommended_profit
+        c["profit_uplift"] = dec.realized_net_uplift_inr
+        c["travel_time"] = dec.travel_time_min
+        c["distance"] = dec.distance_km
+        c["is_move_recommended"] = dec.is_move_recommended
 
         valid_destinations.append(c)
 
@@ -867,7 +2000,7 @@ async def recommendations_live(req: RecommendationRequest):
         "profit": "derived",
     }
 
-    return {
+    res = {
         "request_id": f"rec_{now.strftime('%Y%m%d%H%M%S')}",
         "generated_at": now.isoformat(),
         "search_radius_km": req.search_radius_km,
@@ -913,3 +2046,5 @@ async def recommendations_live(req: RecommendationRequest):
             "note": "Demand is an ML estimate based on real-world contextual signals — not a live sensor count.",
         },
     }
+    api_response_cache.set(cache_key, res, ttl_seconds=60)
+    return res
