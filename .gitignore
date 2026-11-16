@@ -96,6 +96,7 @@ members-checklist*
 # MLOps & Tracking
 mlruns/
 mlflow.db
+*.db
 v2-plan2.md
 alekhya-checklist.md
 catboost_info/

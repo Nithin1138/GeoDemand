@@ -656,3 +656,125 @@ class ShiftPlanResponse(BaseModel):
     verdict: str = Field(..., description="RECOMMENDED_SHIFT, CONSIDER_SHIFT, or STAY_PUT_SHIFT")
     decision_reason: str = Field(..., description="Natural language strategic explanation")
     solver_telemetry: Dict[str, Any] = Field(..., description="OR-Tools solver status and solve time")
+
+
+# ===========================================================================
+# Fleet Management & Dispatch Schemas
+# ===========================================================================
+
+class FleetReserveCellRequest(BaseModel):
+    vendor_id: str = Field(..., min_length=1, max_length=64, description="Unique vendor ID")
+    h3_cell: str = Field(..., min_length=15, max_length=15, description="Target H3 resolution 8 cell")
+    vendor_category: str = Field(default="food", description="Vendor category: food, fruits, beverages, snacks, repair, salon")
+    duration_minutes: int = Field(default=60, ge=15, le=720, description="Reserved trading slot duration in minutes")
+    is_soft: bool = Field(default=True, description="True for provisional soft reservation with TTL expiry; False for confirmed hard reservation")
+    ttl_minutes: int = Field(default=15, ge=1, le=120, description="Soft reservation expiry TTL in minutes")
+    deposit_amount_inr: float = Field(default=0.0, ge=0.0, description="Optional security deposit in INR")
+    fleet_id: Optional[str] = Field(default=None, description="Optional fleet identifier")
+
+
+class FleetReserveCellResponse(BaseModel):
+    status: str = Field(..., description="CONFIRMED or REJECTED")
+    reservation_id: Optional[str] = Field(default=None, description="Unique reservation ID if confirmed")
+    vendor_id: str = Field(..., description="Vendor ID")
+    h3_cell: str = Field(..., description="Target H3 cell")
+    vendor_category: str = Field(..., description="Vendor category")
+    is_soft: bool = Field(..., description="Whether reservation is soft or hard")
+    expires_at: Optional[str] = Field(default=None, description="Expiration timestamp (ISO 8601)")
+    slot_start: Optional[str] = Field(default=None, description="Trading slot start timestamp (ISO 8601)")
+    slot_end: Optional[str] = Field(default=None, description="Trading slot end timestamp (ISO 8601)")
+    message: str = Field(..., description="Status explanation or rejection rationale")
+    rejection_reason: Optional[str] = Field(default=None, description="Specific error reason if rejected")
+
+
+class FleetCancelReservationRequest(BaseModel):
+    reservation_id: str = Field(..., description="Reservation ID to cancel")
+    vendor_id: Optional[str] = Field(default=None, description="Optional vendor ID verifying ownership")
+    reason: Optional[str] = Field(default="vendor_cancellation", description="Cancellation reason")
+
+
+class FleetCancelReservationResponse(BaseModel):
+    status: str = Field(..., description="CANCELLED or ERROR")
+    reservation_id: str = Field(..., description="Reservation ID")
+    released_h3_cell: Optional[str] = Field(default=None, description="H3 cell freed by cancellation")
+    message: str = Field(..., description="Detailed cancellation result")
+
+
+class CategoryOccupancyDetail(BaseModel):
+    category: str = Field(..., description="Vendor category")
+    active_count: int = Field(..., description="Current active vendors of this category in cell")
+    category_capacity: int = Field(..., description="Maximum category capacity for this cell")
+    available_capacity: int = Field(..., description="Available remaining category slots")
+    competition_lambda: float = Field(..., description="Competition cannibalization factor lambda")
+    effective_demand_multiplier: float = Field(..., description="Current demand scaling multiplier: 1/(1+lambda*N)")
+
+
+class CellOccupancyResponse(BaseModel):
+    h3_cell: str = Field(..., description="H3 cell index")
+    total_capacity: int = Field(..., description="Total physical vendor capacity")
+    total_active_occupancy: int = Field(..., description="Currently occupied / reserved slots")
+    available_capacity: int = Field(..., description="Remaining available vendor slots")
+    is_at_capacity: bool = Field(..., description="True if no available slots remain")
+    categories: Dict[str, CategoryOccupancyDetail] = Field(..., description="Per-category breakdown")
+    active_reservation_ids: List[str] = Field(..., description="List of currently active reservation IDs")
+
+
+class FleetDispatchVendorItem(BaseModel):
+    vendor_id: str = Field(..., description="Unique vendor identifier")
+    vendor_category: str = Field(default="food", description="Category: food, fruits, beverages, snacks, repair, salon")
+    latitude: float = Field(..., ge=-90.0, le=90.0, description="Current latitude")
+    longitude: float = Field(..., ge=-180.0, le=180.0, description="Current longitude")
+    current_h3_cell: Optional[str] = Field(default=None, description="Optional current H3 cell")
+    status: str = Field(default="IDLE", description="Vendor status: IDLE, OCCUPIED, OFFLINE")
+    average_order_value: Optional[float] = Field(default=None, ge=1.0, description="Category AOV override in INR")
+    fuel_efficiency_km_l: float = Field(default=35.0, ge=1.0, description="Vehicle fuel efficiency in km/L")
+    speed_km_h: float = Field(default=15.0, ge=1.0, description="Average transit speed in km/h")
+
+
+class FleetDispatchRequest(BaseModel):
+    fleet_id: Optional[str] = Field(default="default_fleet", description="Fleet identifier or independent")
+    vendors: List[FleetDispatchVendorItem] = Field(..., min_length=1, description="List of fleet vendors to dispatch")
+    candidate_cells: Optional[List[Dict[str, Any]]] = Field(default=None, description="Optional target candidate H3 zones")
+    search_radius_km: float = Field(default=5.0, ge=0.5, le=15.0, description="Dynamic candidate zone search radius in km")
+    max_travel_km: float = Field(default=5.0, ge=0.5, le=25.0, description="Maximum permitted travel distance in km")
+    fuel_price_inr: Optional[float] = Field(default=None, ge=50.0, le=200.0, description="Fuel price per litre in INR")
+    auto_reserve_soft: bool = Field(default=True, description="Automatically place soft reservations for dispatched vendors")
+    soft_reservation_ttl_minutes: int = Field(default=15, ge=5, le=60, description="Soft reservation TTL in minutes")
+
+
+class FleetAssignmentItem(BaseModel):
+    vendor_id: str = Field(..., description="Assigned vendor identifier")
+    vendor_category: str = Field(..., description="Vendor category")
+    origin_h3: str = Field(..., description="Starting H3 cell")
+    assigned_h3_cell: str = Field(..., description="Assigned destination H3 cell")
+    landmark_name: str = Field(..., description="Assigned landmark or commercial area")
+    travel_distance_km: float = Field(..., description="Travel road distance in km")
+    travel_time_minutes: float = Field(..., description="Estimated travel time in minutes")
+    fuel_cost_inr: float = Field(..., description="Estimated fuel consumption cost in INR")
+    base_demand_customers: float = Field(..., description="Base hourly customer demand")
+    effective_demand_customers: float = Field(..., description="Cannibalization-adjusted effective demand")
+    demand_sharing_penalty_customers: float = Field(..., description="Demand lost to co-located competition")
+    same_category_co_located: int = Field(..., description="Number of other same-category vendors in this cell")
+    expected_gross_revenue_inr: float = Field(..., description="Projected gross revenue for dispatch horizon in INR")
+    expected_cogs_inr: float = Field(..., description="Projected cost of goods sold in INR")
+    expected_net_profit_inr: float = Field(..., description="Projected net profit after fuel and opex in INR")
+    reservation_id: Optional[str] = Field(default=None, description="Soft reservation ID if auto-reserved")
+    dispatch_verdict: str = Field(default="DISPATCHED", description="DISPATCHED or IDLE")
+    dispatch_reason: str = Field(..., description="Strategic allocation justification")
+
+
+class FleetDispatchResponse(BaseModel):
+    dispatch_id: str = Field(..., description="Unique dispatch run identifier")
+    fleet_id: str = Field(..., description="Fleet identifier")
+    timestamp: str = Field(..., description="Dispatch execution timestamp (ISO 8601)")
+    total_vendors: int = Field(..., description="Total input vendors evaluated")
+    dispatched_count: int = Field(..., description="Number of vendors successfully dispatched")
+    idle_count: int = Field(..., description="Number of vendors unassigned / remaining idle")
+    fleet_total_revenue_inr: float = Field(..., description="Total projected fleet revenue in INR")
+    fleet_total_net_profit_inr: float = Field(..., description="Total projected fleet net profit after fuel in INR")
+    fleet_total_fuel_cost_inr: float = Field(..., description="Total fuel expense across fleet in INR")
+    assignments: List[FleetAssignmentItem] = Field(..., description="Vendor assignment details")
+    unassigned_vendors: List[Dict[str, Any]] = Field(..., description="Vendors that could not be profitably dispatched")
+    cluster_dispersion_ratio: float = Field(..., description="Ratio of unique zones to dispatched vendors (1.0 = perfect dispersion)")
+    dispatch_explanation: str = Field(..., description="Fleet dispatch summary explanation")
+

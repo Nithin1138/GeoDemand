@@ -28,6 +28,7 @@ sys.path.insert(0, str(ROOT / "src"))
 sys.path.insert(0, str(ROOT / "src" / "data"))
 sys.path.insert(0, str(ROOT / "src" / "features"))
 sys.path.insert(0, str(ROOT / "src" / "api"))
+sys.path.insert(0, str(ROOT / "src" / "fleet"))
 
 from dotenv import load_dotenv
 load_dotenv(ROOT / ".env", override=False)
@@ -130,6 +131,10 @@ OPENAPI_TAGS = [
         "name": "Shift Optimization",
         "description": "Multi-stop daily shift planning and VRPTW itinerary optimization using Google OR-Tools.",
     },
+    {
+        "name": "Fleet Management",
+        "description": "Multi-vendor fleet dispatch, cell capacity tracking, and atomic H3 reservations.",
+    },
 ]
 
 app = FastAPI(
@@ -227,12 +232,21 @@ from api.schemas import (
     StreetRouteResponse,
     ShiftPlanRequest,
     ShiftPlanResponse,
+    FleetReserveCellRequest,
+    FleetReserveCellResponse,
+    FleetCancelReservationRequest,
+    FleetCancelReservationResponse,
+    CellOccupancyResponse,
+    FleetDispatchRequest,
+    FleetDispatchResponse,
+    FleetDispatchVendorItem,
     DecisionVerdict,
 )
 from api.cache import api_response_cache, generate_cache_key
 from api.scenario_simulation import ScenarioSimulator
 from api.business_economics import FUEL_PRICE_INR_PER_LITRE
 from optimization.shift_optimizer import ShiftOptimizer
+from fleet.fleet_manager import FleetManager, Vendor, VendorStatus, ReservationStatus
 
 
 
@@ -380,6 +394,135 @@ async def shift_plan(req: ShiftPlanRequest, api_key: str = Depends(verify_api_ke
 
     api_response_cache.set(cache_key, plan, ttl_seconds=60)
     return plan
+
+
+# ---------------------------------------------------------------------------
+# Fleet Management Endpoints
+# ---------------------------------------------------------------------------
+
+fleet_manager = FleetManager()
+
+
+@app.post("/v1/fleet/reserve-cell", response_model=FleetReserveCellResponse, tags=["Fleet Management"], summary="Reserve an H3 cell with capacity enforcement")
+async def fleet_reserve_cell(req: FleetReserveCellRequest, api_key: str = Depends(verify_api_key)):
+    """
+    Atomically reserve a trading spot in an H3 cell.
+    - Enforces total cell physical capacity and category limits
+    - Supports soft reservations with TTL auto-expiration or hard confirmed reservations
+    - Prevents double-booking and concurrent conflict races
+    """
+    ok, res, msg = fleet_manager.reserve_cell(
+        vendor_id=req.vendor_id,
+        h3_cell=req.h3_cell,
+        vendor_category=req.vendor_category,
+        duration_minutes=req.duration_minutes,
+        is_soft=req.is_soft,
+        ttl_minutes=req.ttl_minutes,
+        deposit_amount_inr=req.deposit_amount_inr,
+        fleet_id=req.fleet_id,
+    )
+    if not ok or not res:
+        return {
+            "status": "REJECTED",
+            "reservation_id": None,
+            "vendor_id": req.vendor_id,
+            "h3_cell": req.h3_cell,
+            "vendor_category": req.vendor_category,
+            "is_soft": req.is_soft,
+            "expires_at": None,
+            "slot_start": None,
+            "slot_end": None,
+            "message": msg,
+            "rejection_reason": msg,
+        }
+
+    return {
+        "status": "CONFIRMED",
+        "reservation_id": res.reservation_id,
+        "vendor_id": res.vendor_id,
+        "h3_cell": res.h3_cell,
+        "vendor_category": res.category,
+        "is_soft": res.is_soft,
+        "expires_at": res.expires_at.isoformat(),
+        "slot_start": res.slot_start.isoformat(),
+        "slot_end": res.slot_end.isoformat(),
+        "message": msg,
+        "rejection_reason": None,
+    }
+
+
+@app.post("/v1/fleet/cancel-reservation", response_model=FleetCancelReservationResponse, tags=["Fleet Management"], summary="Cancel an active or pending reservation")
+async def fleet_cancel_reservation(req: FleetCancelReservationRequest, api_key: str = Depends(verify_api_key)):
+    """Cancels a reservation and immediately frees up cell capacity."""
+    ok, msg, cell = fleet_manager.cancel_reservation(
+        reservation_id=req.reservation_id,
+        vendor_id=req.vendor_id,
+    )
+    return {
+        "status": "CANCELLED" if ok else "ERROR",
+        "reservation_id": req.reservation_id,
+        "released_h3_cell": cell,
+        "message": msg,
+    }
+
+
+@app.get("/v1/fleet/cell-occupancy", response_model=CellOccupancyResponse, tags=["Fleet Management"], summary="Get H3 cell occupancy, capacity, and demand multipliers")
+async def fleet_cell_occupancy(h3_cell: str, vendor_category: Optional[str] = None):
+    """Returns active capacity, current occupancies, and competition multipliers for an H3 cell."""
+    if not h3.is_valid_cell(h3_cell):
+        raise HTTPException(status_code=400, detail=f"Invalid H3 cell: {h3_cell}")
+    return fleet_manager.get_cell_occupancy(h3_cell, vendor_category)
+
+
+@app.post("/v1/fleet/dispatch", response_model=FleetDispatchResponse, tags=["Fleet Management"], summary="Coordinate multi-vendor dispatch minimizing clustering")
+async def fleet_dispatch(req: FleetDispatchRequest, api_key: str = Depends(verify_api_key)):
+    """
+    Coordinate dispatch across multiple vendors:
+    - Maximizes fleet-wide total net profit
+    - Applies non-linear demand cannibalization penalty D_eff = D_base / (1 + lambda * N)
+    - Minimizes unnecessary clustering across commercial zones
+    - Automatically creates soft reservations for dispatched spots
+    """
+    vendor_objs: List[Vendor] = []
+    for vi in req.vendors:
+        v = Vendor(
+            vendor_id=vi.vendor_id,
+            category=vi.vendor_category,
+            current_lat=vi.latitude,
+            current_lng=vi.longitude,
+            current_h3=vi.current_h3_cell or "",
+            status=VendorStatus(vi.status) if vi.status in [s.value for s in VendorStatus] else VendorStatus.IDLE,
+            average_order_value=vi.average_order_value,
+            fuel_efficiency_km_l=vi.fuel_efficiency_km_l,
+            speed_km_h=vi.speed_km_h,
+            fleet_id=req.fleet_id,
+        )
+        vendor_objs.append(v)
+
+    res = fleet_manager.dispatch_fleet(
+        vendors=vendor_objs,
+        candidate_cells=req.candidate_cells,
+        fleet_id=req.fleet_id,
+        search_radius_km=req.search_radius_km,
+        max_travel_km=req.max_travel_km,
+        fuel_price_inr=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+        auto_reserve_soft=req.auto_reserve_soft,
+        soft_reservation_ttl_minutes=req.soft_reservation_ttl_minutes,
+    )
+    return res
+
+
+@app.get("/v1/fleet/vendors", tags=["Fleet Management"], summary="List registered fleet vendors")
+async def fleet_list_vendors(fleet_id: Optional[str] = None, status: Optional[str] = None, api_key: str = Depends(verify_api_key)):
+    """Lists registered vendors with status and active reservation references."""
+    stat_enum = None
+    if status:
+        try:
+            stat_enum = VendorStatus(status.upper())
+        except ValueError:
+            pass
+    vendors = fleet_manager.list_vendors(fleet_id=fleet_id, status=stat_enum)
+    return [v.to_dict() for v in vendors]
 
 
 @app.post("/v1/location/context", response_model=LocationContextResponse, tags=["Location"], summary="GPS location context and H3 cell")

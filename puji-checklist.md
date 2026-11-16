@@ -183,6 +183,37 @@
   - Optimization test suite: `tests/test_shift_optimization.py` (9/9 passed).
   - Shift optimizer report: `docs/shift_optimizer_report.md` & brain artifact.
 
+### 10. Phase 3.5C: Fleet Manager, Competition Sharing & Multi-Vendor Dispatch (Completed)
+- [x] **Fleet Manager Core (`src/fleet/fleet_manager.py`):**
+  - Defined vendor identity, category normalization, H3 cell resolution, and availability status transitions (`IDLE`, `RESERVED`, `DISPATCHED`, `OCCUPIED`, `OFFLINE`).
+  - Enforced total physical capacity ($C_{\text{total}}$) and category-specific capacity caps ($C_{\text{cat}}$) per H3 resolution 8 cell.
+- [x] **Competition Sharing & Non-Linear Cannibalization:**
+  - Implemented the roadmap formula: $D_{\text{effective}}(H) = \frac{D_{\text{base}}(H)}{1 + \lambda N_{\text{same category}}(H)}$.
+  - Configured category cannibalization coefficients ($\lambda=0.35$ for food, $0.40$ for snacks, $0.30$ for fruits, $0.25$ for beverages, $0.50$ for repair, $0.45$ for salon).
+  - Calculated explicit demand-sharing penalties ($\Delta D = D_{\text{base}} - D_{\text{effective}}$).
+- [x] **Reservation Engine & Atomic Concurrency Control:**
+  - Implemented soft H3 reservations (provisional with TTL auto-expiration) and hard reservations (confirmed trading windows).
+  - Implemented reservation cancellation immediately releasing cell capacity.
+  - Enforced conflict prevention: prohibited vendors from holding multiple overlapping active reservations.
+  - Secured thread-safe synchronization via `threading.RLock()` and SQLite relational persistence (`data/geodemand_fleet.db`).
+  - Stress-tested concurrency under 30 simultaneous worker threads (0 data races, exactly 1 winner for 1-capacity cell).
+- [x] **Multi-Vendor Fleet Dispatch Engine:**
+  - Maximized fleet-wide total net profit across all vendors considering road distance, travel time, and fuel consumption.
+  - Mitigated vendor clustering: diminishing returns from $D_{\text{effective}}$ naturally distribute vendors across distinct commercial zones (cluster dispersion ratio $\ge 0.75$).
+  - Supported independent single-cart operators and organized fleet networks.
+- [x] **Fleet API Endpoints (`src/api/app.py`):**
+  - `POST /v1/fleet/reserve-cell`: Atomically reserve an H3 cell.
+  - `POST /v1/fleet/cancel-reservation`: Cancel an active or pending reservation.
+  - `GET /v1/fleet/cell-occupancy`: Real-time capacity, occupancies, and demand multipliers.
+  - `POST /v1/fleet/dispatch`: Multi-vendor coordinated dispatch.
+  - `GET /v1/fleet/vendors`: List registered vendors and reservation state.
+- [x] **Deliverables Completed:**
+  - Fleet manager: `src/fleet/fleet_manager.py` & `src/api/fleet_manager.py`
+  - Fleet schemas: `src/api/schemas.py`
+  - API endpoints: `src/api/app.py`
+  - Fleet test suite: `tests/test_fleet_manager.py` (11/11 passed).
+  - Fleet manager report: `docs/fleet_manager_report.md` & brain artifact.
+
 ---
 
 ## 🏆 Completed Previously (V1 / Foundation)
