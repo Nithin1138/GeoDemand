@@ -548,7 +548,23 @@ class NotificationTriggerService:
         prefs = self.get_preferences(vendor_id)
         records: List[DeliveryRecord] = []
 
-        # 1. Check Opt-Out
+        # 1. Check Expiry
+        if message.is_expired(now):
+            logger.warning(f"Notification {message.notification_id} expired before dispatch.")
+            rec = DeliveryRecord(
+                record_id=f"EXP-{uuid.uuid4().hex[:8].upper()}",
+                notification_id=message.notification_id,
+                vendor_id=vendor_id,
+                channel=NotificationChannel.FCM,
+                recipient=prefs.fcm_token or "expired",
+                status=DeliveryStatus.EXPIRED,
+                error_message="Notification expired before dispatch",
+                failed_at=now,
+            )
+            self._record_delivery(rec)
+            return [rec]
+
+        # 2. Check Opt-Out
         if prefs.opt_out and not force:
             logger.info(f"Notification suppressed for vendor {vendor_id}: Opted out.")
             rec = DeliveryRecord(
@@ -564,7 +580,7 @@ class NotificationTriggerService:
             self._record_delivery(rec)
             return [rec]
 
-        # 2. Check Alert Type Preference
+        # 3. Check Alert Type Preference
         if not force:
             if message.alert_type == AlertType.IMPENDING_RAIN and not prefs.alert_impending_rain:
                 return [self._suppress(message, "Impending-rain alerts disabled in vendor preferences")]
@@ -573,7 +589,7 @@ class NotificationTriggerService:
             if message.alert_type == AlertType.DEMAND_SPIKE and not prefs.alert_demand_spike:
                 return [self._suppress(message, "Demand-spike alerts disabled in vendor preferences")]
 
-        # 3. Check Quiet Hours
+        # 4. Check Quiet Hours
         if not force and self._is_quiet_hours(prefs, now):
             # Only critical impending rain can break quiet hours
             if message.severity != AlertSeverity.CRITICAL:
@@ -590,22 +606,6 @@ class NotificationTriggerService:
                 )
                 self._record_delivery(rec)
                 return [rec]
-
-        # 4. Check Expiry
-        if message.is_expired(now):
-            logger.warning(f"Notification {message.notification_id} expired before dispatch.")
-            rec = DeliveryRecord(
-                record_id=f"EXP-{uuid.uuid4().hex[:8].upper()}",
-                notification_id=message.notification_id,
-                vendor_id=vendor_id,
-                channel=NotificationChannel.FCM,
-                recipient=prefs.fcm_token or "expired",
-                status=DeliveryStatus.EXPIRED,
-                error_message="Notification expired before dispatch",
-                failed_at=now,
-            )
-            self._record_delivery(rec)
-            return [rec]
 
         # 5. Duplicate Prevention (Idempotency Key Cooldown)
         if message.idempotency_key and not force:

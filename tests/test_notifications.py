@@ -381,6 +381,12 @@ def test_notification_suppressed_during_quiet_hours():
 
 def test_duplicate_notification_prevention():
     service = NotificationTriggerService()
+    # Disable quiet hours for test vendor so delivery succeeds at any hour
+    service.update_preferences(NotificationPreferences(
+        vendor_id="v_dup_test",
+        quiet_hours_start="",
+        quiet_hours_end="",
+    ))
     msg1 = NotificationMessage(
         notification_id="NOTIF-DUP-1",
         vendor_id="v_dup_test",

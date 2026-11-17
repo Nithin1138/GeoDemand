@@ -1,0 +1,554 @@
+{
+  "version": "v2.1.0",
+  "release_tag": "v2.1.0-prod",
+  "frozen_at": "2026-11-17T05:01:34.058212+00:00",
+  "openapi_version": "3.1.0",
+  "total_endpoints": 43,
+  "endpoint_catalog": [
+    {
+      "path": "/v1/competitors/cell/{h3_cell}",
+      "method": "GET",
+      "summary": "Get competitor intelligence and breakdown for an H3 cell",
+      "tags": [
+        "Competition"
+      ],
+      "operation_id": "get_cell_competitors_v1_competitors_cell__h3_cell__get"
+    },
+    {
+      "path": "/v1/competitors/refresh",
+      "method": "POST",
+      "summary": "Trigger scheduled or on-demand competitor intelligence refresh",
+      "tags": [
+        "Competition"
+      ],
+      "operation_id": "refresh_competitors_v1_competitors_refresh_post"
+    },
+    {
+      "path": "/v1/competitors/scheduler-status",
+      "method": "GET",
+      "summary": "Get competitor background refresh scheduler status",
+      "tags": [
+        "Competition"
+      ],
+      "operation_id": "get_competitor_scheduler_status_v1_competitors_scheduler_status_get"
+    },
+    {
+      "path": "/v1/fleet/cancel-reservation",
+      "method": "POST",
+      "summary": "Cancel an active or pending reservation",
+      "tags": [
+        "Fleet Management"
+      ],
+      "operation_id": "fleet_cancel_reservation_v1_fleet_cancel_reservation_post"
+    },
+    {
+      "path": "/v1/fleet/cell-occupancy",
+      "method": "GET",
+      "summary": "Get H3 cell occupancy, capacity, and demand multipliers",
+      "tags": [
+        "Fleet Management"
+      ],
+      "operation_id": "fleet_cell_occupancy_v1_fleet_cell_occupancy_get"
+    },
+    {
+      "path": "/v1/fleet/dispatch",
+      "method": "POST",
+      "summary": "Coordinate multi-vendor dispatch minimizing clustering",
+      "tags": [
+        "Fleet Management"
+      ],
+      "operation_id": "fleet_dispatch_v1_fleet_dispatch_post"
+    },
+    {
+      "path": "/v1/fleet/reserve-cell",
+      "method": "POST",
+      "summary": "Reserve an H3 cell with capacity enforcement",
+      "tags": [
+        "Fleet Management"
+      ],
+      "operation_id": "fleet_reserve_cell_v1_fleet_reserve_cell_post"
+    },
+    {
+      "path": "/v1/fleet/vendors",
+      "method": "GET",
+      "summary": "List registered fleet vendors",
+      "tags": [
+        "Fleet Management"
+      ],
+      "operation_id": "fleet_list_vendors_v1_fleet_vendors_get"
+    },
+    {
+      "path": "/v1/location/context",
+      "method": "POST",
+      "summary": "GPS location context and H3 cell",
+      "tags": [
+        "Location"
+      ],
+      "operation_id": "location_context_v1_location_context_post"
+    },
+    {
+      "path": "/v1/notifications/delivery-status/{notification_id}",
+      "method": "GET",
+      "summary": "Track notification delivery status",
+      "tags": [
+        "Notifications"
+      ],
+      "operation_id": "get_notification_delivery_status_v1_notifications_delivery_status__notification_id__get"
+    },
+    {
+      "path": "/v1/notifications/dispatch",
+      "method": "POST",
+      "summary": "Directly dispatch an alert notification to a vendor",
+      "tags": [
+        "Notifications"
+      ],
+      "operation_id": "dispatch_notification_v1_notifications_dispatch_post"
+    },
+    {
+      "path": "/v1/notifications/history/{vendor_id}",
+      "method": "GET",
+      "summary": "Get vendor notification delivery history",
+      "tags": [
+        "Notifications"
+      ],
+      "operation_id": "get_vendor_notification_history_v1_notifications_history__vendor_id__get"
+    },
+    {
+      "path": "/v1/notifications/preferences",
+      "method": "POST",
+      "summary": "Register or update vendor notification preferences",
+      "tags": [
+        "Notifications"
+      ],
+      "operation_id": "update_notification_preferences_v1_notifications_preferences_post"
+    },
+    {
+      "path": "/v1/notifications/preferences/{vendor_id}",
+      "method": "GET",
+      "summary": "Get vendor notification preferences",
+      "tags": [
+        "Notifications"
+      ],
+      "operation_id": "get_notification_preferences_v1_notifications_preferences__vendor_id__get"
+    },
+    {
+      "path": "/v1/notifications/trigger-check",
+      "method": "POST",
+      "summary": "Evaluate alerts and trigger vendor notifications",
+      "tags": [
+        "Notifications"
+      ],
+      "operation_id": "check_notification_triggers_v1_notifications_trigger_check_post"
+    },
+    {
+      "path": "/v1/predict/batch",
+      "method": "POST",
+      "summary": "Batch demand prediction and unit economics",
+      "tags": [
+        "Demand Forecasting"
+      ],
+      "operation_id": "predict_batch_v1_predict_batch_post"
+    },
+    {
+      "path": "/v1/predict/demand",
+      "method": "POST",
+      "summary": "Demand prediction and unit economics",
+      "tags": [
+        "Demand Forecasting"
+      ],
+      "operation_id": "predict_demand_v1_predict_demand_post"
+    },
+    {
+      "path": "/v1/recommend/zones",
+      "method": "POST",
+      "summary": "Target candidate zones within search radius",
+      "tags": [
+        "Recommendations"
+      ],
+      "operation_id": "recommend_zones_v1_recommend_zones_post"
+    },
+    {
+      "path": "/v1/recommendations/live",
+      "method": "POST",
+      "summary": "Full live vendor recommendation pipeline",
+      "tags": [
+        "Recommendations"
+      ],
+      "operation_id": "recommendations_live_v1_recommendations_live_post"
+    },
+    {
+      "path": "/v1/routes/shift-plan",
+      "method": "POST",
+      "summary": "Multi-stop daily shift planning and VRPTW itinerary optimization",
+      "tags": [
+        "Shift Optimization"
+      ],
+      "operation_id": "shift_plan_v1_routes_shift_plan_post"
+    },
+    {
+      "path": "/v1/routing/route",
+      "method": "GET",
+      "summary": "Road routing coordinates (GET)",
+      "tags": [
+        "Routing"
+      ],
+      "operation_id": "get_street_route_v1_routing_route_get"
+    },
+    {
+      "path": "/v1/routing/route",
+      "method": "POST",
+      "summary": "Road routing coordinates (POST)",
+      "tags": [
+        "Routing"
+      ],
+      "operation_id": "get_street_route_v1_routing_route_post"
+    },
+    {
+      "path": "/v1/scenario/simulate",
+      "method": "POST",
+      "summary": "Simulate business impact under varied conditions",
+      "tags": [
+        "Scenario Simulation"
+      ],
+      "operation_id": "scenario_simulate_v1_scenario_simulate_post"
+    },
+    {
+      "path": "/v1/system/broker-publish-test",
+      "method": "POST",
+      "summary": "Publish a test event into the broker gateway",
+      "tags": [
+        "System",
+        "Event Broker"
+      ],
+      "operation_id": "publish_test_event_v1_system_broker_publish_test_post"
+    },
+    {
+      "path": "/v1/system/broker-status",
+      "method": "GET",
+      "summary": "Event Ingestion Gateway status, sizing benchmark, and broker metrics",
+      "tags": [
+        "System",
+        "Event Broker"
+      ],
+      "operation_id": "get_broker_status_v1_system_broker_status_get"
+    },
+    {
+      "path": "/v1/system/cache-clear",
+      "method": "POST",
+      "summary": "Clear API response cache",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "cache_clear_v1_system_cache_clear_post"
+    },
+    {
+      "path": "/v1/system/cache-stats",
+      "method": "GET",
+      "summary": "API response cache health and telemetry",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "cache_stats_v1_system_cache_stats_get"
+    },
+    {
+      "path": "/v1/system/circuit-breakers",
+      "method": "GET",
+      "summary": "Circuit breaker states, failure counters, and cooldowns",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "system_circuit_breakers_v1_system_circuit_breakers_get"
+    },
+    {
+      "path": "/v1/system/config",
+      "method": "GET",
+      "summary": "Public client configuration",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "system_config_v1_system_config_get"
+    },
+    {
+      "path": "/v1/system/data-health",
+      "method": "GET",
+      "summary": "Data source health and freshness telemetry",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "data_health_v1_system_data_health_get"
+    },
+    {
+      "path": "/v1/system/error-catalog",
+      "method": "GET",
+      "summary": "Catalogue of standardized error codes, causes, and recovery actions",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "system_error_catalog_v1_system_error_catalog_get"
+    },
+    {
+      "path": "/v1/system/metrics",
+      "method": "GET",
+      "summary": "API latency rolling percentiles and Prometheus telemetry",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "system_metrics_v1_system_metrics_get"
+    },
+    {
+      "path": "/v1/system/model-health",
+      "method": "GET",
+      "summary": "ML model health and drift telemetry",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "model_health_v1_system_model_health_get"
+    },
+    {
+      "path": "/v1/system/ping",
+      "method": "GET",
+      "summary": "Operational liveness ping",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "ping_v1_system_ping_get"
+    },
+    {
+      "path": "/v1/webhooks/dead-letter",
+      "method": "GET",
+      "summary": "List Dead-Letter Queue unrecoverable webhook events",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_list_dead_letters_v1_webhooks_dead_letter_get"
+    },
+    {
+      "path": "/v1/webhooks/dead-letter/retry",
+      "method": "POST",
+      "summary": "Retry a failed event from the Dead-Letter Queue",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_retry_dead_letter_v1_webhooks_dead_letter_retry_post"
+    },
+    {
+      "path": "/v1/webhooks/payments/paytm",
+      "method": "POST",
+      "summary": "Paytm payment webhook callback",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_paytm_v1_webhooks_payments_paytm_post"
+    },
+    {
+      "path": "/v1/webhooks/payments/phonepe",
+      "method": "POST",
+      "summary": "PhonePe payment webhook callback",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_phonepe_v1_webhooks_payments_phonepe_post"
+    },
+    {
+      "path": "/v1/webhooks/payments/razorpay",
+      "method": "POST",
+      "summary": "Razorpay payment webhook callback",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_razorpay_v1_webhooks_payments_razorpay_post"
+    },
+    {
+      "path": "/v1/webhooks/register-vendor-channel",
+      "method": "POST",
+      "summary": "Link WhatsApp phone number or Telegram ID to vendor identity",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_register_vendor_channel_v1_webhooks_register_vendor_channel_post"
+    },
+    {
+      "path": "/v1/webhooks/telegram",
+      "method": "POST",
+      "summary": "Telegram Bot vendor sales & location pin webhook",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_telegram_event_v1_webhooks_telegram_post"
+    },
+    {
+      "path": "/v1/webhooks/whatsapp",
+      "method": "GET",
+      "summary": "WhatsApp Business webhook verification challenge",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_whatsapp_verify_v1_webhooks_whatsapp_get"
+    },
+    {
+      "path": "/v1/webhooks/whatsapp",
+      "method": "POST",
+      "summary": "WhatsApp vendor sales reporting & GPS location webhook",
+      "tags": [
+        "Webhooks & Ingestion"
+      ],
+      "operation_id": "webhook_whatsapp_event_v1_webhooks_whatsapp_post"
+    }
+  ],
+  "source_checksums": {
+    "api_app": "961059cc2042b1591e01cfb4030c86dbf9218b6e78dd556e87f16e2679452ead",
+    "api_schemas": "60fb1cbbac05b17091e3efbc76c623799211336e040b77cbac049d71566ae21b",
+    "api_recommender": "2c169d204249e1329b6053be6d07bc1d078756215986f1a7cc8e86853c113e05",
+    "shift_optimizer": "48e01f930d6fb9449566766465ed56b6db55bdfc402dd55e39cb5fa55d342d9a",
+    "fleet_manager": "e36444b4e775197383d544aa76688b173624913ee32ba8fe25a48c61caf7d0d4",
+    "security_errors": "2b23c0a539c36c2b8de1b3681544822d5578e4c316330d2120d0df6257230d61",
+    "security_auth": "a0ea680133e025f67667800ac3158c537f47b93174ec5dd8dab9a5e620d36cd4",
+    "security_rate_limiter": "37ec3766394812ba93d1377d5134b2ddba9b382cf76d15c37d4381ae9c3e59a8",
+    "reliability_resilience": "848001a3bd49f7f9eece27a9adff5b9693af5404d06ccc07d0779fbb07f3854f"
+  },
+  "subsystem_verifications": {
+    "authentication": {
+      "status": "VERIFIED",
+      "timing_safe_digest_verified": true,
+      "roles_configured": [
+        "ANONYMOUS",
+        "VENDOR",
+        "FLEET_MANAGER",
+        "ADMIN"
+      ],
+      "registered_api_keys": 3
+    },
+    "database_migrations": {
+      "status": "VERIFIED",
+      "atomic_commit_verified": true,
+      "atomic_rollback_verified": true,
+      "transaction_isolation": "SERIALIZABLE"
+    },
+    "provider_credentials": {
+      "status": "VERIFIED",
+      "credential_masking_active": true,
+      "secret_redaction_verified": true
+    },
+    "payment_integrations": {
+      "status": "VERIFIED",
+      "razorpay_signature_verifier": "ACTIVE",
+      "paytm_signature_verifier": "ACTIVE",
+      "phonepe_signature_verifier": "ACTIVE"
+    },
+    "reservation_consistency": {
+      "status": "VERIFIED",
+      "concurrency_lock_verified": true,
+      "max_capacity_enforced": true,
+      "successful_under_race": 0
+    },
+    "api_health_and_error_handling": {
+      "status": "VERIFIED",
+      "validation_errors_enveloped": true,
+      "not_found_handled": true
+    }
+  },
+  "smoke_test_results": {
+    "total_tested": 12,
+    "all_passed": true,
+    "total_duration_ms": 1062.26,
+    "results": [
+      {
+        "method": "GET",
+        "path": "/v1/system/ping",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 4.01,
+        "passed": true
+      },
+      {
+        "method": "GET",
+        "path": "/v1/system/data-health",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 3.03,
+        "passed": true
+      },
+      {
+        "method": "GET",
+        "path": "/v1/system/metrics",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 4.83,
+        "passed": true
+      },
+      {
+        "method": "GET",
+        "path": "/v1/system/circuit-breakers",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 3.04,
+        "passed": true
+      },
+      {
+        "method": "GET",
+        "path": "/v1/system/error-catalog",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 3.02,
+        "passed": true
+      },
+      {
+        "method": "GET",
+        "path": "/v1/system/model-health",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 15.0,
+        "passed": true
+      },
+      {
+        "method": "POST",
+        "path": "/v1/location/context",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 3.38,
+        "passed": true
+      },
+      {
+        "method": "POST",
+        "path": "/v1/predict/demand",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 6.14,
+        "passed": true
+      },
+      {
+        "method": "POST",
+        "path": "/v1/recommend/zones",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 5.01,
+        "passed": true
+      },
+      {
+        "method": "POST",
+        "path": "/v1/recommendations/live",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 5.04,
+        "passed": true
+      },
+      {
+        "method": "POST",
+        "path": "/v1/scenario/simulate",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 4.49,
+        "passed": true
+      },
+      {
+        "method": "GET",
+        "path": "/v1/fleet/cell-occupancy?h3_cell=8861892543fffff",
+        "status_code": 200,
+        "expected_status": 200,
+        "latency_ms": 2.97,
+        "passed": true
+      }
+    ]
+  },
+  "is_production_ready": true
+}
