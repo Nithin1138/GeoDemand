@@ -71,3 +71,4 @@ resource "aws_ecr_repository" "api" {
     Name = "geodemand-api-ecr"
   }
 }
+

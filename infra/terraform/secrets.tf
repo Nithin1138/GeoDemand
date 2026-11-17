@@ -23,3 +23,4 @@ resource "aws_secretsmanager_secret_version" "app_secrets" {
     PHONEPE_WEBHOOK_SECRET  = "phonepe_sec_prod_live"
   })
 }
+

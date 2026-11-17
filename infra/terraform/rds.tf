@@ -74,3 +74,4 @@ resource "aws_db_instance" "postgres" {
     Name = "geodemand-${var.environment}-postgres"
   }
 }
+

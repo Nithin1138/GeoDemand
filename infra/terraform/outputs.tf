@@ -47,3 +47,4 @@ output "secrets_manager_secret_arn" {
   description = "ARN of Secrets Manager holding API credentials"
   value       = aws_secretsmanager_secret.app_secrets.arn
 }
+

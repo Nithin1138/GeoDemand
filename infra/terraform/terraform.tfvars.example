@@ -25,3 +25,4 @@ ecs_app_memory         = 4096
 ecs_app_desired_count  = 2
 ecs_app_min_count      = 2
 ecs_app_max_count      = 10
+

@@ -59,3 +59,4 @@ resource "aws_cloudwatch_metric_alarm" "alb_5xx" {
     LoadBalancer = aws_lb.main.arn_suffix
   }
 }
+

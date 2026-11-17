@@ -1,7 +1,7 @@
 {
   "version": "v2.1.0",
   "release_tag": "v2.1.0-prod",
-  "frozen_at": "2026-11-17T14:05:48.025523+00:00",
+  "frozen_at": "2026-11-17T14:58:01.496860+00:00",
   "openapi_version": "3.1.0",
   "total_endpoints": 46,
   "endpoint_catalog": [
@@ -477,14 +477,14 @@
   "smoke_test_results": {
     "total_tested": 12,
     "all_passed": true,
-    "total_duration_ms": 1054.51,
+    "total_duration_ms": 1012.46,
     "results": [
       {
         "method": "GET",
         "path": "/v1/system/ping",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.0,
+        "latency_ms": 1.1,
         "passed": true
       },
       {
@@ -492,7 +492,7 @@
         "path": "/v1/system/data-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.79,
+        "latency_ms": 0.8,
         "passed": true
       },
       {
@@ -500,7 +500,7 @@
         "path": "/v1/system/metrics",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.97,
+        "latency_ms": 2.15,
         "passed": true
       },
       {
@@ -508,7 +508,7 @@
         "path": "/v1/system/circuit-breakers",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.69,
+        "latency_ms": 0.96,
         "passed": true
       },
       {
@@ -516,7 +516,7 @@
         "path": "/v1/system/error-catalog",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.87,
+        "latency_ms": 1.11,
         "passed": true
       },
       {
@@ -524,7 +524,7 @@
         "path": "/v1/system/model-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 4.14,
+        "latency_ms": 4.32,
         "passed": true
       },
       {
@@ -532,7 +532,7 @@
         "path": "/v1/location/context",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.94,
+        "latency_ms": 1.02,
         "passed": true
       },
       {
@@ -540,7 +540,7 @@
         "path": "/v1/predict/demand",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.22,
+        "latency_ms": 1.35,
         "passed": true
       },
       {
@@ -548,7 +548,7 @@
         "path": "/v1/recommend/zones",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.1,
+        "latency_ms": 1.22,
         "passed": true
       },
       {
@@ -556,7 +556,7 @@
         "path": "/v1/recommendations/live",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.95,
+        "latency_ms": 1.04,
         "passed": true
       },
       {
@@ -564,7 +564,7 @@
         "path": "/v1/scenario/simulate",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.93,
+        "latency_ms": 1.01,
         "passed": true
       },
       {
@@ -572,7 +572,7 @@
         "path": "/v1/fleet/cell-occupancy?h3_cell=8861892543fffff",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.67,
+        "latency_ms": 0.75,
         "passed": true
       }
     ]

@@ -106,3 +106,4 @@ variable "ecs_app_max_count" {
   description = "Maximum auto-scaling count for ECS tasks under peak load"
   default     = 10
 }
+

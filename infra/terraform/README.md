@@ -61,3 +61,4 @@ terraform output
 - **KMS Encryption:** All S3 buckets and RDS storage volumes use AES-256 encryption at rest.
 - **TLS In-Transit:** Redis ElastiCache enforces in-transit encryption (`rediss://`).
 - **Disaster Recovery:** RDS automated backups with 14-day retention and multi-AZ automated failover.
+

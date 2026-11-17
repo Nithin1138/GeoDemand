@@ -1,10 +1,11 @@
 /**
  * GeoDemand AI — Progressive Web App Service Worker
- * Version: 2.1.0-prod
- * Strategy: Cache-first for core shell assets, Network-first with graceful offline fallback for API requests.
+ * Version: 2.2.0-prod
+ * Strategy: Network-first for static assets with cache fallback (instant updates + offline resilience).
+ *           Network-first with JSON offline fallback for API endpoints.
  */
 
-const CACHE_NAME = 'geodemand-shell-v2.1.0';
+const CACHE_NAME = 'geodemand-shell-v2.2.0';
 const STATIC_ASSETS = [
   '/',
   '/static/style.css',
@@ -64,18 +65,14 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
-  // Static shell assets: Cache-first, fall back to network
+  // Static shell assets: Network-first, fall back to cache when offline
   event.respondWith(
-    caches.match(event.request).then((cachedResponse) => {
-      if (cachedResponse) {
-        return cachedResponse;
-      }
-      return fetch(event.request).then((networkResponse) => {
+    fetch(event.request)
+      .then((networkResponse) => {
         if (
           networkResponse &&
           networkResponse.status === 200 &&
-          event.request.method === 'GET' &&
-          (url.pathname.startsWith('/static/') || url.origin === location.origin)
+          event.request.method === 'GET'
         ) {
           const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME).then((cache) => {
@@ -83,7 +80,10 @@ self.addEventListener('fetch', (event) => {
           });
         }
         return networkResponse;
-      });
-    })
+      })
+      .catch(() => {
+        return caches.match(event.request);
+      })
   );
 });
+

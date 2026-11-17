@@ -640,19 +640,20 @@ async function planShiftItinerary() {
     const duration = Number($('shiftDurationHours').value);
     const maxStops = Number($('shiftMaxStops').value);
     const category = $('vendorCategory').value;
-    const aov = Number($('aov').value);
+
+    const today = new Date();
+    today.setHours(startHour, 0, 0, 0);
 
     const payload = {
-      vendor_id: $('vendorIdInput')?.value || 'vendor-001',
-      origin_lat: state.origin.lat,
-      origin_lng: state.origin.lng,
-      category: category,
-      average_order_value: aov,
-      shift_start_hour: startHour,
+      latitude: state.origin.lat,
+      longitude: state.origin.lng,
+      vendor_category: category,
+      shift_start_time: today.toISOString(),
       shift_duration_hours: duration,
-      max_stops: maxStops,
-      setup_time_min: 15,
-      teardown_time_min: 15
+      max_relocation_stops: maxStops,
+      min_dwell_time_minutes: 90,
+      setup_time_minutes: 15,
+      teardown_time_minutes: 15
     };
 
     const res = await fetch(`${API_BASE}/v1/routes/shift-plan`, {
@@ -663,57 +664,71 @@ async function planShiftItinerary() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      throw new Error(err.detail?.error || err.detail || 'Failed to compute shift plan');
+      const msg = err.detail?.message || err.detail?.error || (typeof err.detail === 'string' ? err.detail : 'Failed to compute shift plan');
+      throw new Error(msg);
     }
 
     const data = await res.json();
     resultsWrap.classList.remove('hidden');
 
-    $('shiftTotalProfit').textContent = money(data.total_shift_profit_inr || data.summary?.total_profit_inr || 0);
-    $('shiftTotalRevenue').textContent = money(data.total_shift_revenue_inr || data.summary?.total_revenue_inr || 0);
-    $('shiftTravelDistance').textContent = `${number(data.total_travel_distance_km || data.summary?.total_distance_km || 0, 1)} km`;
-    $('shiftTravelTime').textContent = `Transit: ${number(data.total_travel_time_min || data.summary?.total_travel_min || 0)} min`;
-    $('shiftStopsCount').textContent = `${data.stops?.length || data.itinerary?.length || 0} stops`;
+    const summary = data.summary || {};
+    $('shiftTotalProfit').textContent = money(summary.total_net_profit_inr || 0);
+    $('shiftTotalRevenue').textContent = money(summary.total_gross_revenue_inr || 0);
+    $('shiftTravelDistance').textContent = `${number(summary.total_travel_distance_km || 0, 1)} km`;
+    $('shiftTravelTime').textContent = `Transit: ${number(summary.total_transit_minutes || 0)} min`;
+    $('shiftStopsCount').textContent = `${data.itinerary?.length || summary.total_stops || 0} stops`;
 
-    const baselineProfit = data.baseline_stay_profit_inr || data.summary?.baseline_profit_inr;
-    if (baselineProfit != null) {
-      const uplift = (data.total_shift_profit_inr || 0) - baselineProfit;
-      $('shiftProfitUplift').textContent = `vs Stay: ${uplift >= 0 ? '+' : ''}${money(uplift)} uplift`;
-    }
+    const uplift = data.shift_net_uplift_inr || 0;
+    const upliftPct = data.shift_net_uplift_pct || 0;
+    $('shiftProfitUplift').textContent = `vs Stay: +${money(uplift)} (${number(upliftPct)}% uplift)`;
 
-    const stops = data.stops || data.itinerary || [];
+    const stops = data.itinerary || [];
     const timeline = $('shiftTimeline');
     timeline.replaceChildren();
 
     stops.forEach((stop, index) => {
       const el = document.createElement('div');
       el.className = `timeline-stop${index === 0 ? ' top-stop' : ''}`;
+      const name = stop.landmark_display || stop.landmark_name || `H3 Zone ${stop.h3_cell}`;
+      const arr = stop.arrival_formatted || stop.arrival_time?.slice(11, 16) || '—';
+      const dep = stop.departure_formatted || stop.departure_time?.slice(11, 16) || '—';
       el.innerHTML = `
-        <div class="timeline-badge">${index + 1}</div>
+        <div class="timeline-badge">${stop.stop_number || index + 1}</div>
         <div class="timeline-details">
           <div class="timeline-header">
-            <span class="timeline-cell">Stop #${index + 1} · H3 ${escapeHTML(stop.h3_cell || 'Zone')}</span>
-            <span class="timeline-window">${escapeHTML(stop.arrival_time || '')} – ${escapeHTML(stop.departure_time || '')} (${number(stop.dwell_duration_min || 60)}m dwell)</span>
+            <span class="timeline-cell">${escapeHTML(name)}</span>
+            <span class="timeline-window">${escapeHTML(arr)} – ${escapeHTML(dep)} (${number(stop.dwell_minutes || 90)}m trading)</span>
           </div>
           <div class="timeline-metrics">
-            <span>Est. Profit: <strong>${money(stop.expected_profit_inr || 0)}</strong></span>
-            <span>Demand: <strong>${number(stop.expected_customers || 0)} cust/hr</strong></span>
-            <span>Transit: <strong>${number(stop.travel_time_from_prev_min || 0)}m (${number(stop.distance_from_prev_km || 0, 1)}km)</strong></span>
+            <span>Net Profit: <strong>${money(stop.net_profit_inr || 0)}</strong></span>
+            <span>Est. Customers: <strong>${number(stop.expected_hourly_customers || 0)} / hr</strong></span>
+            <span>Next Leg: <strong>${number(stop.travel_to_next_stop_km || 0, 1)} km (${number(stop.travel_to_next_stop_minutes || 0)} min)</strong></span>
           </div>
         </div>
       `;
       timeline.appendChild(el);
     });
 
-    // Draw route polyline if coordinates available
-    if (state.map && data.route_coordinates?.length) {
+    // Draw route polyline and waypoint markers on map
+    if (state.map && stops.length > 0) {
       state.route.clearLayers();
-      L.polyline(data.route_coordinates, { color: '#28745b', weight: 4, opacity: 0.85 }).addTo(state.route);
-      state.map.fitBounds(L.polyline(data.route_coordinates).getBounds(), { padding: [30, 30] });
+      const coords = [[state.origin.lat, state.origin.lng], ...stops.map((s) => [s.latitude, s.longitude])];
+      L.polyline(coords, { color: '#28745b', weight: 4, opacity: 0.85 }).addTo(state.route);
+      stops.forEach((s) => {
+        L.marker([s.latitude, s.longitude], {
+          icon: L.divIcon({
+            className: '',
+            html: `<div class="rank-marker top" style="background:#153e35;border-color:#d7eb9e;">${s.stop_number}</div>`,
+            iconSize: [28, 28],
+            iconAnchor: [14, 28]
+          })
+        }).addTo(state.route);
+      });
+      state.map.fitBounds(L.polyline(coords).getBounds(), { padding: [40, 40] });
     }
     announce('Optimized shift plan generated successfully.');
   } catch (err) {
-    alert(`Shift Optimizer: ${err.message}`);
+    showError(`Shift Optimizer: ${err.message}`);
   } finally {
     btn.disabled = false;
     btn.innerHTML = `${icon('route')}Plan Optimized Shift Route`;
@@ -721,10 +736,10 @@ async function planShiftItinerary() {
 }
 
 async function checkFleetOccupancy() {
-  const cell = $('fleetH3Input').value.trim();
+  const cell = $('fleetH3Input').value.trim() || state.results?.recommendations?.[0]?.h3_cell || '';
   const display = $('fleetStatusDisplay');
   if (!cell) {
-    display.innerHTML = '<span style="color:var(--amber);">Please enter a valid H3 cell to inspect occupancy.</span>';
+    display.innerHTML = '<span style="color:var(--amber);">Please enter a valid H3 cell (or find recommendations first).</span>';
     return;
   }
   display.innerHTML = '<span class="status-dot status-loading"></span> Checking cell capacity...';
@@ -743,11 +758,11 @@ async function checkFleetOccupancy() {
 }
 
 async function reserveFleetCell() {
-  const cell = $('fleetH3Input').value.trim();
+  const cell = $('fleetH3Input').value.trim() || state.results?.recommendations?.[0]?.h3_cell || '';
   const vendorId = $('vendorIdInput').value.trim() || 'vendor-001';
   const display = $('fleetStatusDisplay');
   if (!cell) {
-    display.innerHTML = '<span style="color:var(--amber);">Please specify an H3 cell to reserve.</span>';
+    display.innerHTML = '<span style="color:var(--amber);">Please specify an H3 cell to reserve (or click a recommendation first).</span>';
     return;
   }
   display.innerHTML = '<span class="status-dot status-loading"></span> Locking cell reservation...';
@@ -758,17 +773,20 @@ async function reserveFleetCell() {
       body: JSON.stringify({
         vendor_id: vendorId,
         h3_cell: cell,
-        category: $('vendorCategory').value,
-        duration_hours: 2
+        vendor_category: $('vendorCategory').value,
+        duration_minutes: 60,
+        is_soft: true,
+        deposit_amount_inr: 0.0
       })
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail?.error || data.detail || 'Reservation rejected');
+    if (!res.ok) throw new Error(data.detail?.error || data.detail?.message || data.detail || 'Reservation rejected');
+    state.lastReservationId = data.reservation_id;
     display.innerHTML = `
       <span style="color:var(--green);font-weight:600;">✓ Reservation Confirmed!</span><br/>
       Reservation ID: <code>${escapeHTML(data.reservation_id || 'RES-ACTIVE')}</code> ·
       Cell: <code>${escapeHTML(cell)}</code> ·
-      Expires: ${escapeHTML(data.expires_at || 'In 2 hours')}
+      Expires: ${escapeHTML(data.slot_end || data.expires_at || 'In 60 minutes')}
     `;
   } catch (err) {
     display.innerHTML = `<span style="color:var(--red);">Reservation failed: ${escapeHTML(err.message)}</span>`;
@@ -784,7 +802,11 @@ async function cancelFleetReservation() {
     const res = await fetch(`${API_BASE}/v1/fleet/cancel-reservation`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vendor_id: vendorId, h3_cell: cell })
+      body: JSON.stringify({
+        reservation_id: state.lastReservationId || 'RES-MANUAL-001',
+        vendor_id: vendorId,
+        reason: 'vendor_cancellation'
+      })
     });
     const data = await res.json();
     display.innerHTML = `<span style="color:var(--secondary);">Reservation cleared for ${escapeHTML(vendorId)}.</span>`;
@@ -794,7 +816,7 @@ async function cancelFleetReservation() {
 }
 
 async function recordPosTransaction() {
-  const amount = Number($('posAmount').value);
+  const amount = Number($('posAmount').value) || 150;
   const paymentMode = $('posPaymentMode').value;
   const category = $('posCategory').value;
   const receipt = $('posReceipt');
@@ -804,25 +826,35 @@ async function recordPosTransaction() {
   receipt.innerHTML = '<span class="status-dot status-loading"></span> Submitting transaction to Feature Store...';
 
   try {
+    const txId = `POS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
+    const payload = {
+      transaction_id: txId,
+      vendor_id: vendorId,
+      amount_inr: amount,
+      payment_method: paymentMode,
+      category: category,
+      items_count: 1,
+      location: {
+        latitude: state.origin.lat,
+        longitude: state.origin.lng
+      },
+      event_timestamp: new Date().toISOString()
+    };
+
     const res = await fetch(`${API_BASE}/v1/telemetry/transactions`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        vendor_id: vendorId,
-        amount_inr: amount,
-        payment_method: paymentMode,
-        category: category,
-        latitude: state.origin.lat,
-        longitude: state.origin.lng,
-        timestamp: new Date().toISOString()
-      })
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'geodemand-prod-live-key'
+      },
+      body: JSON.stringify(payload)
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail?.error || data.detail || 'Ingestion failed');
+    if (!res.ok) throw new Error(data.detail?.error || data.detail?.message || data.detail || 'Ingestion failed');
     receipt.innerHTML = `
       <strong>✓ Transaction Ingested Successfully!</strong><br/>
       Amount: ₹${number(amount)} · Method: ${escapeHTML(paymentMode.toUpperCase())} ·
-      Tx ID: <code>${escapeHTML(data.transaction_id || data.id || 'TX-OK')}</code><br/>
+      Tx ID: <code>${escapeHTML(data.transaction_id || txId)}</code> · H3: <code>${escapeHTML(data.h3_cell_id || 'Res-8')}</code><br/>
       <small>Ground-truth telemetry mapped to Feature Store for actuals calibration.</small>
     `;
   } catch (err) {

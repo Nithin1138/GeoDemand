@@ -66,3 +66,4 @@ groups:
         annotations:
           summary: "Dead-Letter Queue has unrecovered payment or messaging events"
           description: "DLQ queue contains {{ $value }} unrecovered events"
+

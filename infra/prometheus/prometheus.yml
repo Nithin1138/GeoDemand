@@ -41,3 +41,4 @@ scrape_configs:
       - targets: ["rabbitmq:15692"]
         labels:
           service: "rabbitmq-broker"
+

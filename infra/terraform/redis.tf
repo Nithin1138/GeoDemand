@@ -50,3 +50,4 @@ resource "aws_elasticache_replication_group" "redis" {
     Name = "geodemand-${var.environment}-redis"
   }
 }
+

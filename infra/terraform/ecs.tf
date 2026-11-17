@@ -199,3 +199,4 @@ resource "aws_appautoscaling_policy" "cpu" {
     scale_out_cooldown = 60
   }
 }
+
