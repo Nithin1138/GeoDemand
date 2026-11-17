@@ -624,6 +624,22 @@ async def dashboard():
     return JSONResponse({"message": "GeoDemand AI v2.1 — POST /v1/recommendations/live to begin"})
 
 
+@app.get("/manifest.json", include_in_schema=False)
+async def pwa_manifest():
+    manifest_path = DASHBOARD_DIR / "manifest.json"
+    if manifest_path.exists():
+        return FileResponse(str(manifest_path), media_type="application/manifest+json")
+    return JSONResponse({"error": "manifest.json not found"}, status_code=404)
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def pwa_service_worker():
+    sw_path = DASHBOARD_DIR / "sw.js"
+    if sw_path.exists():
+        return FileResponse(str(sw_path), media_type="application/javascript")
+    return JSONResponse({"error": "sw.js not found"}, status_code=404)
+
+
 @app.get("/v1/system/ping", response_model=PingResponse, tags=["System"], summary="Operational liveness ping")
 async def ping():
     return {"status": "ok", "service": "GeoDemand AI", "version": "2.1.0",

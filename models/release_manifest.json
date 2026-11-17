@@ -1,7 +1,7 @@
 {
   "release_version": "v2.1.0",
   "release_tag": "v2.1.0-prod",
-  "release_timestamp": "2026-11-17T13:19:20.920691+00:00",
+  "release_timestamp": "2026-11-17T14:06:04.718376+00:00",
   "architecture": "LightGBM Regressor + Calibrated Quantile Heads (P10/P50/P90) + TreeSHAP",
   "target_metric": "expected_customer_count",
   "primary_artifact_path": "models/demand_model.pkl",
@@ -14,7 +14,7 @@
     "lgbm_v1/label_encoders.joblib": "b8510d6e472dbdbbab9ea3d57a0dfec054aebf2a326ce309151521fdd5538e46",
     "lgbm_v1/feature_schema.json": "5c95287f1b4c2efc511b81e97b9b3b257193413322a697b3b1a5af63881777df"
   },
-  "feature_schema_sha256": "cab5cc67715d2e1ceba571761d72403c9dac17cb190be5ca63c3be4dffc09a66",
+  "feature_schema_sha256": "171d26e388430d3685e14f31a7bcfe2a86d7dc882ad43d27b21d9a80665d4ecc",
   "metrics": {
     "val_mae": 0.7749,
     "val_rmse": 1.0078,

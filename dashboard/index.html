@@ -4,6 +4,11 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <meta name="theme-color" content="#153e35" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="GeoDemand AI" />
+  <link rel="manifest" href="/manifest.json" />
   <title>GeoDemand AI — Location Overview</title>
   <meta name="description" content="A clearer view of your next business opportunity. Explore nearby demand, compare estimated profits, and find the right location for your mobile business." />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -38,6 +43,11 @@
     <symbol id="i-expand" viewBox="0 0 24 24"><path d="M8 3H3v5m13-5h5v5M3 16v5h5m13-5v5h-5"/></symbol>
     <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 3v12m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
     <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2m0 16v2M2 12h2m16 0h2M5 5l1.5 1.5m11 11L19 19M5 19l1.5-1.5m11-11L19 5"/></symbol>
+    <symbol id="i-route" viewBox="0 0 24 24"><circle cx="6" cy="19" r="3"/><circle cx="18" cy="5" r="3"/><path d="M12 19h4.5a3.5 3.5 0 0 0 0-7h-9a3.5 3.5 0 0 1 0-7H9"/></symbol>
+    <symbol id="i-radar" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/><path d="m12 12 7-7"/></symbol>
+    <symbol id="i-pos" viewBox="0 0 24 24"><rect x="4" y="2" width="16" height="20" rx="2"/><path d="M8 6h8M8 10h8M8 14h2M14 14h2M8 18h2M14 18h2"/></symbol>
+    <symbol id="i-cpu" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M15 2v2M9 2v2M15 20v2M9 20v2M2 15h2M2 9h2M20 15h2M20 9h2"/></symbol>
+    <symbol id="i-nav" viewBox="0 0 24 24"><polygon points="3 11 22 2 13 21 11 13 3 11"/></symbol>
   </svg>
 
   <div class="app-shell">
@@ -51,6 +61,10 @@
         <a class="nav-link active" href="#overview" aria-current="page"><svg class="icon"><use href="#i-grid"/></svg>Overview<span class="nav-active-dot"></span></a>
         <a class="nav-link" href="#explore"><svg class="icon"><use href="#i-map"/></svg>Explore map</a>
         <a class="nav-link" href="#recommendations"><svg class="icon"><use href="#i-trend"/></svg>Recommendations</a>
+        <a class="nav-link" href="#shiftPlanner"><svg class="icon"><use href="#i-route"/></svg>Shift planner</a>
+        <a class="nav-link" href="#fleetRadar"><svg class="icon"><use href="#i-radar"/></svg>Fleet radar</a>
+        <a class="nav-link" href="#telemetryPos"><svg class="icon"><use href="#i-pos"/></svg>POS telemetry</a>
+        <a class="nav-link" href="#mlopsDrift"><svg class="icon"><use href="#i-cpu"/></svg>MLOps & drift</a>
         <a class="nav-link" href="#dataSources"><svg class="icon"><use href="#i-layers"/></svg>Data sources</a>
       </nav>
       <div class="sidebar-note">
@@ -66,6 +80,15 @@
     <div class="workspace">
       <header class="topbar">
         <div class="breadcrumb"><button class="icon-button mobile-menu" id="menuBtn" type="button" aria-label="Open navigation" aria-controls="sidebar" aria-expanded="false"><svg class="icon"><use href="#i-menu"/></svg></button><span>Workspace</span><svg class="icon"><use href="#i-chevron"/></svg><strong>Overview</strong></div>
+        <div class="city-selector-wrap">
+          <label for="citySelect" class="sr-only">City</label>
+          <select id="citySelect" class="city-select" aria-label="Target City Selection">
+            <option value="vijayawada" selected>📍 Vijayawada</option>
+            <option value="hyderabad">📍 Hyderabad</option>
+            <option value="bengaluru">📍 Bengaluru</option>
+            <option value="visakhapatnam">📍 Visakhapatnam</option>
+          </select>
+        </div>
         <div class="topbar-right"><div class="system-status" id="systemStatus" role="status"><span class="status-dot status-loading"></span><span id="statusText">Connecting</span></div><span class="topbar-divider"></span><span class="today-date"><svg class="icon"><use href="#i-calendar"/></svg><span id="todayDate">Today</span></span><button class="icon-button" type="button" aria-label="How this dashboard works" data-help><svg class="icon"><use href="#i-info"/></svg></button></div>
       </header>
 
@@ -135,6 +158,205 @@
           <article class="surface context-card"><div class="card-heading"><div><h2>A little local context</h2><p>The conditions behind the forecast.</p></div><span class="soft-icon"><svg class="icon"><use href="#i-sun"/></svg></span></div><div class="weather-overview"><span class="weather-icon" id="weatherIcon"><svg class="icon"><use href="#i-sun"/></svg></span><div><strong id="weatherTemperature">—°</strong><span id="weatherText">Weather appears after analysis</span></div><span class="provenance-badge badge-cached" id="weatherBadge">NOT CHECKED</span></div><div class="context-detail"><span>Starting H3 cell</span><code id="h3CellDisplay">Not analyzed yet</code></div><p class="water-warning hidden" id="waterWarning">Your starting point is on a river or bridge. Recommendations only include verified land zones.</p><div class="context-detail"><span>Last analysis</span><span id="lastUpdated">Not run yet</span></div></article>
           <article class="surface sources-card"><div class="card-heading"><div><h2>Clarity behind every number</h2><p>Know what’s live, estimated, or derived.</p></div><span class="transparency-tag"><svg class="icon"><use href="#i-check"/></svg>Transparent by design</span></div><div class="freshness-table" id="freshnessTable"><div class="sources-empty"><svg class="icon"><use href="#i-layers"/></svg><p>Run an analysis to see the sources used for your forecast.</p></div></div><p class="estimate-note"><svg class="icon"><use href="#i-info"/></svg>Demand is a model estimate, not a live customer count. Profit is a calculated forecast, not guaranteed earnings.</p></article>
         </section>
+
+        <!-- MEMBER 4: V2 Production Sections -->
+        <!-- 1. Full-Shift Multi-Stop VRPTW Itinerary Planner (Phase 9.4) -->
+        <section class="surface shift-section" id="shiftPlanner" aria-labelledby="shiftTitle">
+          <div class="card-heading">
+            <div>
+              <div class="title-with-badge">
+                <h2 id="shiftTitle">Shift Route Planner</h2>
+                <span class="badge-feature">OR-TOOLS VRPTW</span>
+              </div>
+              <p>Optimize your full-day selling itinerary with multi-stop dwell scheduling & road routing.</p>
+            </div>
+          </div>
+          <div class="shift-content">
+            <div class="shift-controls">
+              <div class="form-row">
+                <div class="form-group">
+                  <label for="shiftStartHour">Shift Start Time</label>
+                  <select id="shiftStartHour" class="form-input">
+                    <option value="8" selected>08:00 AM (Morning Rush)</option>
+                    <option value="11">11:00 AM (Lunch Break)</option>
+                    <option value="16">04:00 PM (Evening Snacks)</option>
+                    <option value="19">07:00 PM (Dinner & Night)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="shiftDurationHours">Shift Duration</label>
+                  <select id="shiftDurationHours" class="form-input">
+                    <option value="4">4 Hours (Half Day)</option>
+                    <option value="6">6 Hours (Standard)</option>
+                    <option value="8" selected>8 Hours (Full Day)</option>
+                    <option value="10">10 Hours (Extended)</option>
+                  </select>
+                </div>
+                <div class="form-group">
+                  <label for="shiftMaxStops">Max Route Stops</label>
+                  <select id="shiftMaxStops" class="form-input">
+                    <option value="2">2 Stops</option>
+                    <option value="3" selected>3 Stops</option>
+                    <option value="4">4 Stops</option>
+                    <option value="5">5 Stops</option>
+                  </select>
+                </div>
+              </div>
+              <button class="btn btn-primary" id="runShiftBtn" type="button">
+                <svg class="icon"><use href="#i-route"/></svg>Plan Optimized Shift Route
+              </button>
+            </div>
+
+            <div class="shift-results hidden" id="shiftResults">
+              <div class="metrics-grid shift-summary-grid">
+                <article class="summary-card">
+                  <div class="summary-top"><span>Total Shift Profit</span><span class="summary-icon"><svg class="icon"><use href="#i-wallet"/></svg></span></div>
+                  <div class="summary-value" id="shiftTotalProfit">—</div>
+                  <div class="summary-foot" id="shiftProfitUplift">vs Stay Baseline: —</div>
+                </article>
+                <article class="summary-card">
+                  <div class="summary-top"><span>Total Revenue</span><span class="summary-icon lavender"><svg class="icon"><use href="#i-spark"/></svg></span></div>
+                  <div class="summary-value" id="shiftTotalRevenue">—</div>
+                  <div class="summary-foot">Across all scheduled stops</div>
+                </article>
+                <article class="summary-card">
+                  <div class="summary-top"><span>Travel Distance</span><span class="summary-icon sand"><svg class="icon"><use href="#i-map"/></svg></span></div>
+                  <div class="summary-value" id="shiftTravelDistance">—</div>
+                  <div class="summary-foot" id="shiftTravelTime">Transit time: —</div>
+                </article>
+                <article class="summary-card">
+                  <div class="summary-top"><span>Stops Scheduled</span><span class="summary-icon"><svg class="icon"><use href="#i-pin"/></svg></span></div>
+                  <div class="summary-value" id="shiftStopsCount">—</div>
+                  <div class="summary-foot">With dwell & setup time</div>
+                </article>
+              </div>
+
+              <div class="timeline-container">
+                <h3>Optimized Itinerary Schedule</h3>
+                <div class="timeline-stops" id="shiftTimeline"></div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 2. Fleet Radar & Demand Sharing (Phase 10.4) -->
+        <section class="surface fleet-section" id="fleetRadar" aria-labelledby="fleetTitle">
+          <div class="card-heading">
+            <div>
+              <div class="title-with-badge">
+                <h2 id="fleetTitle">Fleet Operations Radar</h2>
+                <span class="badge-feature">COORDINATION</span>
+              </div>
+              <p>H3 cell occupancy tracking, soft reservations, and cannibalization prevention.</p>
+            </div>
+          </div>
+          <div class="fleet-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="fleetH3Input">Target H3 Cell</label>
+                <input class="form-input" type="text" id="fleetH3Input" placeholder="Select a location or paste H3 (e.g. 886189254dfffff)" />
+              </div>
+              <div class="form-group">
+                <label for="vendorIdInput">Vendor Identifier</label>
+                <input class="form-input" type="text" id="vendorIdInput" value="vendor-001" />
+              </div>
+            </div>
+            <div class="action-buttons-row">
+              <button class="btn btn-outline" id="checkOccupancyBtn" type="button">
+                <svg class="icon"><use href="#i-target"/></svg>Check Cell Occupancy
+              </button>
+              <button class="btn btn-primary" id="reserveCellBtn" type="button">
+                <svg class="icon"><use href="#i-check"/></svg>Reserve Cell (Soft Lock)
+              </button>
+              <button class="btn btn-outline" id="cancelReservationBtn" type="button">
+                <svg class="icon"><use href="#i-close"/></svg>Cancel Reservation
+              </button>
+            </div>
+            <div class="fleet-status-display" id="fleetStatusDisplay">
+              <span class="badge-cached">Enter or select an H3 cell above to inspect fleet occupancy.</span>
+            </div>
+          </div>
+        </section>
+
+        <!-- 3. POS Telemetry & Real Sales Ingestion (Phase 11.4) -->
+        <section class="surface telemetry-section" id="telemetryPos" aria-labelledby="posTitle">
+          <div class="card-heading">
+            <div>
+              <div class="title-with-badge">
+                <h2 id="posTitle">POS Telemetry & Sales Ingestion</h2>
+                <span class="badge-feature">FEATURE STORE INGEST</span>
+              </div>
+              <p>Log verified cash/UPI sales to calibrate actuals vs ML predictions.</p>
+            </div>
+          </div>
+          <div class="telemetry-content">
+            <div class="form-row">
+              <div class="form-group">
+                <label for="posAmount">Transaction Amount (₹)</label>
+                <input class="form-input" type="number" id="posAmount" value="150" min="10" step="5" />
+              </div>
+              <div class="form-group">
+                <label for="posPaymentMode">Payment Method</label>
+                <select id="posPaymentMode" class="form-input">
+                  <option value="upi" selected>UPI (PhonePe / GPay / Paytm)</option>
+                  <option value="cash">Cash</option>
+                  <option value="card">Card / QR</option>
+                </select>
+              </div>
+              <div class="form-group">
+                <label for="posCategory">Item Category</label>
+                <select id="posCategory" class="form-input">
+                  <option value="food" selected>Food & Meals</option>
+                  <option value="fruits">Fruits & Juice</option>
+                  <option value="salon">Salon Service</option>
+                  <option value="repair">Repair Service</option>
+                </select>
+              </div>
+            </div>
+            <button class="btn btn-primary" id="submitPosBtn" type="button">
+              <svg class="icon"><use href="#i-pos"/></svg>Record POS Transaction
+            </button>
+            <div class="pos-receipt hidden" id="posReceipt" role="status"></div>
+          </div>
+        </section>
+
+        <!-- 4. MLOps Platform & Feature Drift Telemetry (Phase 13.4) -->
+        <section class="surface mlops-section" id="mlopsDrift" aria-labelledby="mlopsTitle">
+          <div class="card-heading">
+            <div>
+              <div class="title-with-badge">
+                <h2 id="mlopsTitle">MLOps & Model Drift Monitor</h2>
+                <span class="badge-feature">MLFLOW v2.1.0</span>
+              </div>
+              <p>Real-time feature distribution stability, prediction drift, and continuous training health.</p>
+            </div>
+          </div>
+          <div class="mlops-content">
+            <div class="metrics-grid mlops-grid">
+              <article class="summary-card">
+                <div class="summary-top"><span>Active Champion Model</span><span class="summary-icon"><svg class="icon"><use href="#i-cpu"/></svg></span></div>
+                <div class="summary-value small-val" id="mlopsModelName">LightGBM v2.1.0</div>
+                <div class="summary-foot" id="mlopsModelStatus">Status: Production Champion</div>
+              </article>
+              <article class="summary-card">
+                <div class="summary-top"><span>Population Stability (PSI)</span><span class="summary-icon lavender"><svg class="icon"><use href="#i-spark"/></svg></span></div>
+                <div class="summary-value" id="mlopsPsi">0.038</div>
+                <div class="summary-foot" id="mlopsPsiStatus"><span class="status-dot status-ok"></span>Stable (Threshold < 0.20)</div>
+              </article>
+              <article class="summary-card">
+                <div class="summary-top"><span>Wasserstein Distance</span><span class="summary-icon sand"><svg class="icon"><use href="#i-trend"/></svg></span></div>
+                <div class="summary-value" id="mlopsWasserstein">0.021</div>
+                <div class="summary-foot">Distribution delta: Minimal</div>
+              </article>
+              <article class="summary-card">
+                <div class="summary-top"><span>Continuous Training (CT)</span><span class="summary-icon"><svg class="icon"><use href="#i-check"/></svg></span></div>
+                <div class="summary-value" id="mlopsRetrainStatus">Ready</div>
+                <div class="summary-foot" id="mlopsRetrainMeta">Auto-trigger: Guarded</div>
+              </article>
+            </div>
+          </div>
+        </section>
+
         <footer class="page-footer"><span>GeoDemand AI <span class="footer-dot">·</span> A clearer view of what’s possible.</span><span>Made for your next move<svg class="icon"><use href="#i-arrow"/></svg></span></footer>
       </main>
     </div>

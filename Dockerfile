@@ -6,7 +6,7 @@ FROM python:3.11-slim as base
 # Prevent Python from writing .pyc files and buffer stdout/stderr
 ENV PYTHONDONTWRITEBYTECODE=1 \
     PYTHONUNBUFFERED=1 \
-    PYTHONPATH="/app/src:/app/src/data:/app/src/features:/app/src/api"
+    PYTHONPATH="/app:/app/src:/app/src/data:/app/src/features:/app/src/api:/app/src/optimization:/app/src/fleet:/app/src/ingestion:/app/src/notifications"
 
 WORKDIR /app
 

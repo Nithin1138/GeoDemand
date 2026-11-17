@@ -460,7 +460,10 @@ function buildRecCard(rec) {
     ${rec.explanation ? `<p class="rec-explanation-text">${escapeHTML(rec.explanation)}</p>` : ''}
     <div class="rec-metrics"><div><div class="metric-value">${number(rec.expected_customers)}</div><div class="metric-label">Customers / hr</div></div><div><div class="metric-value">${time}</div><div class="metric-label">Est. travel time</div></div><div><div class="metric-value">${number(rec.distance_km, 2)} km</div><div class="metric-label">Distance</div></div></div>
     <div class="rec-signals"><span class="signal-chip chip-comp-${comp}">${escapeHTML(comp)} competition</span>${rec.weather_condition ? `<span class="signal-chip">${escapeHTML(rec.weather_condition.replace(/_/g, ' '))}</span>` : ''}${rec.decision_action ? `<span class="signal-chip">${escapeHTML(rec.decision_action)}</span>` : ''}</div>
-    <button class="btn rec-select" type="button" aria-label="View recommended area ${number(rec.rank)} on map" aria-pressed="${state.selectedCell === rec.h3_cell}">${icon('map')}View on map${icon('arrow', 'button-arrow')}</button>
+    <div style="display:flex;gap:8px;align-items:center;margin-top:12px;">
+      <button class="btn rec-select" type="button" aria-label="View recommended area ${number(rec.rank)} on map" aria-pressed="${state.selectedCell === rec.h3_cell}">${icon('map')}View on map${icon('arrow', 'button-arrow')}</button>
+      <a class="btn-navigate" href="https://www.google.com/maps/dir/?api=1&destination=${rec.latitude},${rec.longitude}" target="_blank" rel="noopener noreferrer" title="Open turn-by-turn navigation in Google Maps">${icon('nav')}Navigate</a>
+    </div>
     <details class="rec-details"><summary>Why this location & forecast details</summary><div class="confidence-row"><span>Estimated revenue / hr</span><strong>${money(rec.expected_revenue_inr)}</strong></div><div class="confidence-row"><span>P10–P90 customer range</span><strong>${hasInterval ? `${number(interval.p10)}–${number(interval.p90)} / hr` : 'Unavailable'}</strong></div>${hasInterval ? `<div class="interval-bar" style="--median-position:${medianPosition}%" aria-hidden="true"></div>` : ''}<div class="confidence-row"><span>Uncertainty</span><strong>${escapeHTML(uncertainty)}</strong></div><div class="confidence-row"><span>Median (P50)</span><strong>${number(interval.p50)} customers / hr</strong></div><div class="confidence-row"><span>Method</span><strong>${interval.uncertainty_method === 'quantile_regression' ? 'Quantile regression' : 'Approximate / unspecified'}</strong></div>${rec.top_drivers?.length ? `<div class="rec-drivers"><div class="rec-drivers-title">What’s driving the opportunity</div><ul>${rec.top_drivers.map((driver) => `<li>${escapeHTML(driver)}</li>`).join('')}</ul></div>` : ''}<div class="confidence-row"><span>H3 cell</span><strong>${escapeHTML(rec.h3_cell)}</strong></div></details>`;
   card.querySelector('.rec-select').addEventListener('click', () => selectRecommendation(rec.h3_cell, true));
   return card;
@@ -605,6 +608,241 @@ function focusSetup() {
   $('vendorCategory').focus({ preventScroll: true });
 }
 
+/* ========================================================================== */
+/* MEMBER 4 PRODUCTION HANDLERS: Multi-City, Shift, Fleet, POS, MLOps, PWA    */
+/* ========================================================================== */
+const CITIES = {
+  vijayawada: { lat: 16.5062, lng: 80.6480, name: 'Vijayawada' },
+  hyderabad: { lat: 17.3850, lng: 78.4867, name: 'Hyderabad' },
+  bengaluru: { lat: 12.9716, lng: 77.5946, name: 'Bengaluru' },
+  visakhapatnam: { lat: 17.6868, lng: 83.2185, name: 'Visakhapatnam' },
+};
+
+function handleCityChange(event) {
+  const cityKey = event.target.value;
+  const city = CITIES[cityKey];
+  if (!city) return;
+  $('latInput').value = city.lat;
+  $('lngInput').value = city.lng;
+  $('mapLocationName').textContent = city.name;
+  updateOrigin(city.lat, city.lng, true);
+  invalidateResults();
+  announce(`Switched location to ${city.name}.`);
+}
+
+async function planShiftItinerary() {
+  const btn = $('runShiftBtn');
+  const resultsWrap = $('shiftResults');
+  btn.disabled = true;
+  btn.textContent = 'Optimizing itinerary...';
+  try {
+    const startHour = Number($('shiftStartHour').value);
+    const duration = Number($('shiftDurationHours').value);
+    const maxStops = Number($('shiftMaxStops').value);
+    const category = $('vendorCategory').value;
+    const aov = Number($('aov').value);
+
+    const payload = {
+      vendor_id: $('vendorIdInput')?.value || 'vendor-001',
+      origin_lat: state.origin.lat,
+      origin_lng: state.origin.lng,
+      category: category,
+      average_order_value: aov,
+      shift_start_hour: startHour,
+      shift_duration_hours: duration,
+      max_stops: maxStops,
+      setup_time_min: 15,
+      teardown_time_min: 15
+    };
+
+    const res = await fetch(`${API_BASE}/v1/routes/shift-plan`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail?.error || err.detail || 'Failed to compute shift plan');
+    }
+
+    const data = await res.json();
+    resultsWrap.classList.remove('hidden');
+
+    $('shiftTotalProfit').textContent = money(data.total_shift_profit_inr || data.summary?.total_profit_inr || 0);
+    $('shiftTotalRevenue').textContent = money(data.total_shift_revenue_inr || data.summary?.total_revenue_inr || 0);
+    $('shiftTravelDistance').textContent = `${number(data.total_travel_distance_km || data.summary?.total_distance_km || 0, 1)} km`;
+    $('shiftTravelTime').textContent = `Transit: ${number(data.total_travel_time_min || data.summary?.total_travel_min || 0)} min`;
+    $('shiftStopsCount').textContent = `${data.stops?.length || data.itinerary?.length || 0} stops`;
+
+    const baselineProfit = data.baseline_stay_profit_inr || data.summary?.baseline_profit_inr;
+    if (baselineProfit != null) {
+      const uplift = (data.total_shift_profit_inr || 0) - baselineProfit;
+      $('shiftProfitUplift').textContent = `vs Stay: ${uplift >= 0 ? '+' : ''}${money(uplift)} uplift`;
+    }
+
+    const stops = data.stops || data.itinerary || [];
+    const timeline = $('shiftTimeline');
+    timeline.replaceChildren();
+
+    stops.forEach((stop, index) => {
+      const el = document.createElement('div');
+      el.className = `timeline-stop${index === 0 ? ' top-stop' : ''}`;
+      el.innerHTML = `
+        <div class="timeline-badge">${index + 1}</div>
+        <div class="timeline-details">
+          <div class="timeline-header">
+            <span class="timeline-cell">Stop #${index + 1} · H3 ${escapeHTML(stop.h3_cell || 'Zone')}</span>
+            <span class="timeline-window">${escapeHTML(stop.arrival_time || '')} – ${escapeHTML(stop.departure_time || '')} (${number(stop.dwell_duration_min || 60)}m dwell)</span>
+          </div>
+          <div class="timeline-metrics">
+            <span>Est. Profit: <strong>${money(stop.expected_profit_inr || 0)}</strong></span>
+            <span>Demand: <strong>${number(stop.expected_customers || 0)} cust/hr</strong></span>
+            <span>Transit: <strong>${number(stop.travel_time_from_prev_min || 0)}m (${number(stop.distance_from_prev_km || 0, 1)}km)</strong></span>
+          </div>
+        </div>
+      `;
+      timeline.appendChild(el);
+    });
+
+    // Draw route polyline if coordinates available
+    if (state.map && data.route_coordinates?.length) {
+      state.route.clearLayers();
+      L.polyline(data.route_coordinates, { color: '#28745b', weight: 4, opacity: 0.85 }).addTo(state.route);
+      state.map.fitBounds(L.polyline(data.route_coordinates).getBounds(), { padding: [30, 30] });
+    }
+    announce('Optimized shift plan generated successfully.');
+  } catch (err) {
+    alert(`Shift Optimizer: ${err.message}`);
+  } finally {
+    btn.disabled = false;
+    btn.innerHTML = `${icon('route')}Plan Optimized Shift Route`;
+  }
+}
+
+async function checkFleetOccupancy() {
+  const cell = $('fleetH3Input').value.trim();
+  const display = $('fleetStatusDisplay');
+  if (!cell) {
+    display.innerHTML = '<span style="color:var(--amber);">Please enter a valid H3 cell to inspect occupancy.</span>';
+    return;
+  }
+  display.innerHTML = '<span class="status-dot status-loading"></span> Checking cell capacity...';
+  try {
+    const res = await fetch(`${API_BASE}/v1/fleet/cell-occupancy?h3_cell=${encodeURIComponent(cell)}`);
+    const data = await res.json();
+    display.innerHTML = `
+      <strong>H3 Cell:</strong> <code>${escapeHTML(cell)}</code> &nbsp;|&nbsp;
+      <strong>Occupancy:</strong> ${number(data.active_vendors || 0)} / ${number(data.capacity || 3)} vendors &nbsp;|&nbsp;
+      <strong>Status:</strong> <span class="badge-feature">${escapeHTML(data.status || 'AVAILABLE')}</span> &nbsp;|&nbsp;
+      <strong>Demand Multiplier:</strong> ${number(data.demand_multiplier || 1.0, 2)}x
+    `;
+  } catch (err) {
+    display.innerHTML = `<span style="color:var(--red);">Error checking occupancy: ${escapeHTML(err.message)}</span>`;
+  }
+}
+
+async function reserveFleetCell() {
+  const cell = $('fleetH3Input').value.trim();
+  const vendorId = $('vendorIdInput').value.trim() || 'vendor-001';
+  const display = $('fleetStatusDisplay');
+  if (!cell) {
+    display.innerHTML = '<span style="color:var(--amber);">Please specify an H3 cell to reserve.</span>';
+    return;
+  }
+  display.innerHTML = '<span class="status-dot status-loading"></span> Locking cell reservation...';
+  try {
+    const res = await fetch(`${API_BASE}/v1/fleet/reserve-cell`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vendor_id: vendorId,
+        h3_cell: cell,
+        category: $('vendorCategory').value,
+        duration_hours: 2
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail?.error || data.detail || 'Reservation rejected');
+    display.innerHTML = `
+      <span style="color:var(--green);font-weight:600;">✓ Reservation Confirmed!</span><br/>
+      Reservation ID: <code>${escapeHTML(data.reservation_id || 'RES-ACTIVE')}</code> ·
+      Cell: <code>${escapeHTML(cell)}</code> ·
+      Expires: ${escapeHTML(data.expires_at || 'In 2 hours')}
+    `;
+  } catch (err) {
+    display.innerHTML = `<span style="color:var(--red);">Reservation failed: ${escapeHTML(err.message)}</span>`;
+  }
+}
+
+async function cancelFleetReservation() {
+  const cell = $('fleetH3Input').value.trim();
+  const vendorId = $('vendorIdInput').value.trim() || 'vendor-001';
+  const display = $('fleetStatusDisplay');
+  display.innerHTML = '<span class="status-dot status-loading"></span> Cancelling reservation...';
+  try {
+    const res = await fetch(`${API_BASE}/v1/fleet/cancel-reservation`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ vendor_id: vendorId, h3_cell: cell })
+    });
+    const data = await res.json();
+    display.innerHTML = `<span style="color:var(--secondary);">Reservation cleared for ${escapeHTML(vendorId)}.</span>`;
+  } catch (err) {
+    display.innerHTML = `<span style="color:var(--red);">Cancel failed: ${escapeHTML(err.message)}</span>`;
+  }
+}
+
+async function recordPosTransaction() {
+  const amount = Number($('posAmount').value);
+  const paymentMode = $('posPaymentMode').value;
+  const category = $('posCategory').value;
+  const receipt = $('posReceipt');
+  const vendorId = $('vendorIdInput')?.value || 'vendor-001';
+
+  receipt.classList.remove('hidden');
+  receipt.innerHTML = '<span class="status-dot status-loading"></span> Submitting transaction to Feature Store...';
+
+  try {
+    const res = await fetch(`${API_BASE}/v1/telemetry/transactions`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        vendor_id: vendorId,
+        amount_inr: amount,
+        payment_method: paymentMode,
+        category: category,
+        latitude: state.origin.lat,
+        longitude: state.origin.lng,
+        timestamp: new Date().toISOString()
+      })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail?.error || data.detail || 'Ingestion failed');
+    receipt.innerHTML = `
+      <strong>✓ Transaction Ingested Successfully!</strong><br/>
+      Amount: ₹${number(amount)} · Method: ${escapeHTML(paymentMode.toUpperCase())} ·
+      Tx ID: <code>${escapeHTML(data.transaction_id || data.id || 'TX-OK')}</code><br/>
+      <small>Ground-truth telemetry mapped to Feature Store for actuals calibration.</small>
+    `;
+  } catch (err) {
+    receipt.innerHTML = `<span style="color:var(--red);">POS Ingestion error: ${escapeHTML(err.message)}</span>`;
+  }
+}
+
+async function loadMlopsTelemetry() {
+  try {
+    const res = await fetch(`${API_BASE}/v1/system/model-health`);
+    if (!res.ok) return;
+    const data = await res.json();
+    if (data.model_version) $('mlopsModelName').textContent = data.model_version;
+    if (data.drift_metrics?.psi != null) $('mlopsPsi').textContent = number(data.drift_metrics.psi, 3);
+    if (data.drift_metrics?.wasserstein != null) $('mlopsWasserstein').textContent = number(data.drift_metrics.wasserstein, 3);
+  } catch (e) {
+    // Non-blocking telemetry load
+  }
+}
+
 window.addEventListener('DOMContentLoaded', () => {
   $('todayDate').textContent = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' });
   initMap();
@@ -644,6 +882,21 @@ window.addEventListener('DOMContentLoaded', () => {
   $('helpDialog').addEventListener('click', (event) => { if (event.target === $('helpDialog') && (event.clientX < $('helpDialog').getBoundingClientRect().left || event.clientX > $('helpDialog').getBoundingClientRect().right || event.clientY < $('helpDialog').getBoundingClientRect().top || event.clientY > $('helpDialog').getBoundingClientRect().bottom)) $('helpDialog').close(); });
   $('menuBtn').addEventListener('click', () => toggleMenu(!$('sidebar').classList.contains('open')));
   $('sidebarScrim').addEventListener('click', () => toggleMenu(false));
+
+  // Member 4: Production event listener attachments
+  $('citySelect')?.addEventListener('change', handleCityChange);
+  $('runShiftBtn')?.addEventListener('click', planShiftItinerary);
+  $('checkOccupancyBtn')?.addEventListener('click', checkFleetOccupancy);
+  $('reserveCellBtn')?.addEventListener('click', reserveFleetCell);
+  $('cancelReservationBtn')?.addEventListener('click', cancelFleetReservation);
+  $('submitPosBtn')?.addEventListener('click', recordPosTransaction);
+  loadMlopsTelemetry();
+
+  // PWA Service Worker Registration
+  if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
+    navigator.serviceWorker.register('/sw.js').catch((err) => console.log('SW registration note:', err));
+  }
+
   document.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', () => {
     document.querySelectorAll('.nav-link').forEach((item) => { item.classList.remove('active'); item.removeAttribute('aria-current'); });
     link.classList.add('active');

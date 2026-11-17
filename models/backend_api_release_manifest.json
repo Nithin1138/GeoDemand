@@ -1,7 +1,7 @@
 {
   "version": "v2.1.0",
   "release_tag": "v2.1.0-prod",
-  "frozen_at": "2026-11-17T13:17:24.362907+00:00",
+  "frozen_at": "2026-11-17T14:05:48.025523+00:00",
   "openapi_version": "3.1.0",
   "total_endpoints": 46,
   "endpoint_catalog": [
@@ -423,7 +423,7 @@
     }
   ],
   "source_checksums": {
-    "api_app": "446223e56b5affc76777e285fb4994434bcd3a149eac4c51c0bd1e14c3e3a025",
+    "api_app": "430c66a3355353d3ff800f0b9b7b304751df53e039acc188e4569965d13c5630",
     "api_schemas": "41e3363093d2bb03a3e7b02fba3d486a2a12a69afbe0bf9023fa09d759661db0",
     "api_recommender": "09c64b3c81b7e2546e0e0842440ab3d5846a7ac4ab74e33ad143597a8c55b9ed",
     "shift_optimizer": "48e01f930d6fb9449566766465ed56b6db55bdfc402dd55e39cb5fa55d342d9a",
@@ -477,14 +477,14 @@
   "smoke_test_results": {
     "total_tested": 12,
     "all_passed": true,
-    "total_duration_ms": 1020.62,
+    "total_duration_ms": 1054.51,
     "results": [
       {
         "method": "GET",
         "path": "/v1/system/ping",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.05,
+        "latency_ms": 1.0,
         "passed": true
       },
       {
@@ -492,7 +492,7 @@
         "path": "/v1/system/data-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.86,
+        "latency_ms": 0.79,
         "passed": true
       },
       {
@@ -500,7 +500,7 @@
         "path": "/v1/system/metrics",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.82,
+        "latency_ms": 1.97,
         "passed": true
       },
       {
@@ -508,7 +508,7 @@
         "path": "/v1/system/circuit-breakers",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.78,
+        "latency_ms": 0.69,
         "passed": true
       },
       {
@@ -516,7 +516,7 @@
         "path": "/v1/system/error-catalog",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.88,
+        "latency_ms": 0.87,
         "passed": true
       },
       {
@@ -524,7 +524,7 @@
         "path": "/v1/system/model-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 4.08,
+        "latency_ms": 4.14,
         "passed": true
       },
       {
@@ -532,7 +532,7 @@
         "path": "/v1/location/context",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 0.96,
+        "latency_ms": 0.94,
         "passed": true
       },
       {
@@ -540,7 +540,7 @@
         "path": "/v1/predict/demand",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.29,
+        "latency_ms": 1.22,
         "passed": true
       },
       {
@@ -556,7 +556,7 @@
         "path": "/v1/recommendations/live",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.12,
+        "latency_ms": 0.95,
         "passed": true
       },
       {
@@ -564,7 +564,7 @@
         "path": "/v1/scenario/simulate",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.04,
+        "latency_ms": 0.93,
         "passed": true
       },
       {
