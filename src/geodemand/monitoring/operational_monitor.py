@@ -454,7 +454,7 @@ class ModelRollbackTracker:
                 gate.backup_current_champion()
                 backup_exists = backup_file.exists()
             except Exception as e:
-                logger.warning(f"Failed to auto-create champion backup snapshot: {e}")
+                logger.warning(f"Failed to auto-seed champion backup snapshot: {e}")
 
         backup_ver = None
         backup_hash = self._file_hash(backup_file) if backup_exists else None

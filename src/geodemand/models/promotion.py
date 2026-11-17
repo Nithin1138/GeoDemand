@@ -533,7 +533,7 @@ class ModelPromotionGate:
         return self.backup_dir
 
     def _backup_active_champion(self) -> Path:
-        """Alias for backup_current_champion."""
+        """Internal alias for backup_current_champion."""
         return self.backup_current_champion()
 
     def rollback_to_backup(self) -> bool:
