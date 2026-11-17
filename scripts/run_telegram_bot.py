@@ -20,6 +20,7 @@ from dotenv import load_dotenv
 
 # Add project root to sys.path
 ROOT_DIR = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT_DIR))
 sys.path.insert(0, str(ROOT_DIR / "src"))
 sys.path.insert(0, str(ROOT_DIR / "src" / "api"))
 sys.path.insert(0, str(ROOT_DIR / "src" / "fleet"))
@@ -198,3 +199,4 @@ def poll_updates():
 
 if __name__ == "__main__":
     poll_updates()
+
