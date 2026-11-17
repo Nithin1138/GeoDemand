@@ -487,7 +487,7 @@ def test_telegram_recommend_command_webhook():
             "from": {"id": 77665544, "first_name": "Suresh"},
             "chat": {"id": 77665544},
             "date": int(time.time()),
-            "text": "/recommend",
+            "text": "📍 /recommend",
         },
     }
     res = webhook_service.process_telegram_webhook(
@@ -499,6 +499,24 @@ def test_telegram_recommend_command_webhook():
     assert res["vendor_id"] == "vendor_002"
     assert "Benz Circle" in res["reply_text"]
     assert "RECOMMENDED MOVE" in res["reply_text"]
+
+    # Test emoji-prefixed status command
+    status_update = {
+        "update_id": 99204,
+        "message": {
+            "message_id": 413,
+            "from": {"id": 77665544, "first_name": "Suresh"},
+            "chat": {"id": 77665544},
+            "date": int(time.time()),
+            "text": "ℹ️ /status",
+        },
+    }
+    res_status = webhook_service.process_telegram_webhook(
+        secret_token=TELEGRAM_WEBHOOK_SECRET,
+        parsed_json=status_update,
+    )
+    assert res_status["status"] == "STATUS_GENERATED"
+    assert "vendor_002" in res_status["reply_text"]
 
 
 # ===========================================================================

@@ -110,8 +110,10 @@ def poll_updates():
                         vendor_channel_registry.register(assigned_vendor, telegram_id=username)
                     logger.info(f"Auto-registered Telegram user {user_id} (@{username}) as '{assigned_vendor}'")
 
+                text_lower = text.lower()
+
                 # Handle /start or greeting
-                if text.lower().startswith("/start") or text.lower().startswith("/help"):
+                if any(k in text_lower for k in ("/start", "/help", "start", "help", "hello", "hi")) and "sale" not in text_lower:
                     welcome_text = (
                         f"👋 <b>Welcome to GeoDemand AI (@{bot_info.get('username')})!</b>\n\n"
                         f"I am your mobile vendor decision intelligence assistant.\n\n"
@@ -133,12 +135,16 @@ def poll_updates():
                     send_telegram_reply(chat_id, welcome_text, markup)
                     continue
 
-                if text.lower().startswith("/status"):
+                if any(k in text_lower for k in ("/status", "status", "profile", "health")) and "sale" not in text_lower:
                     v_id = vendor_channel_registry.resolve_by_telegram(user_id) or "vendor_default"
+                    v = webhook_service._fleet_manager.get_vendor(v_id)
+                    lat = v.current_lat if v and v.current_lat else 16.5062
+                    lng = v.current_lng if v and v.current_lng else 80.6480
                     status_text = (
                         f"ℹ️ <b>Vendor Profile Status:</b>\n"
                         f"• <b>Vendor ID:</b> <code>{v_id}</code>\n"
                         f"• <b>Telegram Chat ID:</b> <code>{chat_id}</code>\n"
+                        f"• <b>Current Location:</b> ({lat:.4f}, {lng:.4f})\n"
                         f"• <b>System Status:</b> 🟢 ONLINE (Production Ready)\n"
                         f"• <b>City:</b> Vijayawada, Andhra Pradesh\n"
                         f"• <b>Active Model:</b> Approved LightGBM v2.1.0\n"
@@ -158,10 +164,13 @@ def poll_updates():
                     reply = webhook_res.get("reply_text", "Recommendation generated.")
                     markup = {
                         "inline_keyboard": [
-                            [{"text": "🗺️ Open Navigation in Maps", "url": "https://www.google.com/maps/dir/?api=1&destination=Benz+Circle+Vijayawada"}]
+                            [{"text": "🗺️ Open Navigation in Maps", "url": "https://www.google.com/maps/dir/?api=1&destination=16.5062,80.6480"}]
                         ]
                     }
                     send_telegram_reply(chat_id, reply, markup)
+                elif status in ("STATUS_GENERATED", "LOCATION_HELP"):
+                    reply = webhook_res.get("reply_text", "Information:")
+                    send_telegram_reply(chat_id, reply)
                 elif status == "INGESTED":
                     amt = webhook_res.get("amount_inr")
                     tx_id = webhook_res.get("transaction_id")
