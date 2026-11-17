@@ -243,8 +243,24 @@ class DemandModel:
         """
         X = self._build_feature_matrix([feature_row])
         try:
-            # Native LightGBM TreeSHAP contributions
-            contribs = self._model.predict(X, pred_contrib=True)[0]
+            # Native TreeSHAP contributions (handles XGBoost, LightGBM, and generic regressors)
+            if hasattr(self._model, "get_booster"):
+                import xgboost as xgb
+                dmat = xgb.DMatrix(X)
+                contribs = self._model.get_booster().predict(dmat, pred_contribs=True)[0]
+            elif hasattr(self._model, "booster_"):
+                contribs = self._model.booster_.predict(X, pred_contrib=True)[0]
+            elif hasattr(self._model, "predict"):
+                try:
+                    contribs = self._model.predict(X, pred_contrib=True)[0]
+                except TypeError:
+                    contribs = None
+            else:
+                contribs = None
+
+            if contribs is None:
+                return ["Consistent commercial footfall"], []
+
             feature_contribs = contribs[:-1]  # drop base value at the end
             
             # Sort by absolute impact

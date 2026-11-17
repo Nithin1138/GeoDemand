@@ -304,15 +304,21 @@ async function getRecommendations(event) {
   const generation = state.generation;
   const controller = new AbortController();
   state.request = controller;
-  const timeout = setTimeout(() => controller.abort('timeout'), 120000);
+  const timeout = setTimeout(() => controller.abort('timeout'), 20000);
   updateOrigin(lat, lng, true);
   setLoading(true);
   setEmptyState('Finding the right spots for you…', 'Comparing demand, profit, and local conditions. This can take a moment.', true);
   try {
     const response = await fetch(`${API_BASE}/v1/recommendations/live`, {
-      method: 'POST', headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'geodemand-prod-live-key'
+      },
+      signal: controller.signal,
       body: JSON.stringify({ latitude: lat, longitude: lng, vendor_category: $('vendorCategory').value, average_order_value: aov, search_radius_km: radius, top_n: 5 }),
     });
+    clearTimeout(timeout);
     const data = await response.json();
     if (generation !== state.generation) return;
     if (!response.ok) {
@@ -633,38 +639,50 @@ function handleCityChange(event) {
 async function planShiftItinerary() {
   const btn = $('runShiftBtn');
   const resultsWrap = $('shiftResults');
-  btn.disabled = true;
-  btn.textContent = 'Optimizing itinerary...';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Optimizing itinerary...';
+  }
   try {
-    const startHour = Number($('shiftStartHour').value);
-    const duration = Number($('shiftDurationHours').value);
-    const maxStops = Number($('shiftMaxStops').value);
-    const category = $('vendorCategory').value;
+    const lat = Number($('latInput')?.value) || state.origin?.lat || 16.5062;
+    const lng = Number($('lngInput')?.value) || state.origin?.lng || 80.6480;
+    const startHour = Number($('shiftStartHour')?.value) || 8;
+    const duration = Number($('shiftDurationHours')?.value) || 8;
+    const maxStops = Number($('shiftMaxStops')?.value) || 3;
+    const category = $('vendorCategory')?.value || 'food';
 
     const today = new Date();
-    today.setHours(startHour, 0, 0, 0);
+    today.setHours(Number.isFinite(startHour) ? startHour : 8, 0, 0, 0);
 
     const payload = {
-      latitude: state.origin.lat,
-      longitude: state.origin.lng,
+      latitude: Number.isFinite(lat) ? lat : 16.5062,
+      longitude: Number.isFinite(lng) ? lng : 80.6480,
       vendor_category: category,
       shift_start_time: today.toISOString(),
-      shift_duration_hours: duration,
-      max_relocation_stops: maxStops,
+      shift_duration_hours: Number.isFinite(duration) ? duration : 8,
+      max_relocation_stops: Number.isFinite(maxStops) ? maxStops : 3,
       min_dwell_time_minutes: 90,
       setup_time_minutes: 15,
       teardown_time_minutes: 15
     };
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort('timeout'), 15000);
+
     const res = await fetch(`${API_BASE}/v1/routes/shift-plan`, {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
+      headers: {
+        'Content-Type': 'application/json',
+        'X-API-Key': 'geodemand-prod-live-key'
+      },
+      signal: controller.signal,
       body: JSON.stringify(payload)
     });
+    clearTimeout(timeout);
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      const msg = err.detail?.message || err.detail?.error || (typeof err.detail === 'string' ? err.detail : 'Failed to compute shift plan');
+      const msg = err.message || err.detail?.message || err.detail?.error || (typeof err.detail === 'string' ? err.detail : 'Failed to compute shift plan');
       throw new Error(msg);
     }
 

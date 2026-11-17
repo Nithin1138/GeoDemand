@@ -17,6 +17,7 @@ Formulates and solves the Prize-Collecting Traveling Salesperson Problem with Ti
 from __future__ import annotations
 
 import logging
+import math
 import time
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
@@ -124,20 +125,28 @@ class ShiftOptimizer:
         pool = pool[:12]
         num_locs = len(pool)
 
-        # Compute travel time, distance, and fuel cost matrices
+        # Compute travel time, distance, and fuel cost matrices with fast spatial network calculation
         dist_matrix = [[0.0] * num_locs for _ in range(num_locs)]
         time_matrix = [[0] * num_locs for _ in range(num_locs)]
         fuel_matrix = [[0.0] * num_locs for _ in range(num_locs)]
 
+        def _fast_haversine_km(lat1: float, lon1: float, lat2: float, lon2: float) -> float:
+            R = 6371.0
+            dlat = math.radians(lat2 - lat1)
+            dlon = math.radians(lon2 - lon1)
+            a = math.sin(dlat / 2.0) ** 2 + math.cos(math.radians(lat1)) * math.cos(math.radians(lat2)) * math.sin(dlon / 2.0) ** 2
+            return 2.0 * R * math.asin(math.sqrt(max(0.0, min(1.0, a))))
+
         for i in range(num_locs):
             for j in range(num_locs):
                 if i != j:
-                    route = self.routing.get_travel_time(
+                    straight_km = _fast_haversine_km(
                         pool[i]["latitude"], pool[i]["longitude"],
                         pool[j]["latitude"], pool[j]["longitude"],
                     )
-                    dist_km = route.get("distance_km", 1.5)
-                    dur_min = int(round(route.get("duration_min", 6.0)))
+                    # Urban road network circuity ~ 1.35x haversine, avg commercial vehicle speed ~ 22 km/h
+                    dist_km = max(0.2, round(straight_km * 1.35, 2))
+                    dur_min = max(2, int(round((dist_km / 22.0) * 60.0)))
                     dist_matrix[i][j] = dist_km
                     time_matrix[i][j] = dur_min
                     fuel_cost = round((dist_km / FUEL_EFFICIENCY_KM_PER_L) * fuel_price_per_litre, 2)

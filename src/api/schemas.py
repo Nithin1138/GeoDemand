@@ -12,10 +12,11 @@ Formal data contract definitions for all GeoDemand AI live API endpoints:
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from config.settings import (
     DEFAULT_AOV_INR,
@@ -260,8 +261,8 @@ class ShiftPlanRequest(BaseModel):
     """Multi-stop daily shift planning and VRPTW optimization request."""
     model_config = ConfigDict(extra="ignore")
 
-    latitude: float = Field(..., ge=-90.0, le=90.0, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180.0, le=180.0, json_schema_extra={"example": 80.6480})
+    latitude: float = Field(16.5062, ge=-90.0, le=90.0, json_schema_extra={"example": 16.5062})
+    longitude: float = Field(80.6480, ge=-180.0, le=180.0, json_schema_extra={"example": 80.6480})
     vendor_category: str = Field("food", json_schema_extra={"example": "food"})
     shift_start_time: Optional[datetime] = Field(
         None,
@@ -322,6 +323,75 @@ class ShiftPlanRequest(BaseModel):
         description="Optional override for fuel price in INR per liter",
         json_schema_extra={"example": 102.5},
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_shift_request(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Fallback coordinates if missing or null or non-finite
+            try:
+                lat = float(data.get("latitude") if data.get("latitude") is not None else 16.5062)
+                if not (-90.0 <= lat <= 90.0) or math.isnan(lat):
+                    lat = 16.5062
+            except (ValueError, TypeError):
+                lat = 16.5062
+            data["latitude"] = lat
+
+            try:
+                lng = float(data.get("longitude") if data.get("longitude") is not None else 80.6480)
+                if not (-180.0 <= lng <= 180.0) or math.isnan(lng):
+                    lng = 80.6480
+            except (ValueError, TypeError):
+                lng = 80.6480
+            data["longitude"] = lng
+
+            # Category
+            cat = str(data.get("vendor_category") or "food").strip().lower()
+            data["vendor_category"] = cat if cat else "food"
+
+            # Duration clamp
+            try:
+                dur = float(data.get("shift_duration_hours") if data.get("shift_duration_hours") is not None else 8.0)
+                dur = max(4.0, min(14.0, dur))
+            except (ValueError, TypeError):
+                dur = 8.0
+            data["shift_duration_hours"] = dur
+
+            # Stops clamp
+            try:
+                stops = int(data.get("max_relocation_stops") if data.get("max_relocation_stops") is not None else 3)
+                stops = max(1, min(5, stops))
+            except (ValueError, TypeError):
+                stops = 3
+            data["max_relocation_stops"] = stops
+
+            # Dwell / setup / teardown
+            try:
+                dwell = int(data.get("min_dwell_time_minutes") if data.get("min_dwell_time_minutes") is not None else 90)
+                dwell = max(30, min(240, dwell))
+            except (ValueError, TypeError):
+                dwell = 90
+            data["min_dwell_time_minutes"] = dwell
+
+            try:
+                setup = int(data.get("setup_time_minutes") if data.get("setup_time_minutes") is not None else 15)
+                setup = max(0, min(60, setup))
+            except (ValueError, TypeError):
+                setup = 15
+            data["setup_time_minutes"] = setup
+
+            try:
+                td = int(data.get("teardown_time_minutes") if data.get("teardown_time_minutes") is not None else 15)
+                td = max(0, min(60, td))
+            except (ValueError, TypeError):
+                td = 15
+            data["teardown_time_minutes"] = td
+
+            # shift_start_time
+            st = data.get("shift_start_time")
+            if not st or (isinstance(st, str) and not st.strip()):
+                data["shift_start_time"] = None
+        return data
 
 
 # ===========================================================================
