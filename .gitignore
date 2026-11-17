@@ -92,6 +92,9 @@ __agent__/
 
 # Member Checklists
 members-checklist*
+puji-checklist*
+puji-checklist.md
+
 
 # MLOps & Tracking
 mlruns/
