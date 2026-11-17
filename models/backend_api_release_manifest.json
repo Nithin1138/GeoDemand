@@ -1,7 +1,7 @@
 {
   "version": "v2.1.0",
   "release_tag": "v2.1.0-prod",
-  "frozen_at": "2026-11-16T15:42:39.129460+00:00",
+  "frozen_at": "2026-11-17T05:01:34.058212+00:00",
   "openapi_version": "3.1.0",
   "total_endpoints": 43,
   "endpoint_catalog": [
@@ -402,7 +402,7 @@
     "shift_optimizer": "48e01f930d6fb9449566766465ed56b6db55bdfc402dd55e39cb5fa55d342d9a",
     "fleet_manager": "e36444b4e775197383d544aa76688b173624913ee32ba8fe25a48c61caf7d0d4",
     "security_errors": "2b23c0a539c36c2b8de1b3681544822d5578e4c316330d2120d0df6257230d61",
-    "security_auth": "80fe4ee830b9ed0b0be8c7024d74da919c61ed2f74c14bb413f0d544c24861f7",
+    "security_auth": "a0ea680133e025f67667800ac3158c537f47b93174ec5dd8dab9a5e620d36cd4",
     "security_rate_limiter": "37ec3766394812ba93d1377d5134b2ddba9b382cf76d15c37d4381ae9c3e59a8",
     "reliability_resilience": "848001a3bd49f7f9eece27a9adff5b9693af5404d06ccc07d0779fbb07f3854f"
   },
@@ -450,14 +450,14 @@
   "smoke_test_results": {
     "total_tested": 12,
     "all_passed": true,
-    "total_duration_ms": 16598.58,
+    "total_duration_ms": 1062.26,
     "results": [
       {
         "method": "GET",
         "path": "/v1/system/ping",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 3.13,
+        "latency_ms": 4.01,
         "passed": true
       },
       {
@@ -465,7 +465,7 @@
         "path": "/v1/system/data-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 7.66,
+        "latency_ms": 3.03,
         "passed": true
       },
       {
@@ -473,7 +473,7 @@
         "path": "/v1/system/metrics",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 2.09,
+        "latency_ms": 4.83,
         "passed": true
       },
       {
@@ -481,7 +481,7 @@
         "path": "/v1/system/circuit-breakers",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.33,
+        "latency_ms": 3.04,
         "passed": true
       },
       {
@@ -489,7 +489,7 @@
         "path": "/v1/system/error-catalog",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 1.71,
+        "latency_ms": 3.02,
         "passed": true
       },
       {
@@ -497,7 +497,7 @@
         "path": "/v1/system/model-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 16.2,
+        "latency_ms": 15.0,
         "passed": true
       },
       {
@@ -505,7 +505,7 @@
         "path": "/v1/location/context",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 6073.96,
+        "latency_ms": 3.38,
         "passed": true
       },
       {
@@ -513,7 +513,7 @@
         "path": "/v1/predict/demand",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 3439.23,
+        "latency_ms": 6.14,
         "passed": true
       },
       {
@@ -521,7 +521,7 @@
         "path": "/v1/recommend/zones",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 5324.22,
+        "latency_ms": 5.01,
         "passed": true
       },
       {
@@ -529,7 +529,7 @@
         "path": "/v1/recommendations/live",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 79.31,
+        "latency_ms": 5.04,
         "passed": true
       },
       {
@@ -537,7 +537,7 @@
         "path": "/v1/scenario/simulate",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 49.75,
+        "latency_ms": 4.49,
         "passed": true
       },
       {
@@ -545,7 +545,7 @@
         "path": "/v1/fleet/cell-occupancy?h3_cell=8861892543fffff",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 2.69,
+        "latency_ms": 2.97,
         "passed": true
       }
     ]
