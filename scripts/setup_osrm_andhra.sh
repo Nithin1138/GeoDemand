@@ -55,3 +55,4 @@ docker run --rm -t -v "${OSRM_DATA_DIR}:/data" osrm/osrm-backend osrm-customize 
 
 echo "✅ OSRM Graph successfully compiled!"
 echo "   Run 'docker compose up -d osrm' to start the high-speed routing service on port 5000."
+

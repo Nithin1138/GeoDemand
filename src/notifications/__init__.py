@@ -15,6 +15,7 @@ from notifications.models import (
 )
 from notifications.fcm_adapter import FCMAdapter
 from notifications.whatsapp_adapter import WhatsAppNotificationAdapter
+from notifications.telegram_adapter import TelegramNotificationAdapter
 from notifications.notification_engine import (
     NotificationTriggerService,
     notification_service,
@@ -32,6 +33,7 @@ __all__ = [
     "DeliveryRecord",
     "FCMAdapter",
     "WhatsAppNotificationAdapter",
+    "TelegramNotificationAdapter",
     "NotificationTriggerService",
     "notification_service",
 ]

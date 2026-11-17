@@ -1262,6 +1262,7 @@ async def update_notification_preferences(
         channels=channels_enum or [NotificationChannel.FCM, NotificationChannel.WHATSAPP],
         fcm_token=req.fcm_token,
         whatsapp_phone=req.whatsapp_phone,
+        telegram_chat_id=req.telegram_chat_id,
         alert_impending_rain=req.alert_impending_rain,
         alert_event_demand=req.alert_event_demand,
         alert_demand_spike=req.alert_demand_spike,

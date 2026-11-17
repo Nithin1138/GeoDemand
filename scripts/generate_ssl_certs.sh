@@ -29,3 +29,4 @@ chmod 644 "${SSL_DIR}/fullchain.pem"
 echo "✅ Self-signed SSL certificate successfully generated:"
 echo "   - Certificate: ${SSL_DIR}/fullchain.pem"
 echo "   - Private Key: ${SSL_DIR}/privkey.pem"
+

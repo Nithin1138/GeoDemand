@@ -872,6 +872,7 @@ class NotificationPreferencesRequest(BaseModel):
     channels: List[str] = Field(default=["FCM", "WHATSAPP"], description="Enabled notification delivery channels ('FCM', 'WHATSAPP', 'TELEGRAM', 'SMS')")
     fcm_token: Optional[str] = Field(default=None, description="Device FCM registration token")
     whatsapp_phone: Optional[str] = Field(default=None, description="WhatsApp contact phone number")
+    telegram_chat_id: Optional[str] = Field(default=None, description="Telegram user ID or chat ID for bot notifications")
     alert_impending_rain: bool = Field(default=True, description="Enable impending rain warnings")
     alert_event_demand: bool = Field(default=True, description="Enable nearby event demand surge alerts")
     alert_demand_spike: bool = Field(default=True, description="Enable general customer demand spike alerts")

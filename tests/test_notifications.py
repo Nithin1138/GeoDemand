@@ -31,6 +31,7 @@ from notifications.models import (
 )
 from notifications.fcm_adapter import FCMAdapter
 from notifications.whatsapp_adapter import WhatsAppNotificationAdapter
+from notifications.telegram_adapter import TelegramNotificationAdapter
 from notifications.notification_engine import NotificationTriggerService
 
 
@@ -525,3 +526,96 @@ def test_notification_history_endpoint(api_client):
     records = r.json()
     assert isinstance(records, list)
     assert len(records) >= 1
+
+
+# ===========================================================================
+# Telegram Bot Adapter & Delivery Tests
+# ===========================================================================
+
+def test_telegram_notification_adapter_simulated_delivery():
+    adapter = TelegramNotificationAdapter()
+    assert adapter.is_live is False
+
+    reloc = RelocationDetails(
+        destination_h3_cell="88619aa6c1fffff",
+        destination_name="Benz Circle Hub",
+        distance_km=1.2,
+        travel_time_minutes=6,
+        expected_profit_uplift_inr=75.0,
+        recommended_departure_time="11:30",
+        expected_arrival_time="11:36",
+        is_move_recommended=True,
+        forecast_freshness=ForecastFreshnessMetadata(),
+    )
+    msg = NotificationMessage(
+        notification_id="NOTIF-TG-TEST-001",
+        vendor_id="vendor_001",
+        alert_type=AlertType.DEMAND_SPIKE,
+        severity=AlertSeverity.INFO,
+        title="High Customer Demand near Benz Circle",
+        body="Demand surge detected with +₹75/hr uplift.",
+        relocation=reloc,
+    )
+
+    rec = adapter.send_notification("99887766", msg)
+    assert rec.status == DeliveryStatus.DELIVERED
+    assert rec.channel == NotificationChannel.TELEGRAM
+    assert rec.recipient == "99887766"
+    assert "MOCK-TG-MSG" in rec.upstream_message_id
+
+
+def test_telegram_notification_adapter_live_mock():
+    with patch("requests.post") as mock_post:
+        mock_resp = MagicMock()
+        mock_resp.status_code = 200
+        mock_resp.json.return_value = {"ok": True, "result": {"message_id": 43210}}
+        mock_post.return_value = mock_resp
+
+        adapter = TelegramNotificationAdapter(bot_token="123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11")
+        assert adapter.is_live is True
+
+        msg = NotificationMessage(
+            notification_id="NOTIF-TG-LIVE-001",
+            vendor_id="vendor_001",
+            alert_type=AlertType.IMPENDING_RAIN,
+            severity=AlertSeverity.WARNING,
+            title="Heavy Rain Imminent",
+            body="Rain beginning in 20 min. Deploy cart canopy.",
+        )
+
+        rec = adapter.send_notification("99887766", msg)
+        assert rec.status == DeliveryStatus.DELIVERED
+        assert rec.upstream_message_id == "43210"
+        assert mock_post.called
+
+
+def test_telegram_notification_adapter_invalid_chat_id():
+    adapter = TelegramNotificationAdapter()
+    msg = NotificationMessage(
+        notification_id="NOTIF-TG-INV-001",
+        vendor_id="vendor_001",
+        alert_type=AlertType.DEMAND_SPIKE,
+        severity=AlertSeverity.INFO,
+        title="Test Alert",
+        body="Test Body",
+    )
+    rec = adapter.send_notification("", msg)
+    assert rec.status == DeliveryStatus.FAILED
+    assert "INVALID_CHAT_ID" in rec.error_message
+
+
+def test_notification_dispatch_via_telegram_channel():
+    service = NotificationTriggerService()
+    msg = NotificationMessage(
+        notification_id=f"NOTIF-TG-DISP-{datetime.now().strftime('%f')}",
+        vendor_id="vendor_002",
+        alert_type=AlertType.DEMAND_SPIKE,
+        severity=AlertSeverity.INFO,
+        title="Telegram Dispatch Test",
+        body="Testing Telegram channel dispatch.",
+    )
+    records = service.dispatch_notification(msg, override_channel=NotificationChannel.TELEGRAM, force=True)
+    assert len(records) >= 1
+    tg_rec = [r for r in records if r.channel == NotificationChannel.TELEGRAM][0]
+    assert tg_rec.status == DeliveryStatus.DELIVERED
+

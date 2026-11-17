@@ -33,6 +33,7 @@ from notifications.models import (
 )
 from notifications.fcm_adapter import FCMAdapter
 from notifications.whatsapp_adapter import WhatsAppNotificationAdapter
+from notifications.telegram_adapter import TelegramNotificationAdapter
 from features.weather_client import OpenMeteoClient
 from api.providers.events import EventProviderFactory
 from api.poi_resolver import resolve_candidate_landmark
@@ -65,6 +66,7 @@ class NotificationTriggerService:
         self,
         fcm_adapter: Optional[FCMAdapter] = None,
         whatsapp_adapter: Optional[WhatsAppNotificationAdapter] = None,
+        telegram_adapter: Optional[TelegramNotificationAdapter] = None,
         weather_client: Optional[OpenMeteoClient] = None,
     ):
         if getattr(self, "_initialized", False):
@@ -72,6 +74,7 @@ class NotificationTriggerService:
 
         self.fcm_adapter = fcm_adapter or FCMAdapter()
         self.whatsapp_adapter = whatsapp_adapter or WhatsAppNotificationAdapter()
+        self.telegram_adapter = telegram_adapter or TelegramNotificationAdapter()
         self.weather_client = weather_client or OpenMeteoClient()
 
         # Thread-safe in-memory stores
@@ -90,9 +93,10 @@ class NotificationTriggerService:
         self._preferences_store["vendor_001"] = NotificationPreferences(
             vendor_id="vendor_001",
             opt_out=False,
-            channels=[NotificationChannel.FCM, NotificationChannel.WHATSAPP],
+            channels=[NotificationChannel.FCM, NotificationChannel.WHATSAPP, NotificationChannel.TELEGRAM],
             fcm_token="fcm_token_raju_dosa_v1_device_abc123",
             whatsapp_phone="919876543210",
+            telegram_chat_id="99887766",
             alert_impending_rain=True,
             alert_event_demand=True,
             alert_demand_spike=True,
@@ -101,8 +105,9 @@ class NotificationTriggerService:
         self._preferences_store["vendor_002"] = NotificationPreferences(
             vendor_id="vendor_002",
             opt_out=False,
-            channels=[NotificationChannel.WHATSAPP],
+            channels=[NotificationChannel.WHATSAPP, NotificationChannel.TELEGRAM],
             whatsapp_phone="918765432109",
+            telegram_chat_id="77665544",
             alert_impending_rain=True,
             alert_event_demand=True,
             alert_demand_spike=True,
@@ -111,9 +116,10 @@ class NotificationTriggerService:
         self._preferences_store["VND-001"] = NotificationPreferences(
             vendor_id="VND-001",
             opt_out=False,
-            channels=[NotificationChannel.FCM, NotificationChannel.WHATSAPP],
+            channels=[NotificationChannel.FCM, NotificationChannel.WHATSAPP, NotificationChannel.TELEGRAM],
             fcm_token="fcm_token_vnd001_mobile_xyz789",
             whatsapp_phone="919876543211",
+            telegram_chat_id="11223344",
             min_profit_uplift_inr=40.0,
         )
 
@@ -630,9 +636,10 @@ class NotificationTriggerService:
         # 6. Channel Selection & Delivery
         target_channels = [override_channel] if override_channel else prefs.channels
         if not target_channels:
-            target_channels = [NotificationChannel.FCM, NotificationChannel.WHATSAPP]
+            target_channels = [NotificationChannel.FCM, NotificationChannel.WHATSAPP, NotificationChannel.TELEGRAM]
 
         fcm_succeeded = False
+        wa_succeeded = False
 
         # Attempt FCM
         if NotificationChannel.FCM in target_channels:
@@ -644,11 +651,20 @@ class NotificationTriggerService:
                 fcm_succeeded = True
 
         # Attempt WhatsApp (Primary or Fallback)
-        if NotificationChannel.WHATSAPP in target_channels or (not fcm_succeeded and prefs.whatsapp_phone):
+        if NotificationChannel.WHATSAPP in target_channels or (not fcm_succeeded and prefs.whatsapp_phone and NotificationChannel.TELEGRAM not in target_channels):
             phone = prefs.whatsapp_phone or "919876543210"
             rec_wa = self.whatsapp_adapter.send_notification(phone, message)
             self._record_delivery(rec_wa)
             records.append(rec_wa)
+            if rec_wa.status == DeliveryStatus.DELIVERED:
+                wa_succeeded = True
+
+        # Attempt Telegram (Alternative to WhatsApp or Explicit Channel)
+        if NotificationChannel.TELEGRAM in target_channels or (not wa_succeeded and prefs.telegram_chat_id):
+            chat_id = prefs.telegram_chat_id or "99887766"
+            rec_tg = self.telegram_adapter.send_notification(chat_id, message)
+            self._record_delivery(rec_tg)
+            records.append(rec_tg)
 
         # Store active notification
         with self._store_lock:

@@ -104,6 +104,7 @@ class NotificationPreferences:
     )
     fcm_token: Optional[str] = None
     whatsapp_phone: Optional[str] = None
+    telegram_chat_id: Optional[str] = None
     alert_impending_rain: bool = True
     alert_event_demand: bool = True
     alert_demand_spike: bool = True
@@ -119,6 +120,7 @@ class NotificationPreferences:
             "channels": [c.value if isinstance(c, NotificationChannel) else str(c) for c in self.channels],
             "fcm_token": self.fcm_token,
             "whatsapp_phone": self.whatsapp_phone,
+            "telegram_chat_id": self.telegram_chat_id,
             "alert_impending_rain": self.alert_impending_rain,
             "alert_event_demand": self.alert_event_demand,
             "alert_demand_spike": self.alert_demand_spike,

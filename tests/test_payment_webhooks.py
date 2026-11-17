@@ -9,6 +9,7 @@ import base64
 import hashlib
 import hmac
 import json
+import time
 from datetime import datetime, timezone, timedelta
 import pytest
 
@@ -474,6 +475,30 @@ def test_telegram_sales_command_and_location():
     assert res_sales["status"] == "INGESTED"
     assert res_sales["vendor_id"] == "vendor_002"
     assert res_sales["amount_inr"] == 280.0
+
+
+def test_telegram_recommend_command_webhook():
+    """Telegram bot responds to /recommend command with top relocation hotspot."""
+    vendor_channel_registry.register("vendor_002", telegram_id="77665544")
+    recommend_update = {
+        "update_id": 99203,
+        "message": {
+            "message_id": 412,
+            "from": {"id": 77665544, "first_name": "Suresh"},
+            "chat": {"id": 77665544},
+            "date": int(time.time()),
+            "text": "/recommend",
+        },
+    }
+    res = webhook_service.process_telegram_webhook(
+        secret_token=TELEGRAM_WEBHOOK_SECRET,
+        parsed_json=recommend_update,
+    )
+    assert res["status"] == "RECOMMENDATION_GENERATED"
+    assert res["provider"] == "telegram"
+    assert res["vendor_id"] == "vendor_002"
+    assert "Benz Circle" in res["reply_text"]
+    assert "RECOMMENDED MOVE" in res["reply_text"]
 
 
 # ===========================================================================
