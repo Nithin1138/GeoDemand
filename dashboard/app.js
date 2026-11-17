@@ -7,7 +7,7 @@ const state = {
   map: null,
   baseLayers: {},
   baseLayer: 'streets',
-  origin: { lat: 16.5062, lng: 80.6480 },
+  origin: { lat: 16.5060, lng: 80.6481 },
   marker: null,
   radius: null,
   heatmap: null,
@@ -165,7 +165,7 @@ async function initMap() {
 function updateOrigin(lat, lng, center = false) {
   state.origin = { lat, lng };
   $('mapCoordinates').textContent = `${lat.toFixed(4)}, ${lng.toFixed(4)}`;
-  $('mapLocationName').textContent = Math.abs(lat - 16.5062) < .01 && Math.abs(lng - 80.6480) < .01 ? 'Vijayawada' : 'Starting point';
+  $('mapLocationName').textContent = Math.abs(lat - 16.5060) < .015 && Math.abs(lng - 80.6481) < .015 ? 'Vijayawada' : 'Starting point';
   if (!state.map) return;
   if (state.marker) state.map.removeLayer(state.marker);
   state.marker = L.marker([lat, lng], {
@@ -658,7 +658,7 @@ function focusSetup() {
 /* MEMBER 4 PRODUCTION HANDLERS: Multi-City, Shift, Fleet, POS, MLOps, PWA    */
 /* ========================================================================== */
 const CITIES = {
-  vijayawada: { lat: 16.5062, lng: 80.6480, name: 'Vijayawada' },
+  vijayawada: { lat: 16.5060, lng: 80.6481, name: 'Vijayawada' },
   hyderabad: { lat: 17.3850, lng: 78.4867, name: 'Hyderabad' },
   bengaluru: { lat: 12.9716, lng: 77.5946, name: 'Bengaluru' },
   visakhapatnam: { lat: 17.6868, lng: 83.2185, name: 'Visakhapatnam' },

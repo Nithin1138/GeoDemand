@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css?v=2.7.0" />
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="/static/app.js?v=2.5.0"></script>
+  <script defer src="/static/app.js?v=2.7.1"></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to dashboard</a>
@@ -129,7 +129,7 @@
                 <button class="recenter-button icon-button" id="recenterBtn" type="button" aria-label="Recenter map on your location" title="Recenter on your location"><svg class="icon"><use href="#i-target"/></svg></button>
               </div>
               <div class="map-footer">
-                <span class="map-location"><svg class="icon"><use href="#i-pin"/></svg><strong id="mapLocationName">Vijayawada</strong><span id="mapCoordinates">16.5062, 80.6480</span></span>
+                <span class="map-location"><svg class="icon"><use href="#i-pin"/></svg><strong id="mapLocationName">Vijayawada</strong><span id="mapCoordinates">16.5060, 80.6481</span></span>
                 <div class="map-footer-meta">
                   <span class="telemetry-pill"><svg class="icon"><use href="#i-spark"/></svg>Real-time traffic & weather</span>
                   <span class="radius-pill" id="mapRadius">3 km radius</span>
@@ -142,7 +142,7 @@
               <form id="analysisForm">
                 <div class="form-row profile-inputs"><div class="form-group"><label for="vendorCategory">Your business</label><div class="select-wrap"><select id="vendorCategory" class="form-input"><option value="food">Food & beverages</option><option value="fruits">Fruits & juice</option><option value="salon">Salon van</option><option value="repair">Repair services</option></select></div></div><div class="form-group"><label for="aov">Avg. order value</label><div class="input-affix"><span>₹</span><input class="form-input" type="number" id="aov" value="100" min="20" max="500" step="1" required /></div></div></div>
                 <div class="radius-control"><div class="label-row"><label for="searchRadius">Search radius</label><output for="searchRadius" id="radiusValue">3 km</output></div><input type="range" id="searchRadius" value="3" min="0.5" max="8" step="0.5" /><div class="range-labels"><span>0.5 km</span><span>8 km</span></div></div>
-                <div class="location-control"><div class="label-row"><span class="form-label">Starting location</span><span class="location-mode">Map or coordinates</span></div><button class="btn btn-location" id="useLocationBtn" type="button"><svg class="icon"><use href="#i-target"/></svg>Use my current location</button><div class="form-row coordinates-row"><div class="form-group"><label for="latInput">Latitude</label><input class="form-input" type="number" id="latInput" value="16.5062" step="any" min="-90" max="90" required /></div><div class="form-group"><label for="lngInput">Longitude</label><input class="form-input" type="number" id="lngInput" value="80.6480" step="any" min="-180" max="180" required /></div></div></div>
+                <div class="location-control"><div class="label-row"><span class="form-label">Starting location</span><span class="location-mode">Map or coordinates</span></div><button class="btn btn-location" id="useLocationBtn" type="button"><svg class="icon"><use href="#i-target"/></svg>Use my current location</button><div class="form-row coordinates-row"><div class="form-group"><label for="latInput">Latitude</label><input class="form-input" type="number" id="latInput" value="16.5060" step="any" min="-90" max="90" required /></div><div class="form-group"><label for="lngInput">Longitude</label><input class="form-input" type="number" id="lngInput" value="80.6481" step="any" min="-180" max="180" required /></div></div></div>
                 <button class="btn btn-primary btn-full" id="getRecsBtn" type="submit"><svg class="icon"><use href="#i-spark"/></svg>Find my best locations<svg class="icon button-arrow"><use href="#i-arrow"/></svg></button>
                 <div id="loadingBar" class="loading-bar hidden" aria-hidden="true"><div class="loading-fill"></div></div><p class="form-note" id="formNote"><svg class="icon"><use href="#i-check"/></svg>Built on local signals. Powered by AI.</p><div class="error-msg hidden" id="errorMsg" role="alert"></div>
               </form>
