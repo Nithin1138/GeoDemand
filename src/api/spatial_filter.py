@@ -83,11 +83,26 @@ ELURU_CANAL_MARSH_POLYGON: List[Tuple[float, float]] = [
     (16.514, 80.658),
 ]
 
+NEERUKONDA_AINAVOLU_LAKE_POLYGON: List[Tuple[float, float]] = [
+    (16.483, 80.491),
+    (16.483, 80.503),
+    (16.471, 80.503),
+    (16.471, 80.491),
+]
+
+KNOWN_WATER_H3_CELLS: set[str] = {
+    "88619bd2e7fffff",  # Ainavolu / Neerukonda Freshwater Reservoir
+    "88619aa6c5fffff",  # Krishna River Central
+    "88619aa6c3fffff",  # Krishna River Barrage
+    "88619aa6cbfffff",  # Krishna River South
+}
+
 ALL_WATER_POLYGONS = [
     KRISHNA_RIVER_POLYGON,
     PRAKASAM_BARRAGE_RESERVOIR_POLYGON,
     BHAVANI_ISLAND_WATER_POLYGON,
     ELURU_CANAL_MARSH_POLYGON,
+    NEERUKONDA_AINAVOLU_LAKE_POLYGON,
 ]
 
 # In-memory evaluation cache for coordinates: (lat_round, lng_round) -> is_water
@@ -188,6 +203,9 @@ def is_water_cell(h3_cell: str) -> bool:
     Executes in sub-millisecond time with zero blocking external network calls.
     """
     if not h3_cell or not h3.is_valid_cell(h3_cell):
+        return True
+
+    if h3_cell in KNOWN_WATER_H3_CELLS:
         return True
 
     if h3_cell in _WATER_CELL_CACHE:

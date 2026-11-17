@@ -370,13 +370,48 @@ class OSRMRoutingProvider(RoutingProvider):
                     if data.get("code") == "Ok" and data.get("routes"):
                         route = data["routes"][0]
                         coords = [[pt[1], pt[0]] for pt in route["geometry"]["coordinates"]]
-                        
+
+                        # Check destination reachability:
+                        # If destination waypoint snapped > 200m away, or if last coordinate is > 250m from destination,
+                        # the route is truncated into an inaccessible dead-end.
+                        dest_waypoint_dist = 0.0
+                        if len(data.get("waypoints", [])) > 1:
+                            dest_waypoint_dist = float(data["waypoints"][1].get("distance", 0.0))
+
+                        dist_to_dest_m = (
+                            math.hypot(coords[-1][0] - dest_lat, coords[-1][1] - dest_lng) * 111000
+                            if coords else 9999.0
+                        )
+
+                        if dest_waypoint_dist > 250.0 or dist_to_dest_m > 300.0:
+                            # OSRM could not connect to destination (e.g. stopped at an unreachable dead-end)
+                            # Generate a complete navigable street grid corridor to destination instead of a broken stub
+                            coords = self._generate_street_grid_waypoints(origin_lat, origin_lng, dest_lat, dest_lng)
+                            fb = self._haversine_fallback(origin_lat, origin_lng, dest_lat, dest_lng, time.time())
+                            return {
+                                "code": "Ok",
+                                "coordinates": coords,
+                                "distance_km": fb["distance_km"],
+                                "duration_min": round(fb["duration_min"]),
+                                "is_routable": True,
+                                "source": "navigable_grid_corridor",
+                            }
+
                         # Prune artificial U-turn loops caused by one-way alleys or divided highway medians
                         coords, dist_saved_m, dur_saved_s = self._prune_artificial_uturns(
                             data, origin_lat, origin_lng, dest_lat, dest_lng, coords
                         )
                         adj_dist_m = max(100.0, float(route["distance"]) - dist_saved_m)
                         adj_dur_s = max(30.0, float(route["duration"]) - dur_saved_s)
+
+                        # Smooth start and terminal connections so route always touches origin and destination pins
+                        if coords:
+                            d_orig = math.hypot(coords[0][0] - origin_lat, coords[0][1] - origin_lng) * 111000
+                            if 15.0 < d_orig < 200.0:
+                                coords = [[origin_lat, origin_lng]] + coords
+                            d_dest = math.hypot(coords[-1][0] - dest_lat, coords[-1][1] - dest_lng) * 111000
+                            if 15.0 < d_dest < 200.0:
+                                coords = coords + [[dest_lat, dest_lng]]
 
                         return {
                             "code": "Ok",

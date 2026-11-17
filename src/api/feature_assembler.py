@@ -194,6 +194,46 @@ class FeatureAssembler:
             except Exception as e:
                 logger.debug(f"Live POI discovery error for {h3_cell}: {e}")
 
+        # 1b. Verified OSM POI Spatial Enhancement (POIResolver)
+        try:
+            from api.poi_resolver import POIResolver
+            resolver = POIResolver.get()
+            local_pois = resolver._h3_index.get(h3_cell, [])
+            if local_pois:
+                for p in local_pois:
+                    cat = p.get("category", "")
+                    name_l = p.get("name", "").lower()
+                    amenity_l = p.get("amenity", "").lower()
+                    is_uni = "university" in amenity_l or "university" in name_l or "campus" in name_l
+
+                    if cat == "college":
+                        # Universities / colleges create substantial student and faculty footfall
+                        feat["college_count"] = feat.get("college_count", 0.0) + (3.0 if is_uni else 1.5)
+                        feat["commercial_ratio"] = max(feat.get("commercial_ratio", 0.0), 0.35 if is_uni else 0.25)
+                        feat["building_density"] = max(feat.get("building_density", 0.5), 3.0 if is_uni else 2.0)
+                        feat["population_density"] = max(feat.get("population_density", 4000.0), 12000.0 if is_uni else 8000.0)
+                        feat["foot_traffic_proxy"] = max(feat.get("foot_traffic_proxy", 20.0), 85.0 if is_uni else 60.0)
+                        source = "real_osm_poi"
+                    elif cat == "hospital":
+                        feat["hospital_count"] = feat.get("hospital_count", 0.0) + 1.5
+                        feat["commercial_ratio"] = max(feat.get("commercial_ratio", 0.0), 0.30)
+                        source = "real_osm_poi"
+                    elif cat == "mall":
+                        feat["mall_count"] = feat.get("mall_count", 0.0) + 1.5
+                        feat["commercial_ratio"] = max(feat.get("commercial_ratio", 0.0), 0.40)
+                        source = "real_osm_poi"
+                    elif cat == "transit":
+                        feat["bus_stop_count"] = feat.get("bus_stop_count", 0.0) + 1.0
+                        source = "real_osm_poi"
+                    elif cat == "park":
+                        feat["park_count"] = feat.get("park_count", 0.0) + 1.0
+                        source = "real_osm_poi"
+                    elif cat == "school":
+                        feat["school_count"] = feat.get("school_count", 0.0) + 1.0
+                        source = "real_osm_poi"
+        except Exception as e:
+            logger.debug(f"OSM POI resolver discovery error for {h3_cell}: {e}")
+
         # 2. Road Accessibility & Density via OSRM
         try:
             osrm_url = f"https://router.project-osrm.org/nearest/v1/driving/{lng:.5f},{lat:.5f}"
