@@ -251,3 +251,4 @@ class TelegramNotificationAdapter:
             delivered_at=datetime.now(timezone.utc),
             upstream_message_id=mock_msg_id,
         )
+
