@@ -5,7 +5,7 @@
  *           Network-first with JSON offline fallback for API endpoints.
  */
 
-const CACHE_NAME = 'geodemand-shell-v2.7.1';
+const CACHE_NAME = 'geodemand-shell-v2.7.2';
 const STATIC_ASSETS = [
   '/',
   '/static/style.css',

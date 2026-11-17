@@ -716,6 +716,7 @@ class ShiftStopItem(BaseModel):
     departure_formatted: str = Field(..., description="Human-readable departure time")
     travel_to_next_stop_minutes: int = Field(..., description="Travel duration to next stop in minutes")
     travel_to_next_stop_km: float = Field(..., description="Road distance to next stop in km")
+    travel_to_next_stop_geometry: Optional[List[List[float]]] = Field(default_factory=list, description="Street coordinates [[lat, lng], ...] for this leg")
     fuel_cost_to_next_inr: float = Field(..., description="Travel fuel expense to next stop in INR")
     expected_hourly_customers: int = Field(..., description="Projected hourly customer count")
     customers_served_at_stop: int = Field(..., description="Total customers served during dwell period")

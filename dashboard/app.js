@@ -21,6 +21,8 @@ const state = {
   routeRequest: null,
   routeGeneration: 0,
   routeCache: new Map(),
+  shiftMap: null,
+  shiftMapLayers: null,
   heatmapVisible: true,
   locating: false,
   loading: false,
@@ -676,6 +678,115 @@ function handleCityChange(event) {
   announce(`Switched location to ${city.name}.`);
 }
 
+function renderShiftMap(stops) {
+  const mapEl = $('shiftMap');
+  if (!mapEl || !window.L || !stops || stops.length === 0) return;
+
+  if (!state.shiftMap) {
+    state.shiftMap = L.map('shiftMap', { zoomControl: true });
+    L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      attribution: '© OpenStreetMap contributors',
+      maxZoom: 19
+    }).addTo(state.shiftMap);
+    state.shiftMapLayers = L.layerGroup().addTo(state.shiftMap);
+  }
+
+  state.shiftMapLayers.clearLayers();
+
+  const allPoints = [];
+  const originLat = state.origin.lat;
+  const originLng = state.origin.lng;
+
+  // Add Origin marker
+  L.marker([originLat, originLng], {
+    icon: L.divIcon({
+      className: '',
+      html: '<div class="origin-marker" style="box-shadow:0 0 0 4px rgba(40,116,91,.3);"><span></span></div>',
+      iconSize: [24, 24],
+      iconAnchor: [12, 12]
+    })
+  }).addTo(state.shiftMapLayers).bindPopup('<strong>Starting Point (Shift Base)</strong>');
+  allPoints.push([originLat, originLng]);
+
+  // Connect legs using real street coordinates when present
+  stops.forEach((stop, index) => {
+    const lat = stop.latitude;
+    const lng = stop.longitude;
+    allPoints.push([lat, lng]);
+
+    const badgeColor = index === 0 ? '#153e35' : (index === stops.length - 1 ? '#8a2b2b' : '#1e6d4e');
+    const borderColor = index === 0 ? '#d7eb9e' : (index === stops.length - 1 ? '#ffcdd2' : '#b7dfca');
+    const marker = L.marker([lat, lng], {
+      icon: L.divIcon({
+        className: '',
+        html: `<div class="rank-marker top" style="background:${badgeColor};border-color:${borderColor};color:#fff;font-weight:750;box-shadow:0 4px 12px rgba(0,0,0,.25);">${stop.stop_number}</div>`,
+        iconSize: [30, 30],
+        iconAnchor: [15, 30]
+      })
+    }).addTo(state.shiftMapLayers);
+
+    const name = stop.landmark_display || stop.landmark_name || `Stop ${stop.stop_number}`;
+    const arr = stop.arrival_formatted || '—';
+    const dep = stop.departure_formatted || '—';
+    const profit = money(stop.net_profit_inr || 0);
+    const dwell = `${number(stop.dwell_minutes || 90)}m trading`;
+    marker.bindPopup(`
+      <div style="font-family:var(--font);padding:4px 2px;">
+        <strong style="font-size:13px;color:var(--ink);">${escapeHTML(name)}</strong>
+        <div style="font-size:11px;color:var(--secondary);margin:4px 0 8px;">Stop #${stop.stop_number} · ${escapeHTML(arr)} – ${escapeHTML(dep)} (${dwell})</div>
+        <div style="display:flex;justify-content:space-between;gap:12px;font-size:11px;border-top:1px solid #edf0eb;padding-top:6px;">
+          <span>Net Profit: <strong style="color:var(--green);">${profit}</strong></span>
+          <span>Est. Customers: <strong>${number(stop.expected_hourly_customers || 0)}/hr</strong></span>
+        </div>
+      </div>
+    `);
+
+    // Draw real road navigation polyline to next stop
+    const legGeo = stop.travel_to_next_stop_geometry;
+    if (legGeo && legGeo.length > 1) {
+      L.polyline(legGeo, { color: '#ffffff', weight: 6, opacity: 0.9, interactive: false }).addTo(state.shiftMapLayers);
+      L.polyline(legGeo, { color: '#28745b', weight: 3.5, opacity: 0.95 }).addTo(state.shiftMapLayers)
+        .bindTooltip(`Transit to Stop ${index + 2} · ${number(stop.travel_to_next_stop_km, 1)} km (${number(stop.travel_to_next_stop_minutes)} min)`, { sticky: true });
+      legGeo.forEach((pt) => allPoints.push(pt));
+    }
+  });
+
+  // Connect origin to first stop if first stop is not origin
+  const firstStop = stops[0];
+  if (firstStop && (Math.abs(firstStop.latitude - originLat) > 1e-4 || Math.abs(firstStop.longitude - originLng) > 1e-4)) {
+    L.polyline([[originLat, originLng], [firstStop.latitude, firstStop.longitude]], {
+      color: '#28745b', weight: 3, dashArray: '5 7', opacity: 0.8
+    }).addTo(state.shiftMapLayers).bindTooltip('Initial transit to Stop 1', { sticky: true });
+  }
+
+  // Also sync with the main radar map
+  if (state.map) {
+    state.route.clearLayers();
+    stops.forEach((stop) => {
+      const legGeo = stop.travel_to_next_stop_geometry;
+      if (legGeo && legGeo.length > 1) {
+        L.polyline(legGeo, { color: '#ffffff', weight: 6, opacity: 0.9, interactive: false }).addTo(state.route);
+        L.polyline(legGeo, { color: '#28745b', weight: 3.5, opacity: 0.95 }).addTo(state.route);
+      }
+      L.marker([stop.latitude, stop.longitude], {
+        icon: L.divIcon({
+          className: '',
+          html: `<div class="rank-marker top" style="background:#153e35;border-color:#d7eb9e;color:#fff;">${stop.stop_number}</div>`,
+          iconSize: [28, 28],
+          iconAnchor: [14, 28]
+        })
+      }).addTo(state.route);
+    });
+  }
+
+  setTimeout(() => {
+    state.shiftMap.invalidateSize();
+    if (allPoints.length > 0) {
+      state.shiftMap.fitBounds(L.polyline(allPoints).getBounds(), { padding: [35, 35] });
+    }
+  }, 100);
+}
+
 async function planShiftItinerary() {
   const btn = $('runShiftBtn');
   const resultsWrap = $('shiftResults');
@@ -771,23 +882,8 @@ async function planShiftItinerary() {
       timeline.appendChild(el);
     });
 
-    // Draw route polyline and waypoint markers on map
-    if (state.map && stops.length > 0) {
-      state.route.clearLayers();
-      const coords = [[state.origin.lat, state.origin.lng], ...stops.map((s) => [s.latitude, s.longitude])];
-      L.polyline(coords, { color: '#28745b', weight: 4, opacity: 0.85 }).addTo(state.route);
-      stops.forEach((s) => {
-        L.marker([s.latitude, s.longitude], {
-          icon: L.divIcon({
-            className: '',
-            html: `<div class="rank-marker top" style="background:#153e35;border-color:#d7eb9e;">${s.stop_number}</div>`,
-            iconSize: [28, 28],
-            iconAnchor: [14, 28]
-          })
-        }).addTo(state.route);
-      });
-      state.map.fitBounds(L.polyline(coords).getBounds(), { padding: [40, 40] });
-    }
+    // Render interactive real-time route on the dedicated shift map and main radar map
+    renderShiftMap(stops);
     announce('Optimized shift plan generated successfully.');
   } catch (err) {
     const msg = err.name === 'AbortError' || err === 'timeout'
@@ -1008,6 +1104,9 @@ function switchView(viewId) {
   if (cleanId === 'explore') $('explore')?.scrollIntoView({ behavior: 'smooth' });
   if (cleanId === 'recommendations') $('recommendations')?.scrollIntoView({ behavior: 'smooth' });
   if (cleanId === 'dataSources') renderDataSourceInventory();
+  if (cleanId === 'shiftPlanner') {
+    setTimeout(() => state.shiftMap?.invalidateSize(), 120);
+  }
   if (cleanId === 'overview' || cleanId === 'explore') {
     setTimeout(() => state.map?.invalidateSize(), 120);
   }

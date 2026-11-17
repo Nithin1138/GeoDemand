@@ -17,7 +17,7 @@
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
   <link rel="stylesheet" href="/static/style.css?v=2.7.0" />
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="/static/app.js?v=2.7.1"></script>
+  <script defer src="/static/app.js?v=2.7.2"></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to dashboard</a>
@@ -257,6 +257,19 @@
                     <div class="summary-value" id="shiftStopsCount">—</div>
                     <div class="summary-foot">With dwell & setup time</div>
                   </article>
+                </div>
+
+                <div class="shift-map-container" style="margin-bottom:24px;">
+                  <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px;">
+                    <div class="title-with-badge">
+                      <h3 style="font-size:14px;font-weight:700;color:var(--ink);">Real-Time Route Navigation Map</h3>
+                      <span class="radar-live-badge"><span class="radar-pulse"></span>LIVE ROAD ROUTING</span>
+                    </div>
+                    <span style="font-size:11px;color:var(--secondary);" id="shiftMapMeta">Turn-by-turn road navigation across scheduled stops</span>
+                  </div>
+                  <div class="surface" style="border-radius:14px;overflow:hidden;border:1.5px solid rgba(40,116,91,.28);box-shadow:0 8px 24px rgba(21,62,53,.08);">
+                    <div id="shiftMap" style="height:360px;width:100%;background:#edf0e7;"></div>
+                  </div>
                 </div>
 
                 <div class="timeline-container">

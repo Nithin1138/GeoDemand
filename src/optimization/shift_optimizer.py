@@ -187,11 +187,47 @@ class ShiftOptimizer:
         K_max = max(1, min(max_relocation_stops, 5))
         model = cp_model.CpModel()
 
+        # Local time window evaluation (IST timezone for Indian urban markets)
+        ist = timezone(timedelta(hours=5, minutes=30))
+        shift_start_local = shift_start.astimezone(ist) if shift_start.tzinfo else shift_start.replace(tzinfo=ist)
+        shift_end_local = shift_start_local + timedelta(minutes=shift_duration_minutes)
+
+        # Compute dynamic time-of-day multipliers for each shift phase
+        phase_mults = []
+        for s in range(K_max):
+            phase_mid_m = int((s + 0.5) * (shift_duration_minutes / max(1, K_max)))
+            phase_dt = shift_start_local + timedelta(minutes=phase_mid_m)
+            phase_hour = phase_dt.hour + phase_dt.minute / 60.0
+
+            s_mults = []
+            for c in pool:
+                c_wins = resolve_candidate_time_windows(c, vendor_category, shift_start_local, shift_end_local)
+                mult = 1.0
+                for w in c_wins:
+                    w_start_h = w["window_start"].hour + w["window_start"].minute / 60.0
+                    w_end_h = w["window_end"].hour + w["window_end"].minute / 60.0
+                    if w_start_h <= phase_hour <= w_end_h:
+                        mult = max(mult, float(w.get("demand_multiplier", 1.3)))
+                if mult == 1.0:
+                    mult = 0.85
+                s_mults.append(mult)
+            phase_mults.append(s_mults)
+
+        # Cap maximum dwell per stop so a single morning peak cannot monopolize the full shift
+        max_dwell = (shift_duration_minutes - teardown_time_minutes) if (K_max <= 1 or num_locs <= 1) else max(
+            min_dwell_time_minutes, int(round(shift_duration_minutes / K_max * 1.35))
+        )
+        K_target = min(
+            K_max,
+            num_locs - 1,
+            int(shift_duration_minutes // (min_dwell_time_minutes + setup_time_minutes + teardown_time_minutes + 10)),
+        )
+
         # Decision variables:
         # stop_loc[step] in [0..num_locs-1]
         # visit_step[step] in {0, 1}
         # start_time[step] in [0..shift_duration_minutes]
-        # dwell_time[step] in [min_dwell_time_minutes..shift_duration_minutes]
+        # dwell_time[step] in [min_dwell_time_minutes..max_dwell]
         # end_time[step] in [0..shift_duration_minutes]
 
         stop_loc = {}
@@ -204,7 +240,7 @@ class ShiftOptimizer:
         for s in range(K_max):
             visit_step[s] = model.NewBoolVar(f"visit_{s}")
             start_time[s] = model.NewIntVar(0, shift_duration_minutes, f"start_{s}")
-            dwell_time[s] = model.NewIntVar(min_dwell_time_minutes, shift_duration_minutes, f"dwell_{s}")
+            dwell_time[s] = model.NewIntVar(min_dwell_time_minutes, max_dwell, f"dwell_{s}")
             end_time[s] = model.NewIntVar(0, shift_duration_minutes, f"end_{s}")
             step_profit[s] = model.NewIntVar(0, 100000, f"profit_{s}")
 
@@ -218,17 +254,19 @@ class ShiftOptimizer:
         # First step must be visited
         model.Add(visit_step[0] == 1)
 
+        # Enforce multi-stop relocation when requested and commercially feasible
+        if K_target >= 2 and K_max >= 2 and shift_duration_hours >= 6.0:
+            model.Add(visit_step[1] == 1)
+
         # Steps must be contiguous: step s+1 can only be visited if step s is visited
         for s in range(K_max - 1):
             model.Add(visit_step[s + 1] <= visit_step[s])
 
-        # Step 0 starts at time 0 (at origin)
+        # Step 0 starts at time 0
         model.Add(start_time[0] == 0)
 
         # Dwell intervals and time sequencing
         for s in range(K_max):
-            # Overhead for relocation: setup and teardown apply if relocating
-            # For step 0 at origin, setup is 0; for subsequent steps, setup applies
             setup_val = setup_time_minutes if s > 0 else 0
             teardown_val = teardown_time_minutes
 
@@ -240,13 +278,11 @@ class ShiftOptimizer:
             model.Add(end_time[s] == start_time[s] + total_duration)
             model.Add(end_time[s] <= shift_duration_minutes)
 
-            # Profit calculation for step s
-            # Profit = sum over i (stop_loc[(s,i)] * hourly_profit_i * dwell_time[s] / 60)
+            # Profit calculation for step s with dynamic commercial phase multipliers
             for i in range(num_locs):
                 h_prof = max(50.0, float(pool[i].get("expected_profit_inr", 300.0)))
-                # Scale: profit in integer cents/paise or round to integer INR
-                # profit_rate_per_min = h_prof / 60.0
-                model.Add(step_profit[s] == int(round(h_prof / 60.0)) * dwell_time[s]).OnlyEnforceIf(stop_loc[(s, i)])
+                phase_rate = max(1, int(round((h_prof * phase_mults[s][i]) / 60.0)))
+                model.Add(step_profit[s] == phase_rate * dwell_time[s]).OnlyEnforceIf(stop_loc[(s, i)])
 
             model.Add(step_profit[s] == 0).OnlyEnforceIf(visit_step[s].Not())
 
@@ -324,6 +360,7 @@ class ShiftOptimizer:
                     next_dur_min = 0
                     next_dist_km = 0.0
                     next_fuel_inr = 0.0
+                    next_geo = []
                     if s + 1 < K_max and solver.Value(visit_step[s + 1]) == 1:
                         next_idx = 0
                         for j in range(num_locs):
@@ -333,6 +370,20 @@ class ShiftOptimizer:
                         next_dur_min = time_matrix[chosen_idx][next_idx]
                         next_dist_km = dist_matrix[chosen_idx][next_idx]
                         next_fuel_inr = fuel_matrix[chosen_idx][next_idx]
+                        next_cand = pool[next_idx]
+                        try:
+                            route_res = self.routing.get_route_geometry(
+                                cand["latitude"], cand["longitude"],
+                                next_cand["latitude"], next_cand["longitude"]
+                            )
+                            if route_res.get("coordinates"):
+                                next_geo = route_res["coordinates"]
+                            if route_res.get("distance_km"):
+                                next_dist_km = float(route_res["distance_km"])
+                            if route_res.get("duration_min"):
+                                next_dur_min = int(route_res["duration_min"])
+                        except Exception as e:
+                            logger.debug(f"Routing geometry calculation failed: {e}")
 
                     # Economics for stop
                     hourly_cust = cand.get("expected_customers", 15)
@@ -366,6 +417,7 @@ class ShiftOptimizer:
                         "departure_formatted": dep_time.strftime("%I:%M %p"),
                         "travel_to_next_stop_minutes": next_dur_min,
                         "travel_to_next_stop_km": next_dist_km,
+                        "travel_to_next_stop_geometry": next_geo,
                         "fuel_cost_to_next_inr": next_fuel_inr,
                         "expected_hourly_customers": hourly_cust,
                         "customers_served_at_stop": stop_cust,
