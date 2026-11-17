@@ -643,6 +643,8 @@ async def pwa_service_worker():
 
 
 @app.get("/v1/system/ping", response_model=PingResponse, tags=["System"], summary="Operational liveness ping")
+@app.get("/v1/system/health", response_model=PingResponse, tags=["System"], summary="Operational health check")
+@app.get("/health", response_model=PingResponse, tags=["System"], include_in_schema=False)
 async def ping():
     return {"status": "ok", "service": "GeoDemand AI", "version": "2.1.0",
             "timestamp": datetime.now(timezone.utc).isoformat()}
