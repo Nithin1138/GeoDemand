@@ -815,15 +815,149 @@ async function cancelFleetReservation() {
   }
 }
 
+function getStoredTransactions() {
+  try {
+    const raw = localStorage.getItem('geodemand_pos_txs');
+    if (raw) return JSON.parse(raw);
+  } catch {}
+  return [
+    {
+      transaction_id: 'TX-VJA-8A91F',
+      amount_inr: 180,
+      payment_method: 'upi',
+      category: 'food',
+      h3_cell_id: '88619aa6c7fffff',
+      timestamp: new Date(Date.now() - 12 * 60000).toISOString()
+    },
+    {
+      transaction_id: 'TX-VJA-72C0B',
+      amount_inr: 95,
+      payment_method: 'cash',
+      category: 'fruits',
+      h3_cell_id: '88619aa6c1fffff',
+      timestamp: new Date(Date.now() - 34 * 60000).toISOString()
+    },
+    {
+      transaction_id: 'TX-VJA-61D44',
+      amount_inr: 240,
+      payment_method: 'upi',
+      category: 'food',
+      h3_cell_id: '88619aa6c7fffff',
+      timestamp: new Date(Date.now() - 58 * 60000).toISOString()
+    }
+  ];
+}
+
+function renderPosStats() {
+  const txs = state.posTransactions || [];
+  const totalCount = txs.length;
+  const totalRev = txs.reduce((sum, t) => sum + (Number(t.amount_inr) || 0), 0);
+  const aov = totalCount > 0 ? Math.round(totalRev / totalCount) : 0;
+
+  const upiCount = txs.filter((t) => (t.payment_method || '').toLowerCase() === 'upi').length;
+  const cashCount = txs.filter((t) => (t.payment_method || '').toLowerCase() === 'cash').length;
+  const cardCount = txs.filter((t) => (t.payment_method || '').toLowerCase() === 'card').length;
+
+  if ($('posStatsTotalCount')) $('posStatsTotalCount').textContent = number(totalCount);
+  if ($('posStatsTotalRevenue')) $('posStatsTotalRevenue').textContent = money(totalRev);
+  if ($('posStatsAov')) $('posStatsAov').textContent = money(aov);
+  if ($('posStatsSplit')) $('posStatsSplit').textContent = `UPI: ${upiCount} · Cash: ${cashCount} · Card: ${cardCount}`;
+  if ($('posFeedBadge')) $('posFeedBadge').textContent = `${totalCount} transaction${totalCount === 1 ? '' : 's'}`;
+
+  const tbody = $('posTransactionsTableBody');
+  if (!tbody) return;
+  tbody.replaceChildren();
+
+  if (txs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--secondary);">No POS transactions logged yet. Enter an amount and tap Record POS Transaction.</td></tr>`;
+    return;
+  }
+
+  txs.slice(0, 15).forEach((t) => {
+    const tr = document.createElement('tr');
+    const timeStr = t.timestamp ? new Date(t.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' }) : 'Just now';
+    const mode = (t.payment_method || 'upi').toLowerCase();
+    tr.innerHTML = `
+      <td style="color:var(--secondary);">${escapeHTML(timeStr)}</td>
+      <td><code>${escapeHTML(t.transaction_id || 'TX-OK')}</code></td>
+      <td style="font-weight:700;color:var(--ink);">${money(t.amount_inr)}</td>
+      <td><span class="badge-tag ${escapeHTML(mode)}">${escapeHTML(mode.toUpperCase())}</span></td>
+      <td style="text-transform:capitalize;">${escapeHTML(t.category || 'food')}</td>
+      <td><code>${escapeHTML((t.h3_cell_id || '88619aa6c7fffff').slice(0, 9))}...</code></td>
+      <td><span class="status-pill status-pill-success">✓ Ingested</span></td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function switchView(viewId) {
+  const cleanId = (viewId || '').replace('#', '').trim() || 'overview';
+  
+  const viewMap = {
+    overview: 'view-overview',
+    explore: 'view-overview',
+    recommendations: 'view-overview',
+    shiftPlanner: 'view-shiftPlanner',
+    fleetRadar: 'view-fleetRadar',
+    telemetryPos: 'view-telemetryPos',
+    mlopsDrift: 'view-mlopsDrift',
+    dataSources: 'view-dataSources'
+  };
+
+  const targetPaneId = viewMap[cleanId] || 'view-overview';
+
+  document.querySelectorAll('.view-pane').forEach((pane) => {
+    if (pane.id === targetPaneId) {
+      pane.classList.remove('hidden-view');
+      pane.classList.add('active-view');
+    } else {
+      pane.classList.add('hidden-view');
+      pane.classList.remove('active-view');
+    }
+  });
+
+  document.querySelectorAll('.nav-link').forEach((item) => {
+    const linkHash = (item.getAttribute('href') || '').replace('#', '').trim();
+    if (linkHash === cleanId) {
+      item.classList.add('active');
+      item.setAttribute('aria-current', 'page');
+    } else {
+      item.classList.remove('active');
+      item.removeAttribute('aria-current');
+    }
+  });
+
+  const titles = {
+    overview: 'Overview',
+    explore: 'Explore Map',
+    recommendations: 'Recommendations',
+    shiftPlanner: 'Shift Route Planner',
+    fleetRadar: 'Fleet Operations Radar',
+    telemetryPos: 'POS Telemetry & Live Sales',
+    mlopsDrift: 'MLOps Drift & Model Health',
+    dataSources: 'Data Feeds & Freshness'
+  };
+  const titleEl = document.querySelector('.breadcrumb strong');
+  if (titleEl) titleEl.textContent = titles[cleanId] || 'Overview';
+
+  if (cleanId === 'explore') $('explore')?.scrollIntoView({ behavior: 'smooth' });
+  if (cleanId === 'recommendations') $('recommendations')?.scrollIntoView({ behavior: 'smooth' });
+  if (cleanId === 'overview' || cleanId === 'explore') {
+    setTimeout(() => state.map?.invalidateSize(), 120);
+  }
+
+  toggleMenu(false);
+}
+
 async function recordPosTransaction() {
   const amount = Number($('posAmount').value) || 150;
-  const paymentMode = $('posPaymentMode').value;
-  const category = $('posCategory').value;
+  const paymentMode = $('posPaymentMode').value || 'upi';
+  const category = $('posCategory').value || 'food';
   const receipt = $('posReceipt');
   const vendorId = $('vendorIdInput')?.value || 'vendor-001';
 
   receipt.classList.remove('hidden');
-  receipt.innerHTML = '<span class="status-dot status-loading"></span> Submitting transaction to Feature Store...';
+  receipt.innerHTML = '<span class="status-dot status-loading"></span> Ingesting sale into Feature Store...';
 
   try {
     const txId = `POS-${Date.now().toString(36).toUpperCase()}-${Math.random().toString(36).substring(2, 6).toUpperCase()}`;
@@ -847,6 +981,7 @@ async function recordPosTransaction() {
         'Content-Type': 'application/json',
         'X-API-Key': 'geodemand-prod-live-key'
       },
+      signal: AbortSignal.timeout(5000),
       body: JSON.stringify(payload)
     });
     const data = await res.json();
@@ -854,10 +989,27 @@ async function recordPosTransaction() {
       const msg = data.detail?.error || data.detail?.message || (typeof data.detail === 'string' ? data.detail : null) || data.message || 'Ingestion failed';
       throw new Error(msg);
     }
+
+    const recordedTx = {
+      transaction_id: data.transaction_id || txId,
+      amount_inr: amount,
+      payment_method: paymentMode,
+      category: category,
+      h3_cell_id: data.h3_cell_id || state.results?.recommendations?.[0]?.h3_cell || '88619aa6c7fffff',
+      timestamp: new Date().toISOString()
+    };
+
+    if (!state.posTransactions) state.posTransactions = [];
+    state.posTransactions.unshift(recordedTx);
+    try {
+      localStorage.setItem('geodemand_pos_txs', JSON.stringify(state.posTransactions.slice(0, 50)));
+    } catch {}
+    renderPosStats();
+
     receipt.innerHTML = `
       <strong>✓ Transaction Ingested Successfully!</strong><br/>
       Amount: ₹${number(amount)} · Method: ${escapeHTML(paymentMode.toUpperCase())} ·
-      Tx ID: <code>${escapeHTML(data.transaction_id || txId)}</code> · H3: <code>${escapeHTML(data.h3_cell_id || 'Res-8')}</code><br/>
+      Tx ID: <code>${escapeHTML(recordedTx.transaction_id)}</code> · H3: <code>${escapeHTML(recordedTx.h3_cell_id)}</code><br/>
       <small>Ground-truth telemetry mapped to Feature Store for actuals calibration.</small>
     `;
   } catch (err) {
@@ -927,17 +1079,32 @@ window.addEventListener('DOMContentLoaded', () => {
   $('submitPosBtn')?.addEventListener('click', recordPosTransaction);
   loadMlopsTelemetry();
 
+  // Initialize POS Telemetry Feed & Stats
+  state.posTransactions = getStoredTransactions();
+  renderPosStats();
+
   // PWA Service Worker Registration
   if ('serviceWorker' in navigator && window.location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('/sw.js').catch((err) => console.log('SW registration note:', err));
   }
 
-  document.querySelectorAll('.nav-link').forEach((link) => link.addEventListener('click', () => {
-    document.querySelectorAll('.nav-link').forEach((item) => { item.classList.remove('active'); item.removeAttribute('aria-current'); });
-    link.classList.add('active');
-    link.setAttribute('aria-current', 'page');
-    toggleMenu(false);
-    toggleExpandedMap(true);
-  }));
+  // Multi-View Navigation Switcher
+  document.querySelectorAll('.nav-link').forEach((link) => {
+    link.addEventListener('click', (e) => {
+      const href = link.getAttribute('href');
+      if (href && href.startsWith('#')) {
+        switchView(href);
+      }
+    });
+  });
+
+  window.addEventListener('hashchange', () => {
+    switchView(window.location.hash);
+  });
+
+  if (window.location.hash) {
+    switchView(window.location.hash);
+  }
+
   document.addEventListener('keydown', (event) => { if (event.key === 'Escape') { toggleMenu(false); toggleExpandedMap(true); } });
 });

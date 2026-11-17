@@ -399,3 +399,205 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
 .btn-navigate:hover { background: #d7ebce; }
 .btn-navigate .icon { width: 13px; height: 13px; }
 
+/* ========================================================================== */
+/* VIEW-PANE SEPARATE PAGES & FIXED LEFT NAV                                  */
+/* ========================================================================== */
+.sidebar {
+  position: fixed !important;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: 236px !important;
+  z-index: 1200;
+  overflow-y: auto;
+  box-shadow: 2px 0 16px rgba(0, 0, 0, 0.06);
+}
+
+.workspace {
+  margin-left: 236px !important;
+  width: calc(100% - 236px) !important;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.view-pane {
+  animation: fadeIn 0.18s ease-in-out;
+}
+
+.view-pane.hidden-view {
+  display: none !important;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* POS Telemetry KPI Summary Grid */
+.pos-kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 14px;
+  margin-top: 18px;
+  margin-bottom: 24px;
+}
+
+.pos-kpi-card {
+  background: #f7faf8;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px 18px;
+}
+
+.pos-kpi-card .kpi-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--secondary);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.pos-kpi-card .kpi-val {
+  font-size: 24px;
+  font-weight: 750;
+  font-family: var(--heading);
+  color: var(--ink);
+  margin: 6px 0 4px;
+}
+
+.pos-kpi-card .kpi-sub {
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.text-green { color: #28745b !important; }
+.text-secondary { color: #5a7569 !important; }
+
+/* POS Workspace Two-Column Grid */
+.pos-workspace-grid {
+  display: grid;
+  grid-template-columns: 340px 1fr;
+  gap: 24px;
+  align-items: flex-start;
+}
+
+.pos-form-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.pos-feed-panel {
+  background: #ffffff;
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  min-width: 0;
+}
+
+.panel-subheading {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  margin-bottom: 14px;
+}
+
+.panel-header-flex {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 14px;
+}
+
+.feed-count-badge {
+  font-size: 10px;
+  font-weight: 700;
+  background: #eef6f0;
+  color: #28745b;
+  padding: 3px 8px;
+  border-radius: 12px;
+}
+
+.table-container {
+  overflow-x: auto;
+  max-height: 420px;
+  overflow-y: auto;
+}
+
+.pos-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  text-align: left;
+}
+
+.pos-table th {
+  background: #fafbfa;
+  color: var(--secondary);
+  font-weight: 600;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.pos-table td {
+  padding: 11px 12px;
+  border-bottom: 1px solid #f0f4f1;
+  color: var(--ink);
+}
+
+.pos-table tr:hover {
+  background: #fbfdfb;
+}
+
+.badge-tag {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: #e8f0eb;
+  color: #2c5946;
+}
+
+.badge-tag.upi { background: #e3f2fd; color: #1565c0; }
+.badge-tag.cash { background: #e8f5e9; color: #2e7d32; }
+.badge-tag.card { background: #fff3e0; color: #e65100; }
+
+.status-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 600;
+  padding: 2px 7px;
+  border-radius: 10px;
+}
+
+.status-pill-success {
+  background: #d4edd9;
+  color: #1e6b37;
+}
+
+.live-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: #e6f4ea;
+  color: #137333;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 4px 10px;
+  border-radius: 16px;
+  letter-spacing: 0.5px;
+}
+
+@media (max-width: 960px) {
+  .sidebar { width: 220px !important; }
+  .workspace { margin-left: 0 !important; width: 100% !important; }
+  .pos-workspace-grid { grid-template-columns: 1fr; }
+}
+
