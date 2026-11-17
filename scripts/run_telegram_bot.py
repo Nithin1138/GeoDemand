@@ -43,6 +43,37 @@ if not BOT_TOKEN:
 BASE_URL = f"https://api.telegram.org/bot{BOT_TOKEN}"
 
 
+VIJAYAWADA_HUBS = {
+    "benz": (16.5062, 80.6480, "Benz Circle / Labbipet"),
+    "station": (16.5186, 80.6198, "Railway Station / Gandhi Nagar"),
+    "railway": (16.5186, 80.6198, "Railway Station / Gandhi Nagar"),
+    "governorpet": (16.5110, 80.6320, "Governorpet / MG Road"),
+    "mg road": (16.5110, 80.6320, "Governorpet / MG Road"),
+    "patamata": (16.4965, 80.6710, "Patamata / Auto Nagar"),
+    "auto nagar": (16.4965, 80.6710, "Patamata / Auto Nagar"),
+    "gunadala": (16.5280, 80.6720, "Gunadala / Ramavarappadu"),
+}
+
+LOCATION_PICKER_MARKUP = {
+    "inline_keyboard": [
+        [{"text": "📍 Benz Circle / Labbipet", "callback_data": "loc:16.5062:80.6480:Benz Circle"}],
+        [{"text": "🚉 Railway Station / Gandhi Nagar", "callback_data": "loc:16.5186:80.6198:Railway Station"}],
+        [{"text": "🛍️ Governorpet / MG Road", "callback_data": "loc:16.5110:80.6320:MG Road"}],
+        [{"text": "🏭 Patamata / Auto Nagar", "callback_data": "loc:16.4965:80.6710:Auto Nagar"}],
+        [{"text": "⛪ Gunadala / Ramavarappadu", "callback_data": "loc:16.5280:80.6720:Gunadala"}],
+    ]
+}
+
+MAIN_KEYBOARD = {
+    "keyboard": [
+        [{"text": "📍 /recommend"}, {"text": "💰 /sale 100"}],
+        [{"text": "📌 Update Location"}, {"text": "ℹ️ /status"}],
+    ],
+    "resize_keyboard": True,
+    "one_time_keyboard": False,
+}
+
+
 def send_telegram_reply(chat_id: int, text: str, reply_markup: dict = None):
     url = f"{BASE_URL}/sendMessage"
     payload = {
@@ -88,6 +119,49 @@ def poll_updates():
 
             for u in updates:
                 last_update_id = u["update_id"]
+
+                # 1. Handle Inline Button Clicks (Callback Queries)
+                cb = u.get("callback_query")
+                if cb:
+                    cb_id = cb.get("id")
+                    cb_data = cb.get("data", "")
+                    cb_from = cb.get("from", {})
+                    cb_user_id = str(cb_from.get("id"))
+                    cb_username = cb_from.get("username")
+                    cb_chat_id = cb.get("message", {}).get("chat", {}).get("id")
+
+                    try:
+                        requests.post(f"{BASE_URL}/answerCallbackQuery", json={"callback_query_id": cb_id}, timeout=5)
+                    except Exception as e:
+                        logger.warning(f"Failed to answer callback query: {e}")
+
+                    if cb_data.startswith("loc:"):
+                        parts = cb_data.split(":")
+                        lat = float(parts[1])
+                        lng = float(parts[2])
+                        loc_name = parts[3] if len(parts) > 3 else "Selected Hub"
+
+                        v_id = vendor_channel_registry.resolve_by_telegram(cb_user_id) or f"vendor_tg_{cb_user_id[-4:]}"
+                        vendor_channel_registry.register(v_id, telegram_id=cb_user_id)
+                        if cb_username:
+                            vendor_channel_registry.register(v_id, telegram_id=cb_username)
+
+                        webhook_service._pipeline.register_vendor_location(v_id, lat, lng)
+                        v = webhook_service._fleet_manager.get_vendor(v_id)
+                        if v:
+                            v.current_lat = lat
+                            v.current_lng = lng
+                            v.last_heartbeat = datetime.now(timezone.utc)
+
+                        reply = (
+                            f"📍 <b>Location Updated to {loc_name}!</b>\n"
+                            f"• <b>Coordinates:</b> ({lat:.4f}, {lng:.4f})\n"
+                            f"• <b>Fleet Status:</b> Synchronized\n\n"
+                            f"Tap <b>📍 /recommend</b> to view top demand hotspots and profit uplift from here!"
+                        )
+                        send_telegram_reply(cb_chat_id, reply, MAIN_KEYBOARD)
+                    continue
+
                 msg = u.get("message")
                 if not msg:
                     continue
@@ -120,21 +194,14 @@ def poll_updates():
                         f"<b>Available Commands:</b>\n"
                         f"• 📍 <b>/recommend</b> — Get the top customer demand hotspot & net profit uplift\n"
                         f"• 💰 <b>/sale &lt;amount&gt;</b> — Log a cash transaction (e.g. <code>/sale 150</code>)\n"
-                        f"• 📌 <b>Send Location Pin</b> — Update your current cart GPS coordinates\n"
+                        f"• 📌 <b>Update Location</b> — Select your trading hub or send GPS coordinates\n"
                         f"• ℹ️ <b>/status</b> — Check your vendor ID and system health\n\n"
                         f"<i>All recommendations account for live weather, traffic friction, and local competition.</i>"
                     )
-                    markup = {
-                        "keyboard": [
-                            [{"text": "📍 /recommend"}, {"text": "💰 /sale 100"}],
-                            [{"text": "📌 Share Location", "request_location": True}, {"text": "ℹ️ /status"}],
-                        ],
-                        "resize_keyboard": True,
-                        "one_time_keyboard": False,
-                    }
-                    send_telegram_reply(chat_id, welcome_text, markup)
+                    send_telegram_reply(chat_id, welcome_text, MAIN_KEYBOARD)
                     continue
 
+                # Handle /status
                 if any(k in text_lower for k in ("/status", "status", "profile", "health")) and "sale" not in text_lower:
                     v_id = vendor_channel_registry.resolve_by_telegram(user_id) or "vendor_default"
                     v = webhook_service._fleet_manager.get_vendor(v_id)
@@ -149,7 +216,42 @@ def poll_updates():
                         f"• <b>City:</b> Vijayawada, Andhra Pradesh\n"
                         f"• <b>Active Model:</b> Approved LightGBM v2.1.0\n"
                     )
-                    send_telegram_reply(chat_id, status_text)
+                    send_telegram_reply(chat_id, status_text, MAIN_KEYBOARD)
+                    continue
+
+                # Handle Location Update / Picker
+                if any(k in text_lower for k in ("location", "share location", "update location", "gps", "pin", "/location", "/loc")) and "sale" not in text_lower:
+                    matched_hub = None
+                    for hub_key, (h_lat, h_lng, h_name) in VIJAYAWADA_HUBS.items():
+                        if hub_key in text_lower:
+                            matched_hub = (h_lat, h_lng, h_name)
+                            break
+
+                    if matched_hub:
+                        h_lat, h_lng, h_name = matched_hub
+                        v_id = vendor_channel_registry.resolve_by_telegram(user_id) or f"vendor_tg_{user_id[-4:]}"
+                        webhook_service._pipeline.register_vendor_location(v_id, h_lat, h_lng)
+                        v = webhook_service._fleet_manager.get_vendor(v_id)
+                        if v:
+                            v.current_lat = h_lat
+                            v.current_lng = h_lng
+                            v.last_heartbeat = datetime.now(timezone.utc)
+                        reply = (
+                            f"📍 <b>Location Updated to {h_name}!</b>\n"
+                            f"• <b>Coordinates:</b> ({h_lat:.4f}, {h_lng:.4f})\n"
+                            f"• <b>Fleet Status:</b> Synchronized\n\n"
+                            f"Tap <b>📍 /recommend</b> to get nearby demand hotspots from this location!"
+                        )
+                        send_telegram_reply(chat_id, reply, MAIN_KEYBOARD)
+                        continue
+
+                    picker_text = (
+                        "📍 <b>Select or Update Your Cart Location:</b>\n\n"
+                        "Tap your current trading hub below:\n"
+                        "• <i>Or type GPS coordinates:</i> <code>16.5062, 80.6480</code>\n"
+                        "• <i>On Mobile:</i> Use 📎 (paperclip) &gt; <b>Location</b>"
+                    )
+                    send_telegram_reply(chat_id, picker_text, LOCATION_PICKER_MARKUP)
                     continue
 
                 # Process update through Webhook Ingestion Service
