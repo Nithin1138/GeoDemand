@@ -4,7 +4,7 @@
     "version": "v2.1.0",
     "owner": "Member 2 \u2014 Machine Learning & MLOps",
     "architecture": "LightGBM Gradient Boosted Trees with Quantile Calibration Heads (P10/P90)",
-    "release_date": "2026-11-16",
+    "release_date": "2026-11-17",
     "license": "Proprietary MOVIGO-ENG"
   },
   "intended_use": {
