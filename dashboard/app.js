@@ -152,7 +152,13 @@ async function initMap() {
   updateOrigin(state.origin.lat, state.origin.lng);
 
   if (window.ResizeObserver) {
-    new ResizeObserver(() => state.map.invalidateSize()).observe($('map'));
+    let resizeTimer = null;
+    new ResizeObserver(() => {
+      if (resizeTimer) clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {
+        if (state.map) state.map.invalidateSize();
+      }, 150);
+    }).observe($('map'));
   }
 }
 

@@ -44,6 +44,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const url = new URL(event.request.url);
 
+  // Allow external CDNs, fonts, and map tiles to stream directly via browser HTTP cache without worker interception
+  if (url.origin !== self.location.origin) {
+    return;
+  }
+
   // API calls: Network-first with JSON offline response
   if (url.pathname.startsWith('/v1/')) {
     event.respondWith(
