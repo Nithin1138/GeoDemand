@@ -86,7 +86,7 @@ class EventbriteProvider(EventProvider):
         }
 
         try:
-            resp = requests.get(url, headers=headers, params=params, timeout=10)
+            resp = requests.get(url, headers=headers, params=params, timeout=3.0)
             if resp.status_code == 200:
                 data = resp.json()
                 events = data.get("events", [])

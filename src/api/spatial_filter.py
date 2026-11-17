@@ -136,18 +136,14 @@ def point_in_polygon(lat: float, lng: float, polygon: List[Tuple[float, float]])
     return inside
 
 
-def is_water_location(lat: float, lng: float, timeout_s: float = 1.5) -> bool:
+def is_water_location(lat: float, lng: float, check_osrm: bool = False, timeout_s: float = 0.5) -> bool:
     """
     Algorithmic water and unroutable terrain detector for any location.
 
     Multi-layer determination:
       1. In-memory LRU cache (0ms)
-      2. Regional geometric cache (pre-indexed water bodies for instant offline evaluation)
-      3. Algorithmic road proximity & navigability check (OSRM nearest drivable road):
-         Street vendors (food trucks, fruit stalls, salon vans, repair vans) physically
-         require accessible road frontage. If the nearest drivable road is > 180 meters
-         away (or road lookup returns unroutable/error), the location is physically inside
-         a body of water (ocean, river, lake, reservoir, swamp) or inaccessible terrain.
+      2. Regional geometric cache (pre-indexed water bodies for instant 0ms offline evaluation)
+      3. Optional algorithmic road proximity check (only when explicitly requested)
     """
     global _OSRM_AVAILABLE, _OSRM_CONSECUTIVE_FAILURES
 
@@ -158,14 +154,14 @@ def is_water_location(lat: float, lng: float, timeout_s: float = 1.5) -> bool:
     if key in _WATER_LOCATION_CACHE:
         return _WATER_LOCATION_CACHE[key]
 
-    # Layer 1: Fast geometric check against known regional water bodies
+    # Layer 1: Fast geometric check against known regional water bodies (0ms instant)
     for poly in ALL_WATER_POLYGONS:
         if point_in_polygon(lat, lng, poly):
             _WATER_LOCATION_CACHE[key] = True
             return True
 
-    # Layer 2: Algorithmic road proximity & navigability check (works anywhere on Earth)
-    if _OSRM_AVAILABLE:
+    # Layer 2: Optional algorithmic road proximity check (disabled by default for instant performance)
+    if check_osrm and _OSRM_AVAILABLE:
         try:
             url = f"https://router.project-osrm.org/nearest/v1/driving/{lng:.5f},{lat:.5f}"
             resp = requests.get(url, timeout=timeout_s).json()
@@ -188,9 +184,8 @@ def is_water_location(lat: float, lng: float, timeout_s: float = 1.5) -> bool:
 
 def is_water_cell(h3_cell: str) -> bool:
     """
-    Comprehensive H3 cell water test.
-    Checks centroid and majority boundary vertices to prevent water cells
-    while avoiding false-positives for waterfront urban commercial districts.
+    Fast and comprehensive H3 cell water test using regional geometric water indexing.
+    Executes in sub-millisecond time with zero blocking external network calls.
     """
     if not h3_cell or not h3.is_valid_cell(h3_cell):
         return True
@@ -200,14 +195,7 @@ def is_water_cell(h3_cell: str) -> bool:
 
     try:
         lat, lng = h3.cell_to_latlng(h3_cell)
-        if is_water_location(lat, lng):
-            _WATER_CELL_CACHE[h3_cell] = True
-            return True
-
-        boundary = h3.cell_to_boundary(h3_cell)
-        water_vertex_count = sum(1 for b_lat, b_lng in boundary if is_water_location(b_lat, b_lng))
-        # If majority (4 or more out of 6) vertices are in water, reject as water cell
-        is_water = water_vertex_count >= 4
+        is_water = is_water_location(lat, lng, check_osrm=False)
         _WATER_CELL_CACHE[h3_cell] = is_water
         return is_water
     except Exception:

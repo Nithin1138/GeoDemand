@@ -252,7 +252,7 @@ class OSRMRoutingProvider(RoutingProvider):
         origin_lng: float,
         dest_lat: float,
         dest_lng: float,
-        timeout_s: float = 4.0,
+        timeout_s: float = 2.0,
     ) -> dict:
         if not validate_coordinates(origin_lat, origin_lng, dest_lat, dest_lng):
             raise ValueError(

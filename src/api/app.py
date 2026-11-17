@@ -16,6 +16,7 @@ Dashboard served at:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 import uuid
@@ -1028,20 +1029,38 @@ async def shift_plan(req: ShiftPlanRequest, api_key: str = Depends(verify_api_ke
     candidates = rec_res.get("recommendations", [])
 
     optimizer = ShiftOptimizer()
-    plan = optimizer.optimize_shift(
-        origin_lat=req.latitude,
-        origin_lng=req.longitude,
-        candidates=candidates,
-        vendor_category=req.vendor_category,
-        shift_start_time=req.shift_start_time,
-        shift_duration_hours=req.shift_duration_hours,
-        max_relocation_stops=req.max_relocation_stops,
-        min_dwell_time_minutes=req.min_dwell_time_minutes,
-        setup_time_minutes=req.setup_time_minutes,
-        teardown_time_minutes=req.teardown_time_minutes,
-        average_order_value=req.average_order_value,
-        fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
-    )
+    try:
+        asyncio.get_running_loop()
+        plan = await asyncio.to_thread(
+            optimizer.optimize_shift,
+            origin_lat=req.latitude,
+            origin_lng=req.longitude,
+            candidates=candidates,
+            vendor_category=req.vendor_category,
+            shift_start_time=req.shift_start_time,
+            shift_duration_hours=req.shift_duration_hours,
+            max_relocation_stops=req.max_relocation_stops,
+            min_dwell_time_minutes=req.min_dwell_time_minutes,
+            setup_time_minutes=req.setup_time_minutes,
+            teardown_time_minutes=req.teardown_time_minutes,
+            average_order_value=req.average_order_value,
+            fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+        )
+    except RuntimeError:
+        plan = optimizer.optimize_shift(
+            origin_lat=req.latitude,
+            origin_lng=req.longitude,
+            candidates=candidates,
+            vendor_category=req.vendor_category,
+            shift_start_time=req.shift_start_time,
+            shift_duration_hours=req.shift_duration_hours,
+            max_relocation_stops=req.max_relocation_stops,
+            min_dwell_time_minutes=req.min_dwell_time_minutes,
+            setup_time_minutes=req.setup_time_minutes,
+            teardown_time_minutes=req.teardown_time_minutes,
+            average_order_value=req.average_order_value,
+            fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+        )
 
     api_response_cache.set(cache_key, plan, ttl_seconds=60)
     return plan
@@ -1954,10 +1973,17 @@ async def recommendations_live(req: RecommendationRequest, api_key: str = Depend
             "_freshness": freshness,
         }
 
-    # Parallel evaluation across thread pool ensures sub-2-second response times
-    max_workers = min(12, max(1, len(candidates_raw)))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        raw_eval_results = list(executor.map(_eval_candidate, candidates_raw))
+    # Parallel evaluation offloaded from async event loop to keep server 100% responsive
+    def _run_parallel_eval():
+        max_workers = min(12, max(1, len(candidates_raw)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(executor.map(_eval_candidate, candidates_raw))
+
+    try:
+        asyncio.get_running_loop()
+        raw_eval_results = await asyncio.to_thread(_run_parallel_eval)
+    except RuntimeError:
+        raw_eval_results = _run_parallel_eval()
 
     candidate_results = []
     global_freshness = None

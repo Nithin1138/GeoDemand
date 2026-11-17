@@ -387,10 +387,37 @@ class ShiftPlanRequest(BaseModel):
                 td = 15
             data["teardown_time_minutes"] = td
 
+            # search_radius_km
+            try:
+                rad = float(data.get("search_radius_km") if data.get("search_radius_km") is not None else 4.0)
+                rad = max(0.5, min(10.0, rad))
+            except (ValueError, TypeError):
+                rad = 4.0
+            data["search_radius_km"] = rad
+
+            # average_order_value & fuel_price_inr
+            if "average_order_value" in data and data["average_order_value"] is not None:
+                try:
+                    aov = float(data["average_order_value"])
+                    data["average_order_value"] = aov if aov > 0 else None
+                except (ValueError, TypeError):
+                    data["average_order_value"] = None
+            if "fuel_price_inr" in data and data["fuel_price_inr"] is not None:
+                try:
+                    fp = float(data["fuel_price_inr"])
+                    data["fuel_price_inr"] = fp if fp > 0 else None
+                except (ValueError, TypeError):
+                    data["fuel_price_inr"] = None
+
             # shift_start_time
             st = data.get("shift_start_time")
             if not st or (isinstance(st, str) and not st.strip()):
                 data["shift_start_time"] = None
+            elif isinstance(st, str):
+                try:
+                    datetime.fromisoformat(st.replace("Z", "+00:00"))
+                except Exception:
+                    data["shift_start_time"] = None
         return data
 
 

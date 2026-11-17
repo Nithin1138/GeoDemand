@@ -79,7 +79,7 @@ class OpenMeteoProvider(WeatherProvider):
                     "forecast_hours": 2,
                     "timezone": "Asia/Kolkata",
                 },
-                timeout=8,
+                timeout=3.0,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -169,7 +169,7 @@ class OpenWeatherMapProvider(WeatherProvider):
                     "appid": self.api_key,
                     "units": "metric",
                 },
-                timeout=8,
+                timeout=3.0,
             )
             resp.raise_for_status()
             data = resp.json()
@@ -192,7 +192,7 @@ class OpenWeatherMapProvider(WeatherProvider):
                         "units": "metric",
                         "exclude": "minutely,daily,alerts",
                     },
-                    timeout=8,
+                    timeout=3.0,
                 )
                 if oc_resp.status_code == 200:
                     oc = oc_resp.json()

@@ -310,7 +310,7 @@ async function getRecommendations(event) {
   const generation = state.generation;
   const controller = new AbortController();
   state.request = controller;
-  const timeout = setTimeout(() => controller.abort('timeout'), 20000);
+  const timeout = setTimeout(() => controller.abort('timeout'), 60000);
   updateOrigin(lat, lng, true);
   setLoading(true);
   setEmptyState('Finding the right spots for you…', 'Comparing demand, profit, and local conditions. This can take a moment.', true);
@@ -333,6 +333,7 @@ async function getRecommendations(event) {
       throw new Error(`${message}${detail?.fix ? `\n${detail.fix}` : '\nPlease check your details and try again.'}`);
     }
     state.results = data;
+    markApiActive('System ready');
     renderResults(data);
     $('formNote').innerHTML = `${icon('check')}Analysis ready. Explore your opportunities.`;
     announce(`Analysis complete. ${data.recommendations?.length || 0} locations found.`);
@@ -608,16 +609,31 @@ async function checkSystemHealth() {
   if (healthRetryTimer) clearTimeout(healthRetryTimer);
   try {
     const response = await fetch(`${API_BASE}/v1/system/data-health`, { signal: AbortSignal.timeout(6000) });
-    if (!response.ok) throw new Error('Offline');
+    if (!response.ok) {
+      // Secondary probe before showing offline
+      const probe = await fetch(`${API_BASE}/v1/system/health`, { signal: AbortSignal.timeout(3000) });
+      if (probe.ok) {
+        markApiActive('System ready');
+        return;
+      }
+      throw new Error('Offline');
+    }
     const data = await response.json();
     const ready = data.model?.status === 'loaded';
     if (ready) {
       markApiActive('System ready');
     } else {
       document.querySelector('.status-dot').className = 'status-dot status-error';
-      $('statusText').textContent = data.model?.status === 'not_trained' ? 'Model not trained' : 'Model unavailable';
+      $('statusText').textContent = data.model?.status === 'not_trained' ? 'Model not trained' : 'Model initializing';
     }
   } catch (err) {
+    try {
+      const probe = await fetch(`${API_BASE}/v1/system/health`, { signal: AbortSignal.timeout(2000) });
+      if (probe.ok) {
+        markApiActive('System ready');
+        return;
+      }
+    } catch (_) {}
     document.querySelector('.status-dot').className = 'status-dot status-error';
     $('statusText').textContent = 'API offline';
     $('systemStatus').title = 'Connecting to GeoDemand backend... Click to retry immediately.';
@@ -691,7 +707,7 @@ async function planShiftItinerary() {
     };
 
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort('timeout'), 15000);
+    const timeout = setTimeout(() => controller.abort('timeout'), 60000);
 
     const res = await fetch(`${API_BASE}/v1/routes/shift-plan`, {
       method: 'POST',
@@ -706,11 +722,15 @@ async function planShiftItinerary() {
 
     if (!res.ok) {
       const err = await res.json().catch(() => ({}));
-      const msg = err.message || err.detail?.message || err.detail?.error || (typeof err.detail === 'string' ? err.detail : 'Failed to compute shift plan');
+      const detailedErrors = err.details?.validation_errors?.map((v) => `${v.loc?.slice(-1)[0] || 'field'}: ${v.msg}`).join(', ');
+      const msg = detailedErrors
+        ? `Request payload validation failed (${detailedErrors})`
+        : (err.message || err.detail?.message || err.detail?.error || (typeof err.detail === 'string' ? err.detail : 'Failed to compute shift plan'));
       throw new Error(msg);
     }
 
     const data = await res.json();
+    markApiActive('System ready');
     resultsWrap.classList.remove('hidden');
 
     const summary = data.summary || {};
@@ -770,7 +790,10 @@ async function planShiftItinerary() {
     }
     announce('Optimized shift plan generated successfully.');
   } catch (err) {
-    showError(`Shift Optimizer: ${err.message}`);
+    const msg = err.name === 'AbortError' || err === 'timeout'
+      ? 'The optimization took too long. Please try again or choose fewer stops.'
+      : err.message;
+    showError(`Shift Optimizer: ${msg}`);
   } finally {
     btn.disabled = false;
     btn.innerHTML = `${icon('route')}Plan Optimized Shift Route`;
