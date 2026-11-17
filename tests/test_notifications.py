@@ -532,8 +532,9 @@ def test_notification_history_endpoint(api_client):
 # Telegram Bot Adapter & Delivery Tests
 # ===========================================================================
 
-def test_telegram_notification_adapter_simulated_delivery():
-    adapter = TelegramNotificationAdapter()
+def test_telegram_notification_adapter_simulated_delivery(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
+    adapter = TelegramNotificationAdapter(bot_token=None)
     assert adapter.is_live is False
 
     reloc = RelocationDetails(
@@ -604,8 +605,11 @@ def test_telegram_notification_adapter_invalid_chat_id():
     assert "INVALID_CHAT_ID" in rec.error_message
 
 
-def test_notification_dispatch_via_telegram_channel():
+def test_notification_dispatch_via_telegram_channel(monkeypatch):
+    monkeypatch.delenv("TELEGRAM_BOT_TOKEN", raising=False)
     service = NotificationTriggerService()
+    # Force simulated adapter
+    service.telegram_adapter = TelegramNotificationAdapter(bot_token=None)
     msg = NotificationMessage(
         notification_id=f"NOTIF-TG-DISP-{datetime.now().strftime('%f')}",
         vendor_id="vendor_002",
