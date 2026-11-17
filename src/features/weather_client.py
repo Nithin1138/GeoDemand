@@ -373,7 +373,8 @@ class OpenMeteoClient:
     def _synthetic_fallback_hourly(self, lat: float, lng: float, start_date: str, end_date: str) -> pd.DataFrame:
         """Deterministic synthetic hourly series for training fallback."""
         seed = int(hashlib.md5(f"{start_date}{end_date}".encode()).hexdigest()[:8], 16)
-        dates = pd.date_range(start_date, end_date, freq="h")
+        end_dt_str = f"{end_date} 23:00:00" if len(str(end_date).strip()) == 10 else end_date
+        dates = pd.date_range(start_date, end_dt_str, freq="h")
         rng = np.random.default_rng(seed)
         doy = dates.dayofyear.to_numpy()
         hour = dates.hour.to_numpy()

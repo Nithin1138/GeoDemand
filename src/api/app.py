@@ -246,6 +246,10 @@ OPENAPI_TAGS = [
         "name": "Notifications",
         "description": "Notification trigger service, impending-rain alerts, event alerts, demand spikes, and multi-channel delivery (FCM, WhatsApp).",
     },
+    {
+        "name": "Telemetry",
+        "description": "Live POS transaction ingestion, spatial mapping (H3 Res 8), deduplication, and telemetry ground truth (Phase 11.1).",
+    },
 ]
 
 app = FastAPI(
@@ -560,7 +564,17 @@ from api.schemas import (
     NotificationTriggerCheckResponse,
     NotificationDispatchRequest,
     NotificationDispatchResponse,
+    TelemetryIngestResponse,
+    TelemetryBatchIngestResponse,
 )
+from src.ingestion.schema import (
+    TransactionRecord,
+    TransactionStatus,
+    PaymentMethod,
+    TransactionLocation,
+)
+from src.ingestion.validator import TransactionIngestionPipeline, IngestionResult
+from src.data.actuals_aggregator import ActualsAggregator
 from notifications.notification_engine import notification_service
 from notifications.models import (
     NotificationPreferences,
@@ -588,6 +602,11 @@ from src.ingestion.event_broker import (
     event_gateway,
     BrokerSizingProfile,
 )
+
+# Initialize singleton telemetry pipeline and actuals aggregator (Phase 11.1)
+telemetry_pipeline = TransactionIngestionPipeline()
+actuals_aggregator = ActualsAggregator(default_city="Vijayawada")
+
 
 
 
@@ -799,6 +818,160 @@ async def publish_test_event(
             "vendor_id": req.vendor_id,
             "broker_metrics": event_gateway.broker.get_metrics(),
         }
+
+
+# ---------------------------------------------------------------------------
+# Telemetry Ingestion Endpoints (Phase 11.1)
+# ---------------------------------------------------------------------------
+
+@app.post(
+    "/v1/telemetry/transactions",
+    response_model=TelemetryIngestResponse,
+    tags=["Telemetry"],
+    summary="Ingest POS transaction telemetry event (Phase 11.1)",
+)
+async def ingest_transaction(
+    record: TransactionRecord,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Ingests live or batch Point-of-Sale (POS) transaction telemetry:
+    - Performs validation & data sanitization
+    - Detects duplicate transaction IDs and delayed events
+    - Enriches spatial coordinates to Uber H3 Resolution 8
+    - Forwards to the real-time event broker gateway
+    """
+    res: IngestionResult = telemetry_pipeline.ingest_transaction(record)
+    if res.is_duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Duplicate transaction ID rejected",
+                "transaction_id": record.transaction_id,
+                "errors": res.errors,
+            },
+        )
+    if not res.success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "Transaction validation failed", "errors": res.errors},
+        )
+
+    # Forward valid record to event broker
+    if res.record is not None:
+        event_gateway.publish_transaction(res.record, idempotency_key=f"pos:{res.record.transaction_id}")
+
+    h3_id = res.record.location.h3_cell_id if (res.record and res.record.location) else None
+    ingest_ts = (
+        res.record.ingestion_timestamp.isoformat()
+        if (res.record and res.record.ingestion_timestamp)
+        else datetime.now(timezone.utc).isoformat()
+    )
+
+    return TelemetryIngestResponse(
+        status=res.status_code,
+        transaction_id=record.transaction_id,
+        vendor_id=record.vendor_id,
+        h3_cell_id=h3_id,
+        event_timestamp=record.event_timestamp.isoformat(),
+        ingestion_timestamp=ingest_ts,
+        is_duplicate=res.is_duplicate,
+        is_delayed=res.is_delayed,
+        is_cancelled=res.is_cancelled,
+        is_correction=res.is_correction,
+        warnings=res.warnings,
+        errors=res.errors,
+    )
+
+
+@app.post(
+    "/v1/telemetry/transactions/batch",
+    response_model=TelemetryBatchIngestResponse,
+    tags=["Telemetry"],
+    summary="Batch ingest POS transaction telemetry events (Phase 11.1)",
+)
+async def ingest_transactions_batch(
+    records: List[TransactionRecord],
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Batch processes multiple POS transaction telemetry events:
+    - Deduplicates and resolves spatial cells
+    - Dispatches to event broker
+    - Returns batch metrics breakdown
+    """
+    results: List[TelemetryIngestResponse] = []
+    success_count = 0
+    duplicate_count = 0
+    delayed_count = 0
+    error_count = 0
+
+    for r in records:
+        res = telemetry_pipeline.ingest_transaction(r)
+        h3_id = res.record.location.h3_cell_id if (res.record and res.record.location) else None
+        ingest_ts = (
+            res.record.ingestion_timestamp.isoformat()
+            if (res.record and res.record.ingestion_timestamp)
+            else datetime.now(timezone.utc).isoformat()
+        )
+
+        if res.success:
+            success_count += 1
+            if res.record:
+                event_gateway.publish_transaction(res.record, idempotency_key=f"pos:{res.record.transaction_id}")
+        else:
+            error_count += 1
+        if res.is_duplicate:
+            duplicate_count += 1
+        if res.is_delayed:
+            delayed_count += 1
+
+        results.append(
+            TelemetryIngestResponse(
+                status=res.status_code,
+                transaction_id=r.transaction_id,
+                vendor_id=r.vendor_id,
+                h3_cell_id=h3_id,
+                event_timestamp=r.event_timestamp.isoformat(),
+                ingestion_timestamp=ingest_ts,
+                is_duplicate=res.is_duplicate,
+                is_delayed=res.is_delayed,
+                is_cancelled=res.is_cancelled,
+                is_correction=res.is_correction,
+                warnings=res.warnings,
+                errors=res.errors,
+            )
+        )
+
+    return TelemetryBatchIngestResponse(
+        status="PROCESSED",
+        total_received=len(records),
+        successful_ingestions=success_count,
+        duplicates=duplicate_count,
+        delayed=delayed_count,
+        errors=error_count,
+        results=results,
+    )
+
+
+@app.get(
+    "/v1/telemetry/health",
+    tags=["Telemetry"],
+    summary="Telemetry pipeline and ground truth health status",
+)
+async def get_telemetry_health():
+    """Returns telemetry pipeline state, seen transaction volume, and configuration."""
+    return {
+        "status": "HEALTHY",
+        "seen_transactions_count": len(telemetry_pipeline._seen_transaction_ids),
+        "cancelled_transactions_count": len(telemetry_pipeline._cancelled_transaction_ids),
+        "corrections_count": len(telemetry_pipeline._corrections_map),
+        "max_delay_hours": telemetry_pipeline.max_delay_hours,
+        "h3_resolution": telemetry_pipeline.h3_resolution,
+        "default_city": actuals_aggregator.default_city,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
 
 
 @app.get("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (GET)")

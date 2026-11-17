@@ -924,6 +924,38 @@ class NotificationDispatchResponse(BaseModel):
     records: List[Dict[str, Any]] = Field(..., description="Delivery records by channel")
 
 
+# ===========================================================================
+# Telemetry Ingestion Schemas (Phase 11.1)
+# ===========================================================================
+
+class TelemetryIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: str = Field(..., description="Ingestion status code (e.g., ACCEPTED, DUPLICATE, DELAYED)")
+    transaction_id: str = Field(..., description="Unique transaction ID")
+    vendor_id: str = Field(..., description="Vendor identifier")
+    h3_cell_id: Optional[str] = Field(None, description="Assigned H3 Res-8 spatial cell")
+    event_timestamp: str = Field(..., description="ISO 8601 transaction occurrence timestamp")
+    ingestion_timestamp: str = Field(..., description="ISO 8601 pipeline receipt timestamp")
+    is_duplicate: bool = Field(False, description="Flag indicating previously recorded transaction ID")
+    is_delayed: bool = Field(False, description="Flag indicating event arrived past maximum threshold")
+    is_cancelled: bool = Field(False, description="Flag indicating order cancellation")
+    is_correction: bool = Field(False, description="Flag indicating corrective update")
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal data hygiene warnings")
+    errors: List[str] = Field(default_factory=list, description="Validation failure details")
+
+
+class TelemetryBatchIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: str = Field("PROCESSED", description="Batch processing summary status")
+    total_received: int = Field(..., description="Total records in batch request")
+    successful_ingestions: int = Field(..., description="Number of successfully ingested records")
+    duplicates: int = Field(..., description="Number of duplicate records detected")
+    delayed: int = Field(..., description="Number of delayed records flagged")
+    errors: int = Field(..., description="Number of records with errors")
+    results: List[TelemetryIngestResponse] = Field(..., description="Per-record ingestion outcomes")
+
+
+
 
 
 

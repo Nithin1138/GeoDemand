@@ -1,14 +1,36 @@
 version: '3.8'
 
 services:
+  db:
+    image: postgis/postgis:16-3.4
+    container_name: geodemand-postgis
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-geodemand}
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-geodemand_secret_pw}
+    ports:
+      - "${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgis_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-geodemand}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   geodemand-api:
     build:
       context: .
       dockerfile: Dockerfile
     container_name: geodemand-ai
+    depends_on:
+      db:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-geodemand_secret_pw}@db:5432/${POSTGRES_DB:-geodemand}
       - LIVE_MODE=true
       - ALLOW_SYNTHETIC_FALLBACK=true
       - SHOW_FALLBACK_WARNINGS=true
@@ -27,3 +49,7 @@ services:
       interval: 30s
       timeout: 5s
       retries: 3
+
+volumes:
+  postgis_data:
+

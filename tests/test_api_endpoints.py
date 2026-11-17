@@ -48,6 +48,9 @@ from api.app import (
     cache_stats,
     cache_clear,
     verify_api_key,
+    ingest_transaction,
+    ingest_transactions_batch,
+    get_telemetry_health,
 )
 from api.cache import api_response_cache
 from api.schemas import (
@@ -482,3 +485,69 @@ def test_unloaded_model_raises_503():
         with pytest.raises(HTTPException) as exc:
             run_coroutine(coro)
         assert exc.value.status_code == 503
+
+
+def test_telemetry_transaction_ingest_endpoint():
+    """POST /v1/telemetry/transactions ingests POS events, dedups, and enriches H3."""
+    import asyncio
+    from src.ingestion.schema import TransactionRecord, TransactionLocation, PaymentMethod
+    tx_id = f"TX-INT-{datetime.now(timezone.utc).timestamp()}"
+    rec = TransactionRecord(
+        transaction_id=tx_id,
+        vendor_id="V-TEST-99",
+        event_timestamp=datetime.now(timezone.utc),
+        amount_inr=350.0,
+        payment_method=PaymentMethod.UPI,
+        location=TransactionLocation(latitude=16.5062, longitude=80.6480),
+    )
+    res = asyncio.run(ingest_transaction(rec, api_key="test-key"))
+    assert res.status == "ACCEPTED"
+    assert res.transaction_id == tx_id
+    assert res.h3_cell_id == "88619aa6c7fffff"
+    assert res.is_duplicate is False
+
+    # Second ingestion of same ID is rejected with HTTP 409 Conflict
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(ingest_transaction(rec, api_key="test-key"))
+    assert exc.value.status_code == 409
+    assert "Duplicate transaction ID rejected" in str(exc.value.detail)
+
+
+def test_telemetry_batch_ingest_endpoint():
+    """POST /v1/telemetry/transactions/batch handles multiple transactions."""
+    import asyncio
+    from src.ingestion.schema import TransactionRecord, TransactionLocation, PaymentMethod
+    batch = [
+        TransactionRecord(
+            transaction_id=f"TX-B1-{datetime.now(timezone.utc).timestamp()}",
+            vendor_id="V-BATCH-1",
+            event_timestamp=datetime.now(timezone.utc),
+            amount_inr=120.0,
+            payment_method=PaymentMethod.CASH,
+            location=TransactionLocation(latitude=16.5062, longitude=80.6480),
+        ),
+        TransactionRecord(
+            transaction_id=f"TX-B2-{datetime.now(timezone.utc).timestamp()}",
+            vendor_id="V-BATCH-2",
+            event_timestamp=datetime.now(timezone.utc),
+            amount_inr=480.0,
+            payment_method=PaymentMethod.CARD,
+            location=TransactionLocation(latitude=16.5120, longitude=80.6350),
+        ),
+    ]
+    res = asyncio.run(ingest_transactions_batch(batch, api_key="test-key"))
+    assert res.status == "PROCESSED"
+    assert res.total_received == 2
+    assert res.successful_ingestions == 2
+    assert len(res.results) == 2
+
+
+def test_telemetry_health_endpoint():
+    """GET /v1/telemetry/health returns telemetry pipeline status and config."""
+    import asyncio
+    res = asyncio.run(get_telemetry_health())
+    assert res["status"] == "HEALTHY"
+    assert "seen_transactions_count" in res
+    assert res["default_city"] == "Vijayawada"
+
+
