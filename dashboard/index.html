@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css?v=2.4.0" />
+  <link rel="stylesheet" href="/static/style.css?v=2.5.0" />
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="/static/app.js?v=2.4.0"></script>
+  <script defer src="/static/app.js?v=2.5.0"></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to dashboard</a>
@@ -162,6 +162,28 @@
           <section class="insights-grid" id="dataSources" aria-label="Local context and data transparency">
             <article class="surface context-card"><div class="card-heading"><div><h2>A little local context</h2><p>The conditions behind the forecast.</p></div><span class="soft-icon"><svg class="icon"><use href="#i-sun"/></svg></span></div><div class="weather-overview"><span class="weather-icon" id="weatherIcon"><svg class="icon"><use href="#i-sun"/></svg></span><div><strong id="weatherTemperature">—°</strong><span id="weatherText">Weather appears after analysis</span></div><span class="provenance-badge badge-cached" id="weatherBadge">NOT CHECKED</span></div><div class="context-detail"><span>Starting H3 cell</span><code id="h3CellDisplay">Not analyzed yet</code></div><p class="water-warning hidden" id="waterWarning">Your starting point is on a river or bridge. Recommendations only include verified land zones.</p><div class="context-detail"><span>Last analysis</span><span id="lastUpdated">Not run yet</span></div></article>
             <article class="surface sources-card"><div class="card-heading"><div><h2>Clarity behind every number</h2><p>Know what’s live, estimated, or derived.</p></div><span class="transparency-tag"><svg class="icon"><use href="#i-check"/></svg>Transparent by design</span></div><div class="freshness-table" id="freshnessTable"><div class="sources-empty"><svg class="icon"><use href="#i-layers"/></svg><p>Run an analysis to see the sources used for your forecast.</p></div></div><p class="estimate-note"><svg class="icon"><use href="#i-info"/></svg>Demand is a model estimate, not a live customer count. Profit is a calculated forecast, not guaranteed earnings.</p></article>
+          </section>
+
+          <!-- Member 4: Comprehensive Data Engine & Fallback Inventory Grid -->
+          <section class="surface datasource-inventory-section" aria-labelledby="dsInventoryTitle">
+            <div class="card-heading" style="display:flex;justify-content:space-between;align-items:flex-start;flex-wrap:wrap;gap:16px;">
+              <div>
+                <div class="title-with-badge">
+                  <h2 id="dsInventoryTitle">System Data Feeds & Fallback Grid</h2>
+                  <span class="badge-feature">DATA PROVENANCE & ENGINE TELEMETRY</span>
+                </div>
+                <p>Complete transparent status of all pipelines, active machine learning engines, and fallback mechanisms.</p>
+              </div>
+              <div class="ds-filter-tabs" role="tablist" style="display:flex;gap:8px;">
+                <button class="btn btn-outline ds-filter-btn active" id="filterAllDs" type="button" data-filter="all" style="font-size:11px;padding:6px 12px;">All Feeds (14)</button>
+                <button class="btn btn-outline ds-filter-btn" id="filterActiveDs" type="button" data-filter="active" style="font-size:11px;padding:6px 12px;color:#2e7d32;">Active In-Use (8)</button>
+                <button class="btn btn-outline ds-filter-btn" id="filterFallbackDs" type="button" data-filter="fallback" style="font-size:11px;padding:6px 12px;color:#b91c1c;border-color:#fca5a5;">Unused / Fallback (6)</button>
+              </div>
+            </div>
+
+            <div class="datasource-grid" id="dataSourceGrid" aria-label="Grid of system data sources and fallback datasets">
+              <!-- Dynamically populated by renderDataSourceInventory() -->
+            </div>
           </section>
         </div>
 

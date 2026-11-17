@@ -601,3 +601,156 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
   .pos-workspace-grid { grid-template-columns: 1fr; }
 }
 
+/* ========================================================================== */
+/* DATA SOURCE INVENTORY & RED-BORDER FALLBACK GRID                           */
+/* ========================================================================== */
+.datasource-inventory-section {
+  margin-top: 24px;
+  padding: 24px;
+  border-radius: var(--radius);
+  background: var(--surface);
+  border: 1px solid var(--border);
+}
+
+.datasource-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+}
+
+.datasource-card {
+  background: #ffffff;
+  border: 1.5px solid var(--border);
+  border-radius: 12px;
+  padding: 18px 20px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+  position: relative;
+}
+
+.datasource-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.06);
+}
+
+/* Red border grid for fallback and unused datasets as explicitly requested */
+.datasource-card.fallback-card {
+  border: 2px solid #ef4444 !important;
+  background: #fffdfd !important;
+  box-shadow: 0 4px 16px rgba(239, 68, 68, 0.08);
+}
+
+.datasource-card.active-card {
+  border: 1.5px solid #63a579;
+  background: #ffffff;
+}
+
+.ds-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+
+.ds-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--ink);
+  line-height: 1.35;
+}
+
+.ds-category-tag {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--secondary);
+  display: block;
+  margin-bottom: 3px;
+}
+
+.ds-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.4px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.ds-badge-active {
+  background: #e8f5e9;
+  color: #2e7d32;
+  border: 1px solid #a5d6a7;
+}
+
+.ds-badge-fallback {
+  background: #fee2e2;
+  color: #b91c1c;
+  border: 1px solid #f87171;
+}
+
+.ds-meta-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 12px 0;
+  font-size: 11px;
+}
+
+.ds-meta-item {
+  display: flex;
+  justify-content: space-between;
+  color: var(--secondary);
+}
+
+.ds-meta-item strong {
+  color: var(--ink);
+  font-weight: 600;
+  text-align: right;
+  max-width: 60%;
+  overflow-wrap: anywhere;
+}
+
+.ds-desc {
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--secondary);
+  margin-bottom: 12px;
+  flex: 1;
+}
+
+.ds-reason-box {
+  padding: 10px 12px;
+  border-radius: 8px;
+  font-size: 10.5px;
+  line-height: 1.45;
+}
+
+.ds-reason-active {
+  background: #f1f8f3;
+  border: 1px solid #d4edd9;
+  color: #1e6b37;
+}
+
+.ds-reason-fallback {
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #991b1b;
+}
+
+.ds-filter-tabs .ds-filter-btn.active {
+  background: var(--green-deep);
+  color: #ffffff !important;
+  border-color: var(--green-deep) !important;
+}
+
+
