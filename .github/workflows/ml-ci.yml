@@ -39,7 +39,7 @@ jobs:
     name: ML Quality & Automated Workflow Gate
     runs-on: ubuntu-latest
     env:
-      PYTHONPATH: "src:src/data:src/features:src/api:."
+      PYTHONPATH: "src:src/data:src/features:src/api:src/fleet:src/optimization:src/ingestion:src/notifications:."
       MLFLOW_DISABLE_AGENT_HINT: "1"
       PYTHONUNBUFFERED: "1"
 

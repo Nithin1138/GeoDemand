@@ -37,6 +37,21 @@ from feature_store import (
     CALENDAR_FEATURE_COLUMNS, VENDOR_FEATURE_COLUMNS,
 )
 
+# Canonical 45-feature schema matching Member 2's champion LightGBM model contract
+CANONICAL_FEATURE_COLUMNS = [
+    "average_order_value", "building_density", "bus_stop_count", "cloud_cover",
+    "college_count", "commercial_ratio", "competition_score", "day_cos",
+    "day_sin", "event_importance", "hospital_count", "hour", "hour_cos",
+    "hour_sin", "humidity", "industrial_ratio", "inventory_capacity",
+    "is_holiday", "is_weekend", "mall_count", "metro_station_count",
+    "month", "month_cos", "month_sin", "office_count", "park_count",
+    "parking_count", "population_density", "preparation_time", "pressure",
+    "quarter", "railway_station_count", "rainfall", "residential_ratio",
+    "restaurant_count", "road_density", "school_count", "school_vacation",
+    "season", "temperature", "uv_index", "vendor_category", "visibility",
+    "weekday", "wind_speed",
+]
+
 logger = logging.getLogger(__name__)
 
 # ---------------------------------------------------------------------------
@@ -314,6 +329,34 @@ class FeatureAssembler:
 
         return features, data_freshness
 
+    def validate_features(self, features: dict) -> None:
+        """
+        Validate that all canonical model input features are present, non-null, and finite.
+        Raises ValueError if any contract violation is detected.
+        """
+        missing = [c for c in CANONICAL_FEATURE_COLUMNS if c not in features]
+        if missing:
+            raise ValueError(f"Feature assembler contract violation. Missing required features: {missing}")
+
+        for col in CANONICAL_FEATURE_COLUMNS:
+            val = features[col]
+            if val is None:
+                raise ValueError(f"Feature '{col}' cannot be None.")
+            if isinstance(val, (int, float)) and (np.isnan(val) or np.isinf(val)):
+                raise ValueError(f"Feature '{col}' contains invalid numeric value: {val}")
+
+    def align_features(self, features: dict) -> dict:
+        """
+        Return a feature dict strictly ordered according to the canonical 45-feature schema.
+        """
+        self.validate_features(features)
+        return {col: features[col] for col in CANONICAL_FEATURE_COLUMNS}
+
+    @staticmethod
+    def get_canonical_columns() -> list[str]:
+        """Return the canonical 45-feature column list matching Member 2's model schema."""
+        return CANONICAL_FEATURE_COLUMNS.copy()
+
     def to_dataframe(self, features: dict) -> pd.DataFrame:
         """Convert features dict to single-row DataFrame for model inference."""
-        return pd.DataFrame([features])
+        return pd.DataFrame([self.align_features(features) if all(c in features for c in CANONICAL_FEATURE_COLUMNS) else features])
