@@ -81,6 +81,51 @@ class TransactionRecord(BaseModel):
     source: str = Field("real:pos_telemetry", description="Data source origin")
     metadata: dict[str, Any] = Field(default_factory=dict, description="Arbitrary vendor/device metadata")
 
+    @model_validator(mode="before")
+    @classmethod
+    def pre_validate_legacy_payloads(cls, data: Any) -> Any:
+        """Coerce legacy, flattened, or partially-filled POS telemetry payloads gracefully."""
+        if isinstance(data, dict):
+            import uuid
+            # 1. Fallback for transaction_id
+            if not data.get("transaction_id"):
+                data["transaction_id"] = f"TX-GEN-{uuid.uuid4().hex[:10].upper()}"
+
+            # 2. Fallback for vendor_id
+            if not data.get("vendor_id"):
+                data["vendor_id"] = "vendor-001"
+
+            # 3. Fallback for amount_inr
+            if "amount_inr" not in data and "amount" in data:
+                data["amount_inr"] = float(data["amount"])
+
+            # 4. Fallback for payment_method casing or naming
+            if "payment_method" in data and isinstance(data["payment_method"], str):
+                data["payment_method"] = data["payment_method"].lower()
+            elif "payment_mode" in data and isinstance(data["payment_mode"], str):
+                data["payment_method"] = data["payment_mode"].lower()
+
+            # 5. Fallback for event_timestamp from timestamp
+            if "event_timestamp" not in data and "timestamp" in data:
+                data["event_timestamp"] = data["timestamp"]
+            elif "event_timestamp" not in data:
+                data["event_timestamp"] = datetime.now(timezone.utc).isoformat()
+
+            # 6. Fallback for latitude / longitude at root into location
+            if "location" not in data and ("latitude" in data or "longitude" in data):
+                data["location"] = {
+                    "latitude": data.get("latitude"),
+                    "longitude": data.get("longitude"),
+                    "h3_cell_id": data.get("h3_cell") or data.get("h3_cell_id"),
+                }
+
+            # 7. Fallback for category into metadata
+            if "category" in data:
+                meta = data.setdefault("metadata", {})
+                if isinstance(meta, dict):
+                    meta.setdefault("category", data["category"])
+        return data
+
     @field_validator("event_timestamp", mode="before")
     @classmethod
     def parse_event_timestamp(cls, v: Any) -> datetime:

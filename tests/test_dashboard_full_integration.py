@@ -146,7 +146,8 @@ def test_endpoint_fleet_reserve_and_cancel(client):
 
 
 def test_endpoint_telemetry_transaction(client):
-    """Endpoint: POST /v1/telemetry/transactions"""
+    """Endpoint: POST /v1/telemetry/transactions - Verifies new schema and legacy flattened schema."""
+    # 1. New nested payload
     payload = {
         "transaction_id": f"TX-TEST-{datetime.now().timestamp()}",
         "vendor_id": "vendor-001",
@@ -168,3 +169,23 @@ def test_endpoint_telemetry_transaction(client):
     assert res.status_code == 200
     data = res.json()
     assert data["status"] in ("ingested", "success", "ACCEPTED")
+
+    # 2. Legacy flattened payload from cached browser clients
+    legacy_payload = {
+        "vendor_id": "vendor-001",
+        "amount_inr": 150.0,
+        "payment_method": "cash",
+        "category": "food",
+        "latitude": 16.5062,
+        "longitude": 80.6480,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+    lres = client.post(
+        "/v1/telemetry/transactions",
+        headers={"Content-Type": "application/json", "X-API-Key": "geodemand-prod-live-key"},
+        json=legacy_payload,
+    )
+    assert lres.status_code == 200
+    ldata = lres.json()
+    assert ldata["status"] in ("ingested", "success", "ACCEPTED")
+    assert ldata["h3_cell_id"] is not None

@@ -381,6 +381,7 @@ async def geodemand_api_error_handler(request: Request, exc: GeoDemandAPIError):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     cid = get_correlation_id()
+    logger.error("422 Validation error on %s: %s", request.url.path, exc.errors())
     err_resp = StandardErrorResponse(
         error=ErrorCode.VALIDATION_ERROR.value,
         message="Request payload validation failed.",

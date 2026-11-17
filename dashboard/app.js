@@ -850,7 +850,10 @@ async function recordPosTransaction() {
       body: JSON.stringify(payload)
     });
     const data = await res.json();
-    if (!res.ok) throw new Error(data.detail?.error || data.detail?.message || data.detail || 'Ingestion failed');
+    if (!res.ok) {
+      const msg = data.detail?.error || data.detail?.message || (typeof data.detail === 'string' ? data.detail : null) || data.message || 'Ingestion failed';
+      throw new Error(msg);
+    }
     receipt.innerHTML = `
       <strong>✓ Transaction Ingested Successfully!</strong><br/>
       Amount: ₹${number(amount)} · Method: ${escapeHTML(paymentMode.toUpperCase())} ·
