@@ -92,9 +92,6 @@ NEERUKONDA_AINAVOLU_LAKE_POLYGON: List[Tuple[float, float]] = [
 
 KNOWN_WATER_H3_CELLS: set[str] = {
     "88619bd2e7fffff",  # Ainavolu / Neerukonda Freshwater Reservoir
-    "88619aa6c5fffff",  # Krishna River Central
-    "88619aa6c3fffff",  # Krishna River Barrage
-    "88619aa6cbfffff",  # Krishna River South
 }
 
 ALL_WATER_POLYGONS = [
