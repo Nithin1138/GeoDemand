@@ -95,6 +95,10 @@ members-checklist*
 puji-checklist*
 puji-checklist.md
 
+# Large OSRM & Infra Data
+data/osrm/
+infra/nginx/ssl/*.pem
+
 
 # MLOps & Tracking
 mlruns/

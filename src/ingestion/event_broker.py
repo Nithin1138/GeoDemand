@@ -421,6 +421,8 @@ class RabbitMQEventBroker(EventBroker):
         self._handlers: Dict[str, List[Tuple[Callable[[Dict[str, Any]], bool], int, float]]] = {}
 
         if HAS_PIKA and (self.amqp_url or os.getenv("ENABLE_RABBITMQ", "false").lower() in ("true", "1", "yes")):
+            if not self.amqp_url:
+                self.amqp_url = "amqp://guest:guest@localhost:5672/"
             self._try_connect()
         else:
             logger.info("Pika not installed or AMQP daemon offline; running on In-Memory broker fallback.")

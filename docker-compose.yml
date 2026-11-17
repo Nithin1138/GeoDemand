@@ -19,6 +19,40 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: geodemand-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-guest}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-guest}
+    ports:
+      - "5672:5672"    # AMQP protocol
+      - "15672:15672"  # Management Web UI
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  osrm:
+    image: osrm/osrm-backend:latest
+    container_name: geodemand-osrm
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./data/osrm:/data
+    command: >
+      sh -c "if [ -f /data/andhra-pradesh-latest.osrm ]; then
+               osrm-routed --algorithm mld /data/andhra-pradesh-latest.osrm;
+             else
+               echo 'OSRM graph not found. Run scripts/setup_osrm_andhra.sh to download. Falling back to idle.';
+               sleep infinity;
+             fi"
+
   geodemand-api:
     build:
       context: .
@@ -27,10 +61,15 @@ services:
     depends_on:
       db:
         condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
     ports:
       - "8000:8000"
     environment:
       - DATABASE_URL=postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-geodemand_secret_pw}@db:5432/${POSTGRES_DB:-geodemand}
+      - ENABLE_RABBITMQ=true
+      - RABBITMQ_URL=amqp://${RABBITMQ_USER:-guest}:${RABBITMQ_PASS:-guest}@rabbitmq:5672/
+      - OSRM_URL=http://osrm:5000
       - LIVE_MODE=true
       - ALLOW_SYNTHETIC_FALLBACK=true
       - SHOW_FALLBACK_WARNINGS=true
@@ -50,6 +89,19 @@ services:
       timeout: 5s
       retries: 3
 
+  nginx:
+    image: nginx:1.27-alpine
+    container_name: geodemand-nginx
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./infra/nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./infra/nginx/ssl:/etc/nginx/ssl:ro
+    depends_on:
+      - geodemand-api
+
 volumes:
   postgis_data:
-
+  rabbitmq_data:

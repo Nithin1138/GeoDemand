@@ -210,8 +210,8 @@ class OSRMRoutingProvider(RoutingProvider):
         "https://routing.openstreetmap.de/routed-car",
     ]
 
-    def __init__(self):
-        self._base = OSRM_PUBLIC_URL
+    def __init__(self, base_url: Optional[str] = None):
+        self._base = base_url or os.environ.get("OSRM_URL") or OSRM_PUBLIC_URL
         self._cache: dict = {}
         self._cache_ttl = 300  # 5 minutes
         self._consecutive_failures = 0
