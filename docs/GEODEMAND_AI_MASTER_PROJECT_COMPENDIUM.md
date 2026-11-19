@@ -6,9 +6,9 @@
 **Target Conference:** Second International Conference on Computational Techniques in Data Science (IICTDS 2026) | Microsoft CMT Paper ID: #380 (Special Track 2)  
 **Authors & Team:**
 1. **Isunuri Veera Nithin (23BCE20064)** — Technical Lead, Frontend PWA, Infrastructure, CI/CD & Production Release
-2. **Koduru Pujitha (23BCE20090)** — Data Engineering, H3 Hexagonal Grid, OSM & Open-Meteo Ingestion, Simulation
-3. **R Sai Naga Alekhya (23BCE20084)** — Machine Learning, LightGBM Champion, Quantile Regression, SHAP Explainability & MLOps
-4. **Chittimala Shinni Babu (23BCE20080)** — Backend API (FastAPI), Decision Intelligence, VRPTW Shift Routing & Notification Engine
+2. **R Sai Naga Alekhya (23BCE20084)** — Data Engineering, H3 Hexagonal Grid, OSM & Open-Meteo Ingestion, Simulation
+3. **Chittimala Shinni Babu (23BCE20080)** — Machine Learning, LightGBM Champion, Quantile Regression, SHAP Explainability & MLOps
+4. **Koduru Pujitha (23BCE20090)** — Backend API (FastAPI), Decision Intelligence, VRPTW Shift Routing & Notification Engine
 
 ---
 
