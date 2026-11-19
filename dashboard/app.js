@@ -673,6 +673,7 @@ function handleCityChange(event) {
   $('latInput').value = city.lat;
   $('lngInput').value = city.lng;
   $('mapLocationName').textContent = city.name;
+  if ($('mobileCityText')) $('mobileCityText').textContent = city.name;
   updateOrigin(city.lat, city.lng, true);
   invalidateResults();
   announce(`Switched location to ${city.name}.`);
@@ -1085,6 +1086,15 @@ function switchView(viewId) {
     } else {
       item.classList.remove('active');
       item.removeAttribute('aria-current');
+    }
+  });
+
+  document.querySelectorAll('.mobile-nav-btn').forEach((mBtn) => {
+    const btnView = mBtn.dataset.view;
+    if (btnView === cleanId || (cleanId === 'recommendations' && btnView === 'overview')) {
+      mBtn.classList.add('active');
+    } else {
+      mBtn.classList.remove('active');
     }
   });
 
@@ -1505,6 +1515,43 @@ window.addEventListener('DOMContentLoaded', () => {
         switchView(href);
       }
     });
+  });
+
+  // Mobile Bottom Navigation Bar Switcher
+  document.querySelectorAll('.mobile-nav-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const targetView = btn.dataset.view;
+      if (targetView) {
+        switchView(targetView);
+      }
+    });
+  });
+
+  // Mobile Category Quick Switcher Pills
+  document.querySelectorAll('#mobileCatPills .mobile-cat-pill').forEach((pill) => {
+    pill.addEventListener('click', () => {
+      document.querySelectorAll('#mobileCatPills .mobile-cat-pill').forEach((p) => {
+        p.classList.remove('active');
+        p.setAttribute('aria-selected', 'false');
+      });
+      pill.classList.add('active');
+      pill.setAttribute('aria-selected', 'true');
+      const cat = pill.dataset.cat;
+      const select = $('vendorCategory');
+      if (select) {
+        select.value = cat;
+        select.dispatchEvent(new Event('change'));
+      }
+    });
+  });
+
+  // Mobile GPS Auto-Locate Button
+  $('mobileGpsBtn')?.addEventListener('click', useCurrentLocation);
+
+  // Mobile Find Best Spots CTA Button
+  $('mobileFindBtn')?.addEventListener('click', (e) => {
+    e.preventDefault();
+    getRecommendations(e);
   });
 
   window.addEventListener('hashchange', () => {

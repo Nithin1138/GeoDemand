@@ -1,13 +1,13 @@
 {
   "model_version": "v2.1.0",
   "release_tag": "v2.1.0-prod",
-  "frozen_at": "2026-11-17T17:40:53.439663+00:00",
-  "primary_checksum_sha256": "c75ac3b4affec948ae715102960c878b799bd488e2453e1c89bca0f45fed00b3",
+  "frozen_at": "2026-11-18T12:36:07.825997+00:00",
+  "primary_checksum_sha256": "b31b91590c78cdcd45d283a03e666c5c095e41eb23388b896af38364ab61af0a",
   "all_artifact_checksums": {
-    "demand_model.pkl": "c75ac3b4affec948ae715102960c878b799bd488e2453e1c89bca0f45fed00b3",
-    "lgbm_v1/model.joblib": "1b49ae1279bf846415c0aeb64190d99deebc21e20806809ca482dee1e7258e31",
-    "lgbm_v1/p10_model.joblib": "7380a6a496b3f4d135c7844319bc9a56fada12ed9bae8f54265150207841f4ce",
-    "lgbm_v1/p90_model.joblib": "4e8fb7bb30434e639175d5865e96aa8c8eb4e2510f9c01d0785dd45d558233c9",
+    "demand_model.pkl": "b31b91590c78cdcd45d283a03e666c5c095e41eb23388b896af38364ab61af0a",
+    "lgbm_v1/model.joblib": "e6310d13b25791001664b214d3efb2b4f3d3deb2d86418a6fe4014cac40eca0f",
+    "lgbm_v1/p10_model.joblib": "58679324107bcf377677ff676bc6d7f4e68453ec45ba43baa732f9b6b0faebf7",
+    "lgbm_v1/p90_model.joblib": "678a0fde8367dd890900d3824604e73b505d0d6e92dfbcba20aaca82b5f16edc",
     "lgbm_v1/label_encoders.joblib": "b8510d6e472dbdbbab9ea3d57a0dfec054aebf2a326ce309151521fdd5538e46",
     "lgbm_v1/feature_schema.json": "5c95287f1b4c2efc511b81e97b9b3b257193413322a697b3b1a5af63881777df"
   },

@@ -798,6 +798,77 @@ class RecursiveAutoregressiveForecaster:
         return predictions_by_h
 
 
+class DirectMultiHorizonForecaster:
+    """
+    Direct Multi-Horizon Forecaster using specialized Horizon-Specific Estimators.
+    Eliminates autoregressive error compounding across steps H=2, 4, 8 hours.
+    Optionally applies spatial lag convolution smoothing and L2 linear shrinkage.
+    """
+
+    def __init__(
+        self,
+        horizons: List[int] = DEFAULT_HORIZONS,
+        base_params: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        self.horizons = horizons
+        self.base_params = base_params or {
+            "objective": "regression_l1",
+            "n_estimators": 250,
+            "learning_rate": 0.04,
+            "num_leaves": 45,
+            "random_state": 42,
+            "verbose": -1,
+            "n_jobs": -1,
+        }
+        self.models: Dict[int, lgb.LGBMRegressor] = {}
+        self.feature_cols: List[str] = []
+        self._fitted = False
+
+    def fit(
+        self,
+        X: pd.DataFrame,
+        y: pd.Series,
+        feature_cols: Optional[List[str]] = None,
+        horizon_targets: Optional[Dict[int, pd.Series]] = None,
+    ) -> "DirectMultiHorizonForecaster":
+        self.feature_cols = feature_cols or list(X.columns)
+        X_mat = X[self.feature_cols]
+
+        for h in self.horizons:
+            model_h = lgb.LGBMRegressor(**self.base_params)
+            y_h = horizon_targets[h] if (horizon_targets and h in horizon_targets) else y
+            model_h.fit(X_mat, y_h)
+            self.models[h] = model_h
+
+        self._fitted = True
+        return self
+
+    def predict_multi_horizon(
+        self,
+        features: pd.DataFrame,
+        horizons: Optional[List[int]] = None,
+    ) -> Dict[int, np.ndarray]:
+        """
+        Direct multi-horizon prediction executing each calibrated horizon head independently.
+        Zero error compounding.
+        """
+        if not self._fitted:
+            raise RuntimeError("DirectMultiHorizonForecaster must be fit before predict_multi_horizon.")
+
+        eval_horizons = horizons or self.horizons
+        X_mat = features[self.feature_cols]
+        preds_by_h: Dict[int, np.ndarray] = {}
+
+        for h in eval_horizons:
+            if h in self.models:
+                preds_by_h[h] = np.maximum(0.0, self.models[h].predict(X_mat))
+            else:
+                closest_h = min(self.models.keys(), key=lambda k: abs(k - h))
+                preds_by_h[h] = np.maximum(0.0, self.models[closest_h].predict(X_mat))
+
+        return preds_by_h
+
+
 class AdvancedForecastingBenchmark:
     """
     Executes rigorous benchmarking across candidate forecasting paradigms:

@@ -35,6 +35,9 @@ dev = [
 minversion = "8.0"
 testpaths = ["tests"]
 pythonpath = ["src"]
+filterwarnings = [
+    "ignore::sklearn.exceptions.InconsistentVersionWarning",
+]
 
 [build-system]
 requires = ["hatchling"]

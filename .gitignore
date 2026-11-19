@@ -112,3 +112,28 @@ models/candidates/
 
 data/raw/weather_test/
 
+
+# Test reports & duplicated research folders
+data/deep_comprehensive_test_report.json
+data/processed/pipeline_manifest_*.json
+research_latex/
+
+# ===========================================================================
+# Academic Research, Project Report, PPTs & Future Plans (LOCAL ONLY)
+# ===========================================================================
+research_paper/
+research_latex/
+project_report/
+ppts/
+*.pptx
+*.docx
+future_plan.md
+docs/future_plan.md
+docs/*.pptx
+project_report/**
+research_paper/**
+ppts/**
+scripts/generate_report_figures.py
+scripts/generate_vitap_presentation.py
+scripts/deep_comprehensive_test_suite.py
+tests/COMPREHENSIVE_SYSTEM_TEST_REPORT.md

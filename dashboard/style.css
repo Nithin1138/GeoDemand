@@ -756,4 +756,252 @@ input[type="range"]::-moz-range-thumb { width: 12px; height: 12px; background: v
   border-color: var(--green-deep) !important;
 }
 
+/* ========================================================================== */
+/* DEDICATED MOBILE BOTTOM NAVIGATION BAR & RESPONSIVE LAYOUT                 */
+/* ========================================================================== */
+
+.mobile-bottom-bar {
+  display: none;
+}
+
+.mobile-quick-card {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Safe bottom padding so content never gets occluded by bottom bar */
+  main {
+    padding-bottom: 92px !important;
+  }
+
+  /* Fixed Mobile Bottom Bar */
+  .mobile-bottom-bar {
+    display: flex;
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 64px;
+    z-index: 1200;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(16px);
+    -webkit-backdrop-filter: blur(16px);
+    border-top: 1px solid rgba(226, 232, 240, 0.9);
+    box-shadow: 0 -4px 20px rgba(15, 23, 42, 0.08);
+    align-items: center;
+    justify-content: space-around;
+    padding: 6px 6px calc(6px + env(safe-area-inset-bottom, 0px));
+  }
+
+  .mobile-nav-btn {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    background: none;
+    border: none;
+    padding: 4px 8px;
+    border-radius: 12px;
+    cursor: pointer;
+    color: #64748b;
+    font-size: 10.5px;
+    font-weight: 600;
+    font-family: inherit;
+    gap: 3px;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    -webkit-tap-highlight-color: transparent;
+    flex: 1;
+    max-width: 72px;
+  }
+
+  .mobile-nav-btn .mobile-nav-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border-radius: 8px;
+    transition: all 0.2s ease;
+  }
+
+  .mobile-nav-btn .icon {
+    width: 19px;
+    height: 19px;
+    stroke-width: 2;
+  }
+
+  .mobile-nav-btn:active {
+    transform: scale(0.92);
+  }
+
+  .mobile-nav-btn.active {
+    color: #0284c7;
+    font-weight: 700;
+  }
+
+  .mobile-nav-btn.active .mobile-nav-icon {
+    background: #e0f2fe;
+    color: #0284c7;
+  }
+
+  /* Mobile Quick Action Hero Card */
+  .mobile-quick-card {
+    display: block;
+    background: #ffffff;
+    border: 1px solid #e2e8f0;
+    border-radius: 16px;
+    padding: 14px 16px;
+    margin-bottom: 20px;
+    box-shadow: 0 4px 16px rgba(15, 23, 42, 0.05);
+  }
+
+  .mobile-quick-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+  }
+
+  .mobile-quick-badge {
+    font-size: 12px;
+    font-weight: 700;
+    color: #0f172a;
+    background: #f1f5f9;
+    padding: 4px 10px;
+    border-radius: 8px;
+    border: 1px solid #e2e8f0;
+  }
+
+  .mobile-gps-btn {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: #f0fdf4;
+    border: 1px solid #bbf7d0;
+    color: #166534;
+    font-size: 11.5px;
+    font-weight: 700;
+    padding: 6px 12px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-family: inherit;
+    transition: all 0.15s ease;
+  }
+
+  .mobile-gps-btn:active {
+    background: #dcfce7;
+    transform: scale(0.96);
+  }
+
+  .mobile-gps-btn .icon {
+    width: 14px;
+    height: 14px;
+  }
+
+  /* Category Scroll Chips */
+  .mobile-category-pills {
+    display: flex;
+    gap: 8px;
+    overflow-x: auto;
+    padding-bottom: 8px;
+    margin-bottom: 12px;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+  }
+
+  .mobile-category-pills::-webkit-scrollbar {
+    display: none;
+  }
+
+  .mobile-cat-pill {
+    flex: 0 0 auto;
+    padding: 8px 14px;
+    border-radius: 20px;
+    border: 1px solid #cbd5e1;
+    background: #f8fafc;
+    color: #334155;
+    font-size: 12px;
+    font-weight: 600;
+    font-family: inherit;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  .mobile-cat-pill:active {
+    transform: scale(0.95);
+  }
+
+  .mobile-cat-pill.active {
+    background: #0284c7;
+    color: #ffffff;
+    border-color: #0284c7;
+    box-shadow: 0 2px 8px rgba(2, 132, 199, 0.3);
+  }
+
+  .mobile-cta-btn {
+    min-height: 46px;
+    font-size: 13.5px;
+    font-weight: 700;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    border-radius: 12px;
+  }
+
+  /* Simplified touch-friendly components */
+  .topbar {
+    padding-inline: 14px;
+    height: 56px;
+  }
+
+  .city-selector-wrap {
+    margin-right: 6px;
+  }
+
+  .city-select {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+
+  .summary-card {
+    padding: 12px 14px;
+  }
+
+  .summary-value {
+    font-size: 22px !important;
+  }
+
+  .map-container {
+    height: 320px;
+    border-radius: 12px;
+  }
+
+  .explore-grid {
+    gap: 14px;
+    margin-bottom: 18px;
+  }
+
+  .recs-list {
+    gap: 12px;
+  }
+
+  .rec-card {
+    border-radius: 14px;
+    padding: 16px;
+    box-shadow: 0 2px 10px rgba(15, 23, 42, 0.05);
+  }
+
+  .decision-banner {
+    border-radius: 14px;
+    margin-bottom: 14px;
+  }
+
+  .page-footer {
+    padding-bottom: 24px;
+  }
+}
+
 

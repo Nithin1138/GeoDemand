@@ -123,7 +123,7 @@
     "demand_score",
     "recommendation_score"
   ],
-  "frozen_timestamp": "2026-11-17T17:40:53.439847+00:00",
+  "frozen_timestamp": "2026-11-18T12:36:07.826208+00:00",
   "schema_version": "v2.2-canonical",
   "target_column": "expected_customer_count",
   "target_contract": "expected_customer_count_next_hour",

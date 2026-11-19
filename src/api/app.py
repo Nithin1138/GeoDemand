@@ -642,6 +642,22 @@ async def pwa_service_worker():
     return JSONResponse({"error": "sw.js not found"}, status_code=404)
 
 
+@app.get("/style.css", include_in_schema=False)
+async def style_css():
+    css_path = DASHBOARD_DIR / "style.css"
+    if css_path.exists():
+        return FileResponse(str(css_path), media_type="text/css")
+    return JSONResponse({"error": "style.css not found"}, status_code=404)
+
+
+@app.get("/app.js", include_in_schema=False)
+async def app_js():
+    js_path = DASHBOARD_DIR / "app.js"
+    if js_path.exists():
+        return FileResponse(str(js_path), media_type="application/javascript")
+    return JSONResponse({"error": "app.js not found"}, status_code=404)
+
+
 @app.get("/v1/system/ping", response_model=PingResponse, tags=["System"], summary="Operational liveness ping")
 @app.get("/v1/system/health", response_model=PingResponse, tags=["System"], summary="Operational health check")
 @app.get("/health", response_model=PingResponse, tags=["System"], include_in_schema=False)

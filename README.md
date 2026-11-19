@@ -18,7 +18,7 @@
 - **🌐 Uber H3 Hexagonal Indexing (Resolution 8):** Uniform equidistant spatial discretization ($\sim 461\,\text{m}$ edge length, $\sim 0.74\,\text{km}^2$ area) with automated water-body polygon exclusion.
 - **🛰️ Hybrid Real-Time Data Ingestion:**
   - **Live Weather:** Real-time ambient readings and next-hour precipitation forecasts via Open-Meteo.
-  - **Real Infrastructure:** 35,794 real OpenStreetMap POIs (offices, schools, malls, transport hubs) extracted via Overpass QL.
+  - **Real Infrastructure:** 35,637 real OpenStreetMap POIs (offices, schools, malls, transport hubs) extracted via Overpass QL.
   - **Contextual Signals:** Road traffic speeds (HERE API / diurnal proxy), category competition (Google Places / OSM), and public event footprints.
 - **⚡ Next-Hour Machine Learning Demand Forecast:** LightGBM regressor trained on 711K observations under a strict anti-circularity temporal contract ($t \to t+1$).
 - **📊 Quantile Uncertainty Intervals ($P_{10}$–$P_{90}$):** Dual quantile heads estimating conservative floor ($P_{10}$), median ($P_{50}$), and optimistic ceiling ($P_{90}$) demand bounds without Gaussian assumptions.
@@ -43,7 +43,7 @@
     │                     FASTAPI BACKEND MICROSERVICE                   │
     │  • H3 Res-8 Hexagon Grid Resolution & Spatial Polygon Filtering    │
     │  • Candidate Generation (≤ Search Radius km, Water Pruning)        │
-    │  • 40-Feature Real-Time Assembly & Strict Schema Validation        │
+    │  • 45-Feature Real-Time Assembly & Strict Schema Validation        │
     │  • LightGBM ML Inference (Point Estimate + P10/P90 Quantiles)      │
     │  • TreeSHAP Exact Feature Attribution Decomposition                │
     │  • OSRM Road Network Distance & Driving Duration                   │
@@ -85,7 +85,7 @@ MOVIGO-ENG/
 ├── src/
 │   ├── api/
 │   │   ├── app.py               # FastAPI entrypoint & recommendation routes
-│   │   ├── feature_assembler.py # 40-feature vector assembly pipeline
+│   │   ├── feature_assembler.py # 45-feature vector assembly pipeline
 │   │   ├── location.py          # Coordinate to H3 cell resolution
 │   │   ├── recommender.py       # ML wrapper, Quantiles, SHAP, and Economics
 │   │   ├── spatial_filter.py    # Bounding box & water body exclusion

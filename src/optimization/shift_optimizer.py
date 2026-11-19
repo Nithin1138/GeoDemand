@@ -315,9 +315,10 @@ class ShiftOptimizer:
         total_profit_expr = sum(step_profit[s] for s in range(K_max)) - sum(transit_cost)
         model.Maximize(total_profit_expr)
 
-        # Solve
+        # Solve with lean single-worker execution to prevent CPU contention under load
         solver = cp_model.CpSolver()
-        solver.parameters.max_time_in_seconds = self.solver_time_limit_sec
+        solver.parameters.num_search_workers = 1
+        solver.parameters.max_time_in_seconds = min(0.6, max(0.2, float(self.solver_time_limit_sec)))
         status = solver.Solve(model)
 
         solve_time_ms = round((time.time() - start_t0) * 1000, 2)

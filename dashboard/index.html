@@ -15,9 +15,9 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;450;500;550;600;650;700&family=Manrope:wght@400;500;600;650;700;750;800&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-  <link rel="stylesheet" href="/static/style.css?v=2.7.0" />
+  <link rel="stylesheet" href="./style.css?v=2.7.0" />
   <script defer src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-  <script defer src="/static/app.js?v=2.7.2"></script>
+  <script defer src="./app.js?v=2.7.2"></script>
 </head>
 <body>
   <a class="skip-link" href="#mainContent">Skip to dashboard</a>
@@ -98,6 +98,28 @@
           <section class="page-heading" id="overview">
             <div><div class="eyebrow">YOUR NEXT OPPORTUNITY STARTS HERE</div><h1>Location overview<span class="heading-dot">.</span></h1><p>Less guesswork. More potential. Find the right spot for your business.</p></div>
             <button class="btn btn-outline help-button" type="button" data-help><svg class="icon"><use href="#i-spark"/></svg>How it works</button>
+          </section>
+
+          <!-- Mobile-Optimized Simplified Quick Search Card -->
+          <section class="mobile-quick-card surface" aria-label="Mobile Quick Location Search">
+            <div class="mobile-quick-header">
+              <div class="mobile-quick-badge">📍 <span id="mobileCityText">Vijayawada</span></div>
+              <button class="mobile-gps-btn" id="mobileGpsBtn" type="button" aria-label="Use current GPS location">
+                <svg class="icon"><use href="#i-target"/></svg>
+                <span>GPS Auto-Locate</span>
+              </button>
+            </div>
+            <div class="mobile-category-pills" id="mobileCatPills" role="tablist" aria-label="Quick Category Selection">
+              <button class="mobile-cat-pill active" data-cat="food" type="button" role="tab" aria-selected="true">🍲 Food</button>
+              <button class="mobile-cat-pill" data-cat="fruits" type="button" role="tab" aria-selected="false">🍎 Fruit</button>
+              <button class="mobile-cat-pill" data-cat="salon" type="button" role="tab" aria-selected="false">✂️ Salon</button>
+              <button class="mobile-cat-pill" data-cat="repair" type="button" role="tab" aria-selected="false">🔧 Repair</button>
+            </div>
+            <button class="btn btn-primary btn-full mobile-cta-btn" id="mobileFindBtn" type="button">
+              <svg class="icon"><use href="#i-spark"/></svg>
+              <span>Find Best Spots Near Me</span>
+              <svg class="icon button-arrow"><use href="#i-arrow"/></svg>
+            </button>
           </section>
 
           <section class="metrics-grid" aria-label="Demand and profit estimates">
@@ -466,5 +488,29 @@
 
   <dialog class="help-dialog" id="helpDialog" aria-labelledby="helpTitle"><div class="dialog-heading"><span class="soft-icon"><svg class="icon"><use href="#i-spark"/></svg></span><button class="icon-button" id="closeHelpBtn" type="button" aria-label="Close guide"><svg class="icon"><use href="#i-close"/></svg></button></div><div class="eyebrow">YOUR QUICK START</div><h2 id="helpTitle">A smarter move starts here.</h2><p>Three simple steps to turn local insight into a better business decision.</p><ol class="guide-steps"><li><span>01</span><div><h3>Choose your starting point</h3><p>Click the map, enter coordinates, or use your device location. Adjust the radius to choose how far to explore.</p></div></li><li><span>02</span><div><h3>Make the forecast yours</h3><p>Choose your business category and average order value, then select “Find my best locations”.</p></div></li><li><span>03</span><div><h3>Compare before you move</h3><p>Review profit, demand, travel estimates, and uncertainty. Select a location to see its route, or expand its details to understand why it ranks.</p></div></li></ol><div class="guide-note"><svg class="icon"><use href="#i-info"/></svg>Live and proxy sources are labeled. Forecasts help guide decisions; they don’t guarantee results.</div><button class="btn btn-primary btn-full" id="startGuideBtn" type="button">Got it, let’s explore<svg class="icon"><use href="#i-arrow"/></svg></button></dialog>
   <div class="sr-only" id="announcement" role="status" aria-live="polite"></div>
+
+  <!-- Dedicated Mobile Bottom Navigation Bar -->
+  <nav class="mobile-bottom-bar" id="mobileBottomBar" aria-label="Mobile Navigation">
+    <button class="mobile-nav-btn active" data-view="overview" type="button" aria-label="Find best spots">
+      <div class="mobile-nav-icon"><svg class="icon"><use href="#i-spark"/></svg></div>
+      <span>Spots</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="explore" type="button" aria-label="Explore interactive map">
+      <div class="mobile-nav-icon"><svg class="icon"><use href="#i-map"/></svg></div>
+      <span>Map</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="shiftPlanner" type="button" aria-label="Shift route itinerary planner">
+      <div class="mobile-nav-icon"><svg class="icon"><use href="#i-route"/></svg></div>
+      <span>Shift</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="telemetryPos" type="button" aria-label="POS quick transactions">
+      <div class="mobile-nav-icon"><svg class="icon"><use href="#i-pos"/></svg></div>
+      <span>Sales</span>
+    </button>
+    <button class="mobile-nav-btn" data-view="fleetRadar" type="button" aria-label="Fleet operations radar">
+      <div class="mobile-nav-icon"><svg class="icon"><use href="#i-radar"/></svg></div>
+      <span>Radar</span>
+    </button>
+  </nav>
 </body>
 </html>

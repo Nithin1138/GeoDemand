@@ -2,16 +2,15 @@
 Feature assembler for live inference.
 
 Single responsibility: given a candidate H3 cell, a vendor profile, and
-current real-world context, assemble the EXACT same 41-column feature
+current real-world context, assemble the EXACT same 45-column feature
 vector that the model was trained on (feature_store.parquet schema).
 
-Schema contract (must match feature_store.py column sets):
+Schema contract (must match CANONICAL_FEATURE_COLUMNS):
   - Static spatial features (17 cols)
   - Weather features (9 cols)
-  - Calendar features (8 cols)
-  - Dynamic: competition_score, event_importance (2 cols)
-  - Vendor: vendor_category, inventory_capacity, preparation_time, average_order_value (4 cols)
-  Total trainable: 40 features + expected_customer_count (target, excluded at inference)
+  - Calendar features (13 cols)
+  - Dynamic & Vendor features (6 cols)
+  Total trainable: 45 features (excluding expected_customer_count target at inference)
 
 The assembler also returns a `data_freshness` dict for every feature group,
 which the API surfaces in the recommendation response and dashboard.
