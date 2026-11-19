@@ -115,7 +115,6 @@ data/raw/weather_test/
 
 # Test reports & duplicated research folders
 data/deep_comprehensive_test_report.json
-data/processed/pipeline_manifest_*.json
 research_latex/
 
 # ===========================================================================

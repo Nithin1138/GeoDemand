@@ -1,6 +1,6 @@
 {
   "pipeline_schema_version": "v2.1-next-hour-forecast",
-  "generated_at": "2026-11-15T08:05:40.326437+00:00",
+  "generated_at": "2026-11-18T06:37:14.526624+00:00",
   "files": {
     "h3_cells.parquet": {
       "sha256_16": "ea87c7de4724fdaf",
@@ -62,10 +62,10 @@
       ]
     },
     "weather_hourly.parquet": {
-      "sha256_16": "22c1709cc2bea26e",
+      "sha256_16": "b78cdc197f4c984d",
       "n_rows": 210240,
       "n_cols": 11,
-      "size_bytes": 1460052,
+      "size_bytes": 1484559,
       "provenance": "real:open-meteo-archive",
       "description": "Hourly weather metrics from Open-Meteo archive (with deterministic diurnal simulation fallback)",
       "columns": [
@@ -200,10 +200,10 @@
       ]
     },
     "feature_store.parquet": {
-      "sha256_16": "4338b1f386d81ddc",
+      "sha256_16": "f0f2a9be40123ee1",
       "n_rows": 711750,
       "n_cols": 45,
-      "size_bytes": 6538812,
+      "size_bytes": 6595017,
       "provenance": "hybrid:joined_feature_store",
       "description": "Unified ML training store: features joined strictly at decision_timestamp t to predict target at t+1h",
       "columns": [
@@ -255,5 +255,5 @@
       ]
     }
   },
-  "pipeline_version_hash": "0eebbd3f8a41"
+  "pipeline_version_hash": "5c24f1f918f5"
 }
