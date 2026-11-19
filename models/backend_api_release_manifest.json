@@ -1,9 +1,9 @@
 {
   "version": "v2.1.0",
   "release_tag": "v2.1.0-prod",
-  "frozen_at": "2026-11-17T05:01:34.058212+00:00",
+  "frozen_at": "2026-11-18T12:35:46.240743+00:00",
   "openapi_version": "3.1.0",
-  "total_endpoints": 43,
+  "total_endpoints": 47,
   "endpoint_catalog": [
     {
       "path": "/v1/competitors/cell/{h3_cell}",
@@ -287,6 +287,15 @@
       "operation_id": "system_error_catalog_v1_system_error_catalog_get"
     },
     {
+      "path": "/v1/system/health",
+      "method": "GET",
+      "summary": "Operational health check",
+      "tags": [
+        "System"
+      ],
+      "operation_id": "ping_v1_system_health_get"
+    },
+    {
       "path": "/v1/system/metrics",
       "method": "GET",
       "summary": "API latency rolling percentiles and Prometheus telemetry",
@@ -312,6 +321,33 @@
         "System"
       ],
       "operation_id": "ping_v1_system_ping_get"
+    },
+    {
+      "path": "/v1/telemetry/health",
+      "method": "GET",
+      "summary": "Telemetry pipeline and ground truth health status",
+      "tags": [
+        "Telemetry"
+      ],
+      "operation_id": "get_telemetry_health_v1_telemetry_health_get"
+    },
+    {
+      "path": "/v1/telemetry/transactions",
+      "method": "POST",
+      "summary": "Ingest POS transaction telemetry event (Phase 11.1)",
+      "tags": [
+        "Telemetry"
+      ],
+      "operation_id": "ingest_transaction_v1_telemetry_transactions_post"
+    },
+    {
+      "path": "/v1/telemetry/transactions/batch",
+      "method": "POST",
+      "summary": "Batch ingest POS transaction telemetry events (Phase 11.1)",
+      "tags": [
+        "Telemetry"
+      ],
+      "operation_id": "ingest_transactions_batch_v1_telemetry_transactions_batch_post"
     },
     {
       "path": "/v1/webhooks/dead-letter",
@@ -396,15 +432,15 @@
     }
   ],
   "source_checksums": {
-    "api_app": "961059cc2042b1591e01cfb4030c86dbf9218b6e78dd556e87f16e2679452ead",
-    "api_schemas": "60fb1cbbac05b17091e3efbc76c623799211336e040b77cbac049d71566ae21b",
-    "api_recommender": "2c169d204249e1329b6053be6d07bc1d078756215986f1a7cc8e86853c113e05",
-    "shift_optimizer": "48e01f930d6fb9449566766465ed56b6db55bdfc402dd55e39cb5fa55d342d9a",
+    "api_app": "634baeec0dfd0277acdd0a2d63a86e15a444751883db27cb2022e29d0a930dda",
+    "api_schemas": "42816d62ed14f8956aaf0906688210663cd64d9ab98bea7dba2fceb1511656a2",
+    "api_recommender": "d2f9a01979e4d3ebc03e2c6216b7968d615c00665e2ffc4b5c0d2af66df13f66",
+    "shift_optimizer": "9e2f44cb04faebb3729a6eb047c133dfb0781168c88dc72e46e6345b3634446b",
     "fleet_manager": "e36444b4e775197383d544aa76688b173624913ee32ba8fe25a48c61caf7d0d4",
-    "security_errors": "2b23c0a539c36c2b8de1b3681544822d5578e4c316330d2120d0df6257230d61",
-    "security_auth": "a0ea680133e025f67667800ac3158c537f47b93174ec5dd8dab9a5e620d36cd4",
-    "security_rate_limiter": "37ec3766394812ba93d1377d5134b2ddba9b382cf76d15c37d4381ae9c3e59a8",
-    "reliability_resilience": "848001a3bd49f7f9eece27a9adff5b9693af5404d06ccc07d0779fbb07f3854f"
+    "security_errors": "703bfa790bdf0b87be2c7c5c947632a41d4afa10ab2e1d72bd6c3bca5fdf8ed7",
+    "security_auth": "0ed6f2f245e0c835333155e91093c1d085cd8c3c70ffae6a763d0ddf27588558",
+    "security_rate_limiter": "65590cc420e847d4ba2d2f8c473657a47abbc0dfb33794e12099a5a22ba6a027",
+    "reliability_resilience": "df4f214170680148c27047a4aa567628113bb5f5ea673cf4983a406e67bbd714"
   },
   "subsystem_verifications": {
     "authentication": {
@@ -450,14 +486,14 @@
   "smoke_test_results": {
     "total_tested": 12,
     "all_passed": true,
-    "total_duration_ms": 1062.26,
+    "total_duration_ms": 1031.2,
     "results": [
       {
         "method": "GET",
         "path": "/v1/system/ping",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 4.01,
+        "latency_ms": 0.46,
         "passed": true
       },
       {
@@ -465,7 +501,7 @@
         "path": "/v1/system/data-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 3.03,
+        "latency_ms": 0.41,
         "passed": true
       },
       {
@@ -473,7 +509,7 @@
         "path": "/v1/system/metrics",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 4.83,
+        "latency_ms": 0.91,
         "passed": true
       },
       {
@@ -481,7 +517,7 @@
         "path": "/v1/system/circuit-breakers",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 3.04,
+        "latency_ms": 0.33,
         "passed": true
       },
       {
@@ -489,7 +525,7 @@
         "path": "/v1/system/error-catalog",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 3.02,
+        "latency_ms": 0.41,
         "passed": true
       },
       {
@@ -497,7 +533,7 @@
         "path": "/v1/system/model-health",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 15.0,
+        "latency_ms": 1.95,
         "passed": true
       },
       {
@@ -505,7 +541,7 @@
         "path": "/v1/location/context",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 3.38,
+        "latency_ms": 0.55,
         "passed": true
       },
       {
@@ -513,7 +549,7 @@
         "path": "/v1/predict/demand",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 6.14,
+        "latency_ms": 0.7,
         "passed": true
       },
       {
@@ -521,7 +557,7 @@
         "path": "/v1/recommend/zones",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 5.01,
+        "latency_ms": 0.64,
         "passed": true
       },
       {
@@ -529,7 +565,7 @@
         "path": "/v1/recommendations/live",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 5.04,
+        "latency_ms": 0.59,
         "passed": true
       },
       {
@@ -537,7 +573,7 @@
         "path": "/v1/scenario/simulate",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 4.49,
+        "latency_ms": 0.55,
         "passed": true
       },
       {
@@ -545,7 +581,7 @@
         "path": "/v1/fleet/cell-occupancy?h3_cell=8861892543fffff",
         "status_code": 200,
         "expected_status": 200,
-        "latency_ms": 2.97,
+        "latency_ms": 0.38,
         "passed": true
       }
     ]

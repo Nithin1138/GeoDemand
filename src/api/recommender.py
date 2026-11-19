@@ -243,8 +243,24 @@ class DemandModel:
         """
         X = self._build_feature_matrix([feature_row])
         try:
-            # Native LightGBM TreeSHAP contributions
-            contribs = self._model.predict(X, pred_contrib=True)[0]
+            # Native TreeSHAP contributions (handles XGBoost, LightGBM, and generic regressors)
+            if hasattr(self._model, "get_booster"):
+                import xgboost as xgb
+                dmat = xgb.DMatrix(X)
+                contribs = self._model.get_booster().predict(dmat, pred_contribs=True)[0]
+            elif hasattr(self._model, "booster_"):
+                contribs = self._model.booster_.predict(X, pred_contrib=True)[0]
+            elif hasattr(self._model, "predict"):
+                try:
+                    contribs = self._model.predict(X, pred_contrib=True)[0]
+                except TypeError:
+                    contribs = None
+            else:
+                contribs = None
+
+            if contribs is None:
+                return ["Consistent commercial footfall"], []
+
             feature_contribs = contribs[:-1]  # drop base value at the end
             
             # Sort by absolute impact
@@ -309,14 +325,14 @@ from api.business_economics import (
 
 CATEGORY_SPATIAL_WEIGHTS: dict[str, dict[str, float]] = {
     "food": {
-        "office_count": 2.2,
-        "restaurant_count": 1.8,
-        "commercial_ratio": 2.0,
-        "bus_stop_count": 1.5,
-        "college_count": 1.5,
-        "railway_station_count": 1.8,
-        "population_density": 0.8,
-        "building_density": 1.0,
+        "office_count": 3.5,
+        "restaurant_count": 2.0,
+        "commercial_ratio": 2.5,
+        "bus_stop_count": 1.8,
+        "college_count": 14.0,
+        "railway_station_count": 2.0,
+        "population_density": 1.0,
+        "building_density": 1.5,
     },
     "fruits": {
         "hospital_count": 3.2,
@@ -413,6 +429,18 @@ def calculate_category_demand(raw_p50: int, vendor_category: str, features: dict
     conv_rate = float(spec["conv_rate"])
     raw_demand = float(raw_p50) if raw_p50 > 0 else 20.0
     converted = raw_demand * conv_rate * affinity_multiplier
+
+    # Direct anchor footfall uplift for colleges/universities, corporate offices, and transit hubs
+    colleges = float(features.get("college_count", 0.0))
+    offices = float(features.get("office_count", 0.0))
+    transits = float(features.get("bus_stop_count", 0.0))
+    if cat == "food":
+        converted += colleges * 7.0 + offices * 3.5 + transits * 2.0
+    elif cat == "fruits":
+        hospitals = float(features.get("hospital_count", 0.0))
+        converted += hospitals * 5.0 + colleges * 3.0
+    elif cat == "repair":
+        converted += transits * 3.0
 
     min_c = int(spec["min_cust"])
     max_c = int(spec["max_cust"])

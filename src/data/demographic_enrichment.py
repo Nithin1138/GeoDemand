@@ -16,8 +16,10 @@ Provides:
 
 from __future__ import annotations
 
+import json
 import logging
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
@@ -207,8 +209,48 @@ def _build_ward_polygon(c_lat: float, c_lng: float, area_km2: float) -> List[Tup
     return clean_polygon(verts)
 
 
-def get_vijayawada_census_wards() -> List[WardBoundary]:
-    """Return all statutory Census 2011 wards with cleaned polygons and population."""
+DEFAULT_CENSUS_GEOJSON_PATH = Path("data/raw/census/vijayawada_census_2011_wards.geojson")
+
+
+def get_vijayawada_census_wards(geojson_path: Optional[Union[str, Path]] = None) -> List[WardBoundary]:
+    """
+    Return all statutory Census 2011 wards with cleaned polygons and population.
+    Prioritizes loading from raw official GeoJSON file if available, falling back
+    to canonical embedded geometries.
+    """
+    target_path = Path(geojson_path) if geojson_path else DEFAULT_CENSUS_GEOJSON_PATH
+    if target_path.exists():
+        try:
+            payload = json.loads(target_path.read_text(encoding="utf-8"))
+            features = payload.get("features", [])
+            wards: List[WardBoundary] = []
+            for f in features:
+                props = f.get("properties", {})
+                geom = f.get("geometry", {})
+                coords = geom.get("coordinates", [])
+                if not coords:
+                    continue
+                ring = coords[0] if isinstance(coords[0][0], (list, tuple)) else coords
+                # Convert GeoJSON [lng, lat] to internal (lat, lng)
+                verts = [(float(pt[1]), float(pt[0])) for pt in ring]
+                cleaned = clean_polygon(verts)
+                wards.append(
+                    WardBoundary(
+                        ward_id=props.get("ward_id", f"WARD_{props.get('ward_no', len(wards)+1):02d}"),
+                        ward_name=props.get("ward_name", "Unknown Ward"),
+                        zone_name=props.get("zone_name", "Central"),
+                        census_2011_population=int(props.get("census_2011_population", 20000)),
+                        area_km2=float(props.get("area_sqkm", 1.0)),
+                        polygon=cleaned,
+                    )
+                )
+            if wards:
+                logger.info(f"Loaded {len(wards)} official census wards from {target_path}")
+                return wards
+        except Exception as exc:
+            logger.warning(f"Failed to load wards from {target_path}: {exc}. Using embedded fallback.")
+
+    # Fallback to embedded canonical ward definitions
     wards = []
     for w_id, name, zone, pop, lat, lng, area in CENSUS_WARDS_DATA:
         poly = _build_ward_polygon(lat, lng, area)

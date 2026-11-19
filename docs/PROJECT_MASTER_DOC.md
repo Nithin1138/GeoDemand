@@ -68,12 +68,12 @@ This is a genuine ML + optimization problem, not one where ML is forced in: dema
         │
         ▼
 [FEATURE ASSEMBLER]
-  Constructs 40-feature inference vector matching feature_store.parquet schema
+  Constructs 45-feature inference vector matching feature_store.parquet schema
   Generates data_freshness dictionary with explicit provenance per signal
         │
         ▼
 [DEMAND PREDICTION MODEL]
-  LightGBM Regressor (Test MAE: 0.91 customers/hr)
+  LightGBM Regressor (Test MAE: 0.7644 customers/hr, Val MAE: 0.7749, R²: 0.9771)
   Trained on next-hour temporal contract (features at t → target at t+1)
   Outputs expected_customer_count + uncertainty interval (p10, p50, p90)
         │
@@ -86,7 +86,7 @@ This is a genuine ML + optimization problem, not one where ML is forced in: dema
         │
         ▼
 [RANKING & EXPLAINABILITY ENGINE]
-  Score = 0.60×profit_norm + 0.25×demand_norm - 0.10×distance_norm - 0.05×competition_norm
+  Score = 0.40×profit_norm + 0.20×demand_norm + 0.20×affinity_norm - 0.10×distance_norm - 0.05×competition_norm - 0.05×uncertainty_norm
   Generates top_drivers + human-readable rationale
         │
         ▼

@@ -1,0 +1,4089 @@
+{
+  "type": "FeatureCollection",
+  "name": "vijayawada_census_2011_wards",
+  "crs": {
+    "type": "name",
+    "properties": {
+      "name": "urn:ogc:def:crs:OGC:1.3:CRS84"
+    }
+  },
+  "metadata": {
+    "total_wards": 59,
+    "total_population": 1305050,
+    "total_area_sqkm": 79.35,
+    "generated_by": "GeoDemand AI Data Pipeline (Phase 12.1)"
+  },
+  "features": [
+    {
+      "type": "Feature",
+      "id": "WARD_01",
+      "properties": {
+        "ward_id": "WARD_01",
+        "ward_no": 1,
+        "ward_name": "Kothapet / Brahmin Street",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 22450,
+        "male_population": 11337,
+        "female_population": 11113,
+        "working_population": 9249,
+        "area_sqkm": 0.95,
+        "population_density_per_sqkm": 23631.6,
+        "literacy_rate_pct": 84.5,
+        "center_latitude": 16.516,
+        "center_longitude": 80.612,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.617161,
+              16.516
+            ],
+            [
+              80.61565,
+              16.519499
+            ],
+            [
+              80.612,
+              16.520948
+            ],
+            [
+              80.60835,
+              16.519499
+            ],
+            [
+              80.606839,
+              16.516
+            ],
+            [
+              80.60835,
+              16.512501
+            ],
+            [
+              80.612,
+              16.511052
+            ],
+            [
+              80.61565,
+              16.512501
+            ],
+            [
+              80.617161,
+              16.516
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_02",
+      "properties": {
+        "ward_id": "WARD_02",
+        "ward_no": 2,
+        "ward_name": "Tarapet / Goods Shed",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 19800,
+        "male_population": 9999,
+        "female_population": 9801,
+        "working_population": 8158,
+        "area_sqkm": 1.1,
+        "population_density_per_sqkm": 18000.0,
+        "literacy_rate_pct": 83.2,
+        "center_latitude": 16.519,
+        "center_longitude": 80.615,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.620554,
+              16.519
+            ],
+            [
+              80.618927,
+              16.522765
+            ],
+            [
+              80.615,
+              16.524325
+            ],
+            [
+              80.611073,
+              16.522765
+            ],
+            [
+              80.609446,
+              16.519
+            ],
+            [
+              80.611073,
+              16.515235
+            ],
+            [
+              80.615,
+              16.513675
+            ],
+            [
+              80.618927,
+              16.515235
+            ],
+            [
+              80.620554,
+              16.519
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_03",
+      "properties": {
+        "ward_id": "WARD_03",
+        "ward_no": 3,
+        "ward_name": "Chitti Nagar / Tunnel Area",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 24100,
+        "male_population": 12170,
+        "female_population": 11930,
+        "working_population": 9929,
+        "area_sqkm": 1.25,
+        "population_density_per_sqkm": 19280.0,
+        "literacy_rate_pct": 81.0,
+        "center_latitude": 16.526,
+        "center_longitude": 80.608,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.613921,
+              16.526
+            ],
+            [
+              80.612187,
+              16.530014
+            ],
+            [
+              80.608,
+              16.531676
+            ],
+            [
+              80.603813,
+              16.530014
+            ],
+            [
+              80.602079,
+              16.526
+            ],
+            [
+              80.603813,
+              16.521986
+            ],
+            [
+              80.608,
+              16.520324
+            ],
+            [
+              80.612187,
+              16.521986
+            ],
+            [
+              80.613921,
+              16.526
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_04",
+      "properties": {
+        "ward_id": "WARD_04",
+        "ward_no": 4,
+        "ward_name": "Mallikarjunapeta",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 18200,
+        "male_population": 9191,
+        "female_population": 9009,
+        "working_population": 7498,
+        "area_sqkm": 0.85,
+        "population_density_per_sqkm": 21411.8,
+        "literacy_rate_pct": 85.0,
+        "center_latitude": 16.513,
+        "center_longitude": 80.607,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.611882,
+              16.513
+            ],
+            [
+              80.610452,
+              16.51631
+            ],
+            [
+              80.607,
+              16.517681
+            ],
+            [
+              80.603548,
+              16.51631
+            ],
+            [
+              80.602118,
+              16.513
+            ],
+            [
+              80.603548,
+              16.50969
+            ],
+            [
+              80.607,
+              16.508319
+            ],
+            [
+              80.610452,
+              16.50969
+            ],
+            [
+              80.611882,
+              16.513
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_05",
+      "properties": {
+        "ward_id": "WARD_05",
+        "ward_no": 5,
+        "ward_name": "Prakash Nagar / Wynchipet",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 21500,
+        "male_population": 10858,
+        "female_population": 10642,
+        "working_population": 8858,
+        "area_sqkm": 1.05,
+        "population_density_per_sqkm": 20476.2,
+        "literacy_rate_pct": 82.8,
+        "center_latitude": 16.522,
+        "center_longitude": 80.618,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.623426,
+              16.522
+            ],
+            [
+              80.621837,
+              16.525679
+            ],
+            [
+              80.618,
+              16.527202
+            ],
+            [
+              80.614163,
+              16.525679
+            ],
+            [
+              80.612574,
+              16.522
+            ],
+            [
+              80.614163,
+              16.518321
+            ],
+            [
+              80.618,
+              16.516798
+            ],
+            [
+              80.621837,
+              16.518321
+            ],
+            [
+              80.623426,
+              16.522
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_06",
+      "properties": {
+        "ward_id": "WARD_06",
+        "ward_no": 6,
+        "ward_name": "Kabela / Milk Project Road",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 23400,
+        "male_population": 11817,
+        "female_population": 11583,
+        "working_population": 9641,
+        "area_sqkm": 1.2,
+        "population_density_per_sqkm": 19500.0,
+        "literacy_rate_pct": 80.5,
+        "center_latitude": 16.529,
+        "center_longitude": 80.612,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.617801,
+              16.529
+            ],
+            [
+              80.616102,
+              16.532933
+            ],
+            [
+              80.612,
+              16.534561
+            ],
+            [
+              80.607898,
+              16.532933
+            ],
+            [
+              80.606199,
+              16.529
+            ],
+            [
+              80.607898,
+              16.525067
+            ],
+            [
+              80.612,
+              16.523439
+            ],
+            [
+              80.616102,
+              16.525067
+            ],
+            [
+              80.617801,
+              16.529
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_07",
+      "properties": {
+        "ward_id": "WARD_07",
+        "ward_no": 7,
+        "ward_name": "Janda Chettu Street / Islampet",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 20600,
+        "male_population": 10403,
+        "female_population": 10197,
+        "working_population": 8487,
+        "area_sqkm": 0.9,
+        "population_density_per_sqkm": 22888.9,
+        "literacy_rate_pct": 82.1,
+        "center_latitude": 16.5175,
+        "center_longitude": 80.619,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.624024,
+              16.5175
+            ],
+            [
+              80.622552,
+              16.520906
+            ],
+            [
+              80.619,
+              16.522316
+            ],
+            [
+              80.615448,
+              16.520906
+            ],
+            [
+              80.613976,
+              16.5175
+            ],
+            [
+              80.615448,
+              16.514094
+            ],
+            [
+              80.619,
+              16.512684
+            ],
+            [
+              80.622552,
+              16.514094
+            ],
+            [
+              80.624024,
+              16.5175
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_08",
+      "properties": {
+        "ward_id": "WARD_08",
+        "ward_no": 8,
+        "ward_name": "Bhimannavari Peta / Sitara",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 22100,
+        "male_population": 11160,
+        "female_population": 10940,
+        "working_population": 9105,
+        "area_sqkm": 1.15,
+        "population_density_per_sqkm": 19217.4,
+        "literacy_rate_pct": 79.8,
+        "center_latitude": 16.531,
+        "center_longitude": 80.605,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.610679,
+              16.531
+            ],
+            [
+              80.609016,
+              16.53485
+            ],
+            [
+              80.605,
+              16.536444
+            ],
+            [
+              80.600984,
+              16.53485
+            ],
+            [
+              80.599321,
+              16.531
+            ],
+            [
+              80.600984,
+              16.52715
+            ],
+            [
+              80.605,
+              16.525556
+            ],
+            [
+              80.609016,
+              16.52715
+            ],
+            [
+              80.610679,
+              16.531
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_09",
+      "properties": {
+        "ward_id": "WARD_09",
+        "ward_no": 9,
+        "ward_name": "Kammavari Peta / Canal Bank",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 17500,
+        "male_population": 8838,
+        "female_population": 8662,
+        "working_population": 7210,
+        "area_sqkm": 0.8,
+        "population_density_per_sqkm": 21875.0,
+        "literacy_rate_pct": 83.4,
+        "center_latitude": 16.5145,
+        "center_longitude": 80.603,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.607736,
+              16.5145
+            ],
+            [
+              80.606349,
+              16.517711
+            ],
+            [
+              80.603,
+              16.519041
+            ],
+            [
+              80.599651,
+              16.517711
+            ],
+            [
+              80.598264,
+              16.5145
+            ],
+            [
+              80.599651,
+              16.511289
+            ],
+            [
+              80.603,
+              16.509959
+            ],
+            [
+              80.606349,
+              16.511289
+            ],
+            [
+              80.607736,
+              16.5145
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_10",
+      "properties": {
+        "ward_id": "WARD_10",
+        "ward_no": 10,
+        "ward_name": "Gowri Shankar Nagar",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 19200,
+        "male_population": 9696,
+        "female_population": 9504,
+        "working_population": 7910,
+        "area_sqkm": 0.95,
+        "population_density_per_sqkm": 20210.5,
+        "literacy_rate_pct": 81.6,
+        "center_latitude": 16.527,
+        "center_longitude": 80.615,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.620162,
+              16.527
+            ],
+            [
+              80.61865,
+              16.530499
+            ],
+            [
+              80.615,
+              16.531948
+            ],
+            [
+              80.61135,
+              16.530499
+            ],
+            [
+              80.609838,
+              16.527
+            ],
+            [
+              80.61135,
+              16.523501
+            ],
+            [
+              80.615,
+              16.522052
+            ],
+            [
+              80.61865,
+              16.523501
+            ],
+            [
+              80.620162,
+              16.527
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_11",
+      "properties": {
+        "ward_id": "WARD_11",
+        "ward_no": 11,
+        "ward_name": "Panja Centre Commercial",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 16800,
+        "male_population": 8484,
+        "female_population": 8316,
+        "working_population": 6922,
+        "area_sqkm": 0.7,
+        "population_density_per_sqkm": 24000.0,
+        "literacy_rate_pct": 86.2,
+        "center_latitude": 16.515,
+        "center_longitude": 80.617,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.62143,
+              16.515
+            ],
+            [
+              80.620133,
+              16.518004
+            ],
+            [
+              80.617,
+              16.519248
+            ],
+            [
+              80.613867,
+              16.518004
+            ],
+            [
+              80.61257,
+              16.515
+            ],
+            [
+              80.613867,
+              16.511996
+            ],
+            [
+              80.617,
+              16.510752
+            ],
+            [
+              80.620133,
+              16.511996
+            ],
+            [
+              80.62143,
+              16.515
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_12",
+      "properties": {
+        "ward_id": "WARD_12",
+        "ward_no": 12,
+        "ward_name": "Ratham Centre / Kanaka Durga Foothills",
+        "zone_name": "One Town",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 15400,
+        "male_population": 7777,
+        "female_population": 7623,
+        "working_population": 6345,
+        "area_sqkm": 0.75,
+        "population_density_per_sqkm": 20533.3,
+        "literacy_rate_pct": 84.0,
+        "center_latitude": 16.511,
+        "center_longitude": 80.605,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.609586,
+              16.511
+            ],
+            [
+              80.608243,
+              16.514109
+            ],
+            [
+              80.605,
+              16.515397
+            ],
+            [
+              80.601757,
+              16.514109
+            ],
+            [
+              80.600414,
+              16.511
+            ],
+            [
+              80.601757,
+              16.507891
+            ],
+            [
+              80.605,
+              16.506603
+            ],
+            [
+              80.608243,
+              16.507891
+            ],
+            [
+              80.609586,
+              16.511
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_13",
+      "properties": {
+        "ward_id": "WARD_13",
+        "ward_no": 13,
+        "ward_name": "Governorpet North",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 17600,
+        "male_population": 8888,
+        "female_population": 8712,
+        "working_population": 7251,
+        "area_sqkm": 0.75,
+        "population_density_per_sqkm": 23466.7,
+        "literacy_rate_pct": 87.5,
+        "center_latitude": 16.511,
+        "center_longitude": 80.631,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.635586,
+              16.511
+            ],
+            [
+              80.634243,
+              16.514109
+            ],
+            [
+              80.631,
+              16.515397
+            ],
+            [
+              80.627757,
+              16.514109
+            ],
+            [
+              80.626414,
+              16.511
+            ],
+            [
+              80.627757,
+              16.507891
+            ],
+            [
+              80.631,
+              16.506603
+            ],
+            [
+              80.634243,
+              16.507891
+            ],
+            [
+              80.635586,
+              16.511
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_14",
+      "properties": {
+        "ward_id": "WARD_14",
+        "ward_no": 14,
+        "ward_name": "Governorpet South / Besant Road",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 16400,
+        "male_population": 8282,
+        "female_population": 8118,
+        "working_population": 6757,
+        "area_sqkm": 0.65,
+        "population_density_per_sqkm": 25230.8,
+        "literacy_rate_pct": 88.0,
+        "center_latitude": 16.507,
+        "center_longitude": 80.63,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.634269,
+              16.507
+            ],
+            [
+              80.633019,
+              16.509894
+            ],
+            [
+              80.63,
+              16.511093
+            ],
+            [
+              80.626981,
+              16.509894
+            ],
+            [
+              80.625731,
+              16.507
+            ],
+            [
+              80.626981,
+              16.504106
+            ],
+            [
+              80.63,
+              16.502907
+            ],
+            [
+              80.633019,
+              16.504106
+            ],
+            [
+              80.634269,
+              16.507
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_15",
+      "properties": {
+        "ward_id": "WARD_15",
+        "ward_no": 15,
+        "ward_name": "Gandhi Nagar Main",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 23900,
+        "male_population": 12070,
+        "female_population": 11830,
+        "working_population": 9847,
+        "area_sqkm": 1.15,
+        "population_density_per_sqkm": 20782.6,
+        "literacy_rate_pct": 86.4,
+        "center_latitude": 16.518,
+        "center_longitude": 80.627,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.632679,
+              16.518
+            ],
+            [
+              80.631015,
+              16.52185
+            ],
+            [
+              80.627,
+              16.523444
+            ],
+            [
+              80.622985,
+              16.52185
+            ],
+            [
+              80.621321,
+              16.518
+            ],
+            [
+              80.622985,
+              16.51415
+            ],
+            [
+              80.627,
+              16.512556
+            ],
+            [
+              80.631015,
+              16.51415
+            ],
+            [
+              80.632679,
+              16.518
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_16",
+      "properties": {
+        "ward_id": "WARD_16",
+        "ward_no": 16,
+        "ward_name": "Satyanarayanapuram East",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 26400,
+        "male_population": 13332,
+        "female_population": 13068,
+        "working_population": 10877,
+        "area_sqkm": 1.3,
+        "population_density_per_sqkm": 20307.7,
+        "literacy_rate_pct": 85.2,
+        "center_latitude": 16.524,
+        "center_longitude": 80.632,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.638038,
+              16.524
+            ],
+            [
+              80.636269,
+              16.528093
+            ],
+            [
+              80.632,
+              16.529788
+            ],
+            [
+              80.627731,
+              16.528093
+            ],
+            [
+              80.625962,
+              16.524
+            ],
+            [
+              80.627731,
+              16.519907
+            ],
+            [
+              80.632,
+              16.518212
+            ],
+            [
+              80.636269,
+              16.519907
+            ],
+            [
+              80.638038,
+              16.524
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_17",
+      "properties": {
+        "ward_id": "WARD_17",
+        "ward_no": 17,
+        "ward_name": "Satyanarayanapuram West",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 25100,
+        "male_population": 12676,
+        "female_population": 12424,
+        "working_population": 10341,
+        "area_sqkm": 1.2,
+        "population_density_per_sqkm": 20916.7,
+        "literacy_rate_pct": 85.8,
+        "center_latitude": 16.522,
+        "center_longitude": 80.628,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.633801,
+              16.522
+            ],
+            [
+              80.632102,
+              16.525933
+            ],
+            [
+              80.628,
+              16.527561
+            ],
+            [
+              80.623898,
+              16.525933
+            ],
+            [
+              80.622199,
+              16.522
+            ],
+            [
+              80.623898,
+              16.518067
+            ],
+            [
+              80.628,
+              16.516439
+            ],
+            [
+              80.632102,
+              16.518067
+            ],
+            [
+              80.633801,
+              16.522
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_18",
+      "properties": {
+        "ward_id": "WARD_18",
+        "ward_no": 18,
+        "ward_name": "Maruthi Nagar / Alankar Circle",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 18900,
+        "male_population": 9544,
+        "female_population": 9356,
+        "working_population": 7787,
+        "area_sqkm": 0.85,
+        "population_density_per_sqkm": 22235.3,
+        "literacy_rate_pct": 86.9,
+        "center_latitude": 16.5135,
+        "center_longitude": 80.625,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.629882,
+              16.5135
+            ],
+            [
+              80.628452,
+              16.51681
+            ],
+            [
+              80.625,
+              16.518181
+            ],
+            [
+              80.621548,
+              16.51681
+            ],
+            [
+              80.620118,
+              16.5135
+            ],
+            [
+              80.621548,
+              16.51019
+            ],
+            [
+              80.625,
+              16.508819
+            ],
+            [
+              80.628452,
+              16.51019
+            ],
+            [
+              80.629882,
+              16.5135
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_19",
+      "properties": {
+        "ward_id": "WARD_19",
+        "ward_no": 19,
+        "ward_name": "Seetharampuram / BRTS Road",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 24800,
+        "male_population": 12524,
+        "female_population": 12276,
+        "working_population": 10218,
+        "area_sqkm": 1.25,
+        "population_density_per_sqkm": 19840.0,
+        "literacy_rate_pct": 84.5,
+        "center_latitude": 16.5195,
+        "center_longitude": 80.636,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.64192,
+              16.5195
+            ],
+            [
+              80.640186,
+              16.523514
+            ],
+            [
+              80.636,
+              16.525176
+            ],
+            [
+              80.631814,
+              16.523514
+            ],
+            [
+              80.63008,
+              16.5195
+            ],
+            [
+              80.631814,
+              16.515486
+            ],
+            [
+              80.636,
+              16.513824
+            ],
+            [
+              80.640186,
+              16.515486
+            ],
+            [
+              80.64192,
+              16.5195
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_20",
+      "properties": {
+        "ward_id": "WARD_20",
+        "ward_no": 20,
+        "ward_name": "Madhura Nagar / Railway Colony",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 27100,
+        "male_population": 13686,
+        "female_population": 13414,
+        "working_population": 11165,
+        "area_sqkm": 1.45,
+        "population_density_per_sqkm": 18689.7,
+        "literacy_rate_pct": 83.8,
+        "center_latitude": 16.5265,
+        "center_longitude": 80.638,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.644377,
+              16.5265
+            ],
+            [
+              80.642509,
+              16.530823
+            ],
+            [
+              80.638,
+              16.532613
+            ],
+            [
+              80.633491,
+              16.530823
+            ],
+            [
+              80.631623,
+              16.5265
+            ],
+            [
+              80.633491,
+              16.522177
+            ],
+            [
+              80.638,
+              16.520387
+            ],
+            [
+              80.642509,
+              16.522177
+            ],
+            [
+              80.644377,
+              16.5265
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_21",
+      "properties": {
+        "ward_id": "WARD_21",
+        "ward_no": 21,
+        "ward_name": "Suryaraopet / Red Cross Road",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 15800,
+        "male_population": 7979,
+        "female_population": 7821,
+        "working_population": 6510,
+        "area_sqkm": 0.7,
+        "population_density_per_sqkm": 22571.4,
+        "literacy_rate_pct": 88.5,
+        "center_latitude": 16.504,
+        "center_longitude": 80.633,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.63743,
+              16.504
+            ],
+            [
+              80.636133,
+              16.507004
+            ],
+            [
+              80.633,
+              16.508248
+            ],
+            [
+              80.629867,
+              16.507004
+            ],
+            [
+              80.62857,
+              16.504
+            ],
+            [
+              80.629867,
+              16.500996
+            ],
+            [
+              80.633,
+              16.499752
+            ],
+            [
+              80.636133,
+              16.500996
+            ],
+            [
+              80.63743,
+              16.504
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_22",
+      "properties": {
+        "ward_id": "WARD_22",
+        "ward_no": 22,
+        "ward_name": "Arundalpet Residential",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 19400,
+        "male_population": 9797,
+        "female_population": 9603,
+        "working_population": 7993,
+        "area_sqkm": 0.9,
+        "population_density_per_sqkm": 21555.6,
+        "literacy_rate_pct": 87.1,
+        "center_latitude": 16.5125,
+        "center_longitude": 80.638,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.643023,
+              16.5125
+            ],
+            [
+              80.641552,
+              16.515906
+            ],
+            [
+              80.638,
+              16.517316
+            ],
+            [
+              80.634448,
+              16.515906
+            ],
+            [
+              80.632977,
+              16.5125
+            ],
+            [
+              80.634448,
+              16.509094
+            ],
+            [
+              80.638,
+              16.507684
+            ],
+            [
+              80.641552,
+              16.509094
+            ],
+            [
+              80.643023,
+              16.5125
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_23",
+      "properties": {
+        "ward_id": "WARD_23",
+        "ward_no": 23,
+        "ward_name": "Buckinghampet Transit Belt",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 18200,
+        "male_population": 9191,
+        "female_population": 9009,
+        "working_population": 7498,
+        "area_sqkm": 0.8,
+        "population_density_per_sqkm": 22750.0,
+        "literacy_rate_pct": 86.7,
+        "center_latitude": 16.5085,
+        "center_longitude": 80.637,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.641736,
+              16.5085
+            ],
+            [
+              80.640349,
+              16.511711
+            ],
+            [
+              80.637,
+              16.513041
+            ],
+            [
+              80.633651,
+              16.511711
+            ],
+            [
+              80.632264,
+              16.5085
+            ],
+            [
+              80.633651,
+              16.505289
+            ],
+            [
+              80.637,
+              16.503959
+            ],
+            [
+              80.640349,
+              16.505289
+            ],
+            [
+              80.641736,
+              16.5085
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_24",
+      "properties": {
+        "ward_id": "WARD_24",
+        "ward_no": 24,
+        "ward_name": "Labbipet Commercial / MG Road",
+        "zone_name": "Central",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 17100,
+        "male_population": 8636,
+        "female_population": 8464,
+        "working_population": 7045,
+        "area_sqkm": 0.75,
+        "population_density_per_sqkm": 22800.0,
+        "literacy_rate_pct": 89.2,
+        "center_latitude": 16.5015,
+        "center_longitude": 80.64,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.644586,
+              16.5015
+            ],
+            [
+              80.643242,
+              16.504609
+            ],
+            [
+              80.64,
+              16.505897
+            ],
+            [
+              80.636758,
+              16.504609
+            ],
+            [
+              80.635414,
+              16.5015
+            ],
+            [
+              80.636758,
+              16.498391
+            ],
+            [
+              80.64,
+              16.497103
+            ],
+            [
+              80.643242,
+              16.498391
+            ],
+            [
+              80.644586,
+              16.5015
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_25",
+      "properties": {
+        "ward_id": "WARD_25",
+        "ward_no": 25,
+        "ward_name": "Bhavanipuram Core",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 28700,
+        "male_population": 14494,
+        "female_population": 14206,
+        "working_population": 11824,
+        "area_sqkm": 1.6,
+        "population_density_per_sqkm": 17937.5,
+        "literacy_rate_pct": 83.0,
+        "center_latitude": 16.514,
+        "center_longitude": 80.592,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.598698,
+              16.514
+            ],
+            [
+              80.596736,
+              16.518541
+            ],
+            [
+              80.592,
+              16.520422
+            ],
+            [
+              80.587264,
+              16.518541
+            ],
+            [
+              80.585302,
+              16.514
+            ],
+            [
+              80.587264,
+              16.509459
+            ],
+            [
+              80.592,
+              16.507578
+            ],
+            [
+              80.596736,
+              16.509459
+            ],
+            [
+              80.598698,
+              16.514
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_26",
+      "properties": {
+        "ward_id": "WARD_26",
+        "ward_no": 26,
+        "ward_name": "Vidyadharapuram Main",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 27300,
+        "male_population": 13786,
+        "female_population": 13514,
+        "working_population": 11248,
+        "area_sqkm": 1.55,
+        "population_density_per_sqkm": 17612.9,
+        "literacy_rate_pct": 82.4,
+        "center_latitude": 16.525,
+        "center_longitude": 80.588,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.594593,
+              16.525
+            ],
+            [
+              80.592662,
+              16.529469
+            ],
+            [
+              80.588,
+              16.531321
+            ],
+            [
+              80.583338,
+              16.529469
+            ],
+            [
+              80.581407,
+              16.525
+            ],
+            [
+              80.583338,
+              16.520531
+            ],
+            [
+              80.588,
+              16.518679
+            ],
+            [
+              80.592662,
+              16.520531
+            ],
+            [
+              80.594593,
+              16.525
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_27",
+      "properties": {
+        "ward_id": "WARD_27",
+        "ward_no": 27,
+        "ward_name": "Kummaripalem",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 20400,
+        "male_population": 10302,
+        "female_population": 10098,
+        "working_population": 8405,
+        "area_sqkm": 1.1,
+        "population_density_per_sqkm": 18545.5,
+        "literacy_rate_pct": 84.1,
+        "center_latitude": 16.518,
+        "center_longitude": 80.601,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.606554,
+              16.518
+            ],
+            [
+              80.604927,
+              16.521765
+            ],
+            [
+              80.601,
+              16.523325
+            ],
+            [
+              80.597073,
+              16.521765
+            ],
+            [
+              80.595446,
+              16.518
+            ],
+            [
+              80.597073,
+              16.514235
+            ],
+            [
+              80.601,
+              16.512675
+            ],
+            [
+              80.604927,
+              16.514235
+            ],
+            [
+              80.606554,
+              16.518
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_28",
+      "properties": {
+        "ward_id": "WARD_28",
+        "ward_no": 28,
+        "ward_name": "Gollapudi Bypass Belt",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 29800,
+        "male_population": 15049,
+        "female_population": 14751,
+        "working_population": 12278,
+        "area_sqkm": 2.2,
+        "population_density_per_sqkm": 13545.5,
+        "literacy_rate_pct": 79.5,
+        "center_latitude": 16.538,
+        "center_longitude": 80.575,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.582855,
+              16.538
+            ],
+            [
+              80.580554,
+              16.543325
+            ],
+            [
+              80.575,
+              16.54553
+            ],
+            [
+              80.569446,
+              16.543325
+            ],
+            [
+              80.567145,
+              16.538
+            ],
+            [
+              80.569446,
+              16.532675
+            ],
+            [
+              80.575,
+              16.53047
+            ],
+            [
+              80.580554,
+              16.532675
+            ],
+            [
+              80.582855,
+              16.538
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_29",
+      "properties": {
+        "ward_id": "WARD_29",
+        "ward_no": 29,
+        "ward_name": "Joji Nagar / HB Colony",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 22500,
+        "male_population": 11362,
+        "female_population": 11138,
+        "working_population": 9270,
+        "area_sqkm": 1.2,
+        "population_density_per_sqkm": 18750.0,
+        "literacy_rate_pct": 83.5,
+        "center_latitude": 16.52,
+        "center_longitude": 80.595,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.600801,
+              16.52
+            ],
+            [
+              80.599102,
+              16.523933
+            ],
+            [
+              80.595,
+              16.525561
+            ],
+            [
+              80.590898,
+              16.523933
+            ],
+            [
+              80.589199,
+              16.52
+            ],
+            [
+              80.590898,
+              16.516067
+            ],
+            [
+              80.595,
+              16.514439
+            ],
+            [
+              80.599102,
+              16.516067
+            ],
+            [
+              80.600801,
+              16.52
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_30",
+      "properties": {
+        "ward_id": "WARD_30",
+        "ward_no": 30,
+        "ward_name": "Swathi Centre Residential",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 24600,
+        "male_population": 12423,
+        "female_population": 12177,
+        "working_population": 10135,
+        "area_sqkm": 1.35,
+        "population_density_per_sqkm": 18222.2,
+        "literacy_rate_pct": 82.9,
+        "center_latitude": 16.5165,
+        "center_longitude": 80.585,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.591153,
+              16.5165
+            ],
+            [
+              80.589351,
+              16.520671
+            ],
+            [
+              80.585,
+              16.522399
+            ],
+            [
+              80.580649,
+              16.520671
+            ],
+            [
+              80.578847,
+              16.5165
+            ],
+            [
+              80.580649,
+              16.512329
+            ],
+            [
+              80.585,
+              16.510601
+            ],
+            [
+              80.589351,
+              16.512329
+            ],
+            [
+              80.591153,
+              16.5165
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_31",
+      "properties": {
+        "ward_id": "WARD_31",
+        "ward_no": 31,
+        "ward_name": "P&T Colony / RTC Workshop",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 21200,
+        "male_population": 10706,
+        "female_population": 10494,
+        "working_population": 8734,
+        "area_sqkm": 1.15,
+        "population_density_per_sqkm": 18434.8,
+        "literacy_rate_pct": 84.0,
+        "center_latitude": 16.528,
+        "center_longitude": 80.582,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.587679,
+              16.528
+            ],
+            [
+              80.586016,
+              16.53185
+            ],
+            [
+              80.582,
+              16.533444
+            ],
+            [
+              80.577984,
+              16.53185
+            ],
+            [
+              80.576321,
+              16.528
+            ],
+            [
+              80.577984,
+              16.52415
+            ],
+            [
+              80.582,
+              16.522556
+            ],
+            [
+              80.586016,
+              16.52415
+            ],
+            [
+              80.587679,
+              16.528
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_32",
+      "properties": {
+        "ward_id": "WARD_32",
+        "ward_no": 32,
+        "ward_name": "Urmila Nagar",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 19800,
+        "male_population": 9999,
+        "female_population": 9801,
+        "working_population": 8158,
+        "area_sqkm": 1.05,
+        "population_density_per_sqkm": 18857.1,
+        "literacy_rate_pct": 83.7,
+        "center_latitude": 16.5235,
+        "center_longitude": 80.591,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.596426,
+              16.5235
+            ],
+            [
+              80.594837,
+              16.527179
+            ],
+            [
+              80.591,
+              16.528702
+            ],
+            [
+              80.587163,
+              16.527179
+            ],
+            [
+              80.585574,
+              16.5235
+            ],
+            [
+              80.587163,
+              16.519821
+            ],
+            [
+              80.591,
+              16.518298
+            ],
+            [
+              80.594837,
+              16.519821
+            ],
+            [
+              80.596426,
+              16.5235
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_33",
+      "properties": {
+        "ward_id": "WARD_33",
+        "ward_no": 33,
+        "ward_name": "Sivalayam Street / Ferry Road",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 17900,
+        "male_population": 9040,
+        "female_population": 8860,
+        "working_population": 7375,
+        "area_sqkm": 0.95,
+        "population_density_per_sqkm": 18842.1,
+        "literacy_rate_pct": 82.2,
+        "center_latitude": 16.509,
+        "center_longitude": 80.598,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.603161,
+              16.509
+            ],
+            [
+              80.601649,
+              16.512499
+            ],
+            [
+              80.598,
+              16.513948
+            ],
+            [
+              80.594351,
+              16.512499
+            ],
+            [
+              80.592839,
+              16.509
+            ],
+            [
+              80.594351,
+              16.505501
+            ],
+            [
+              80.598,
+              16.504052
+            ],
+            [
+              80.601649,
+              16.505501
+            ],
+            [
+              80.603161,
+              16.509
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_34",
+      "properties": {
+        "ward_id": "WARD_34",
+        "ward_no": 34,
+        "ward_name": "Ibrahimpatnam Gateway",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 26500,
+        "male_population": 13382,
+        "female_population": 13118,
+        "working_population": 10918,
+        "area_sqkm": 2.5,
+        "population_density_per_sqkm": 10600.0,
+        "literacy_rate_pct": 78.8,
+        "center_latitude": 16.545,
+        "center_longitude": 80.565,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.573374,
+              16.545
+            ],
+            [
+              80.570921,
+              16.550676
+            ],
+            [
+              80.565,
+              16.553027
+            ],
+            [
+              80.559079,
+              16.550676
+            ],
+            [
+              80.556626,
+              16.545
+            ],
+            [
+              80.559079,
+              16.539324
+            ],
+            [
+              80.565,
+              16.536973
+            ],
+            [
+              80.570921,
+              16.539324
+            ],
+            [
+              80.573374,
+              16.545
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_35",
+      "properties": {
+        "ward_id": "WARD_35",
+        "ward_no": 35,
+        "ward_name": "Kondapalli Industrial Approach",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 23100,
+        "male_population": 11666,
+        "female_population": 11434,
+        "working_population": 9517,
+        "area_sqkm": 2.4,
+        "population_density_per_sqkm": 9625.0,
+        "literacy_rate_pct": 79.2,
+        "center_latitude": 16.552,
+        "center_longitude": 80.558,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.566205,
+              16.552
+            ],
+            [
+              80.563802,
+              16.557561
+            ],
+            [
+              80.558,
+              16.559865
+            ],
+            [
+              80.552198,
+              16.557561
+            ],
+            [
+              80.549795,
+              16.552
+            ],
+            [
+              80.552198,
+              16.546439
+            ],
+            [
+              80.558,
+              16.544135
+            ],
+            [
+              80.563802,
+              16.546439
+            ],
+            [
+              80.566205,
+              16.552
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_36",
+      "properties": {
+        "ward_id": "WARD_36",
+        "ward_no": 36,
+        "ward_name": "Guntupalli Rail Cluster",
+        "zone_name": "West",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 18700,
+        "male_population": 9444,
+        "female_population": 9256,
+        "working_population": 7704,
+        "area_sqkm": 1.8,
+        "population_density_per_sqkm": 10388.9,
+        "literacy_rate_pct": 80.1,
+        "center_latitude": 16.54,
+        "center_longitude": 80.56,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.567105,
+              16.54
+            ],
+            [
+              80.565024,
+              16.544816
+            ],
+            [
+              80.56,
+              16.546811
+            ],
+            [
+              80.554976,
+              16.544816
+            ],
+            [
+              80.552895,
+              16.54
+            ],
+            [
+              80.554976,
+              16.535184
+            ],
+            [
+              80.56,
+              16.533189
+            ],
+            [
+              80.565024,
+              16.535184
+            ],
+            [
+              80.567105,
+              16.54
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_37",
+      "properties": {
+        "ward_id": "WARD_37",
+        "ward_no": 37,
+        "ward_name": "Moghalrajpuram Core",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 20500,
+        "male_population": 10352,
+        "female_population": 10148,
+        "working_population": 8446,
+        "area_sqkm": 1.1,
+        "population_density_per_sqkm": 18636.4,
+        "literacy_rate_pct": 88.0,
+        "center_latitude": 16.505,
+        "center_longitude": 80.645,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.650553,
+              16.505
+            ],
+            [
+              80.648927,
+              16.508765
+            ],
+            [
+              80.645,
+              16.510325
+            ],
+            [
+              80.641073,
+              16.508765
+            ],
+            [
+              80.639447,
+              16.505
+            ],
+            [
+              80.641073,
+              16.501235
+            ],
+            [
+              80.645,
+              16.499675
+            ],
+            [
+              80.648927,
+              16.501235
+            ],
+            [
+              80.650553,
+              16.505
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_38",
+      "properties": {
+        "ward_id": "WARD_38",
+        "ward_no": 38,
+        "ward_name": "Moghalrajpuram Caves Belt",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 19200,
+        "male_population": 9696,
+        "female_population": 9504,
+        "working_population": 7910,
+        "area_sqkm": 1.0,
+        "population_density_per_sqkm": 19200.0,
+        "literacy_rate_pct": 87.2,
+        "center_latitude": 16.5075,
+        "center_longitude": 80.647,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.652295,
+              16.5075
+            ],
+            [
+              80.650744,
+              16.51109
+            ],
+            [
+              80.647,
+              16.512577
+            ],
+            [
+              80.643256,
+              16.51109
+            ],
+            [
+              80.641705,
+              16.5075
+            ],
+            [
+              80.643256,
+              16.50391
+            ],
+            [
+              80.647,
+              16.502423
+            ],
+            [
+              80.650744,
+              16.50391
+            ],
+            [
+              80.652295,
+              16.5075
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_39",
+      "properties": {
+        "ward_id": "WARD_39",
+        "ward_no": 39,
+        "ward_name": "Jammi Chettu Centre",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 21400,
+        "male_population": 10807,
+        "female_population": 10593,
+        "working_population": 8817,
+        "area_sqkm": 1.05,
+        "population_density_per_sqkm": 20381.0,
+        "literacy_rate_pct": 86.8,
+        "center_latitude": 16.5,
+        "center_longitude": 80.648,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.653426,
+              16.5
+            ],
+            [
+              80.651837,
+              16.503679
+            ],
+            [
+              80.648,
+              16.505202
+            ],
+            [
+              80.644163,
+              16.503679
+            ],
+            [
+              80.642574,
+              16.5
+            ],
+            [
+              80.644163,
+              16.496321
+            ],
+            [
+              80.648,
+              16.494798
+            ],
+            [
+              80.651837,
+              16.496321
+            ],
+            [
+              80.653426,
+              16.5
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_40",
+      "properties": {
+        "ward_id": "WARD_40",
+        "ward_no": 40,
+        "ward_name": "Moghalrajpuram Hill",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 21800,
+        "male_population": 11009,
+        "female_population": 10791,
+        "working_population": 8982,
+        "area_sqkm": 1.25,
+        "population_density_per_sqkm": 17440.0,
+        "literacy_rate_pct": 87.6,
+        "center_latitude": 16.502,
+        "center_longitude": 80.642,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.64792,
+              16.502
+            ],
+            [
+              80.646186,
+              16.506014
+            ],
+            [
+              80.642,
+              16.507676
+            ],
+            [
+              80.637814,
+              16.506014
+            ],
+            [
+              80.63608,
+              16.502
+            ],
+            [
+              80.637814,
+              16.497986
+            ],
+            [
+              80.642,
+              16.496324
+            ],
+            [
+              80.646186,
+              16.497986
+            ],
+            [
+              80.64792,
+              16.502
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_41",
+      "properties": {
+        "ward_id": "WARD_41",
+        "ward_no": 41,
+        "ward_name": "Siddhartha Nagar",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 19500,
+        "male_population": 9848,
+        "female_population": 9652,
+        "working_population": 8034,
+        "area_sqkm": 1.15,
+        "population_density_per_sqkm": 16956.5,
+        "literacy_rate_pct": 89.0,
+        "center_latitude": 16.498,
+        "center_longitude": 80.651,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.656678,
+              16.498
+            ],
+            [
+              80.655015,
+              16.50185
+            ],
+            [
+              80.651,
+              16.503444
+            ],
+            [
+              80.646985,
+              16.50185
+            ],
+            [
+              80.645322,
+              16.498
+            ],
+            [
+              80.646985,
+              16.49415
+            ],
+            [
+              80.651,
+              16.492556
+            ],
+            [
+              80.655015,
+              16.49415
+            ],
+            [
+              80.656678,
+              16.498
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_42",
+      "properties": {
+        "ward_id": "WARD_42",
+        "ward_no": 42,
+        "ward_name": "Pinnamaneni Poly Clinic Road",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 18400,
+        "male_population": 9292,
+        "female_population": 9108,
+        "working_population": 7581,
+        "area_sqkm": 0.95,
+        "population_density_per_sqkm": 19368.4,
+        "literacy_rate_pct": 88.4,
+        "center_latitude": 16.504,
+        "center_longitude": 80.653,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.658161,
+              16.504
+            ],
+            [
+              80.656649,
+              16.507499
+            ],
+            [
+              80.653,
+              16.508948
+            ],
+            [
+              80.649351,
+              16.507499
+            ],
+            [
+              80.647839,
+              16.504
+            ],
+            [
+              80.649351,
+              16.500501
+            ],
+            [
+              80.653,
+              16.499052
+            ],
+            [
+              80.656649,
+              16.500501
+            ],
+            [
+              80.658161,
+              16.504
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_43",
+      "properties": {
+        "ward_id": "WARD_43",
+        "ward_no": 43,
+        "ward_name": "Municipal Colony / ITI Road",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 22100,
+        "male_population": 11160,
+        "female_population": 10940,
+        "working_population": 9105,
+        "area_sqkm": 1.15,
+        "population_density_per_sqkm": 19217.4,
+        "literacy_rate_pct": 85.9,
+        "center_latitude": 16.508,
+        "center_longitude": 80.651,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.656678,
+              16.508
+            ],
+            [
+              80.655015,
+              16.51185
+            ],
+            [
+              80.651,
+              16.513444
+            ],
+            [
+              80.646985,
+              16.51185
+            ],
+            [
+              80.645322,
+              16.508
+            ],
+            [
+              80.646985,
+              16.50415
+            ],
+            [
+              80.651,
+              16.502556
+            ],
+            [
+              80.655015,
+              16.50415
+            ],
+            [
+              80.656678,
+              16.508
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_44",
+      "properties": {
+        "ward_id": "WARD_44",
+        "ward_no": 44,
+        "ward_name": "Gunadala Hill South",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 23600,
+        "male_population": 11918,
+        "female_population": 11682,
+        "working_population": 9723,
+        "area_sqkm": 1.3,
+        "population_density_per_sqkm": 18153.8,
+        "literacy_rate_pct": 84.1,
+        "center_latitude": 16.516,
+        "center_longitude": 80.658,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.664038,
+              16.516
+            ],
+            [
+              80.662269,
+              16.520093
+            ],
+            [
+              80.658,
+              16.521788
+            ],
+            [
+              80.653731,
+              16.520093
+            ],
+            [
+              80.651962,
+              16.516
+            ],
+            [
+              80.653731,
+              16.511907
+            ],
+            [
+              80.658,
+              16.510212
+            ],
+            [
+              80.662269,
+              16.511907
+            ],
+            [
+              80.664038,
+              16.516
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_45",
+      "properties": {
+        "ward_id": "WARD_45",
+        "ward_no": 45,
+        "ward_name": "Machavaram / Krishna Nagar",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 25200,
+        "male_population": 12726,
+        "female_population": 12474,
+        "working_population": 10382,
+        "area_sqkm": 1.4,
+        "population_density_per_sqkm": 18000.0,
+        "literacy_rate_pct": 85.5,
+        "center_latitude": 16.512,
+        "center_longitude": 80.653,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.659265,
+              16.512
+            ],
+            [
+              80.65743,
+              16.516248
+            ],
+            [
+              80.653,
+              16.518007
+            ],
+            [
+              80.64857,
+              16.516248
+            ],
+            [
+              80.646735,
+              16.512
+            ],
+            [
+              80.64857,
+              16.507752
+            ],
+            [
+              80.653,
+              16.505993
+            ],
+            [
+              80.65743,
+              16.507752
+            ],
+            [
+              80.659265,
+              16.512
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_46",
+      "properties": {
+        "ward_id": "WARD_46",
+        "ward_no": 46,
+        "ward_name": "Pantakaluva Road Commercial",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 24300,
+        "male_population": 12272,
+        "female_population": 12028,
+        "working_population": 10012,
+        "area_sqkm": 1.35,
+        "population_density_per_sqkm": 18000.0,
+        "literacy_rate_pct": 87.0,
+        "center_latitude": 16.497,
+        "center_longitude": 80.658,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.664152,
+              16.497
+            ],
+            [
+              80.66235,
+              16.501171
+            ],
+            [
+              80.658,
+              16.502899
+            ],
+            [
+              80.65365,
+              16.501171
+            ],
+            [
+              80.651848,
+              16.497
+            ],
+            [
+              80.65365,
+              16.492829
+            ],
+            [
+              80.658,
+              16.491101
+            ],
+            [
+              80.66235,
+              16.492829
+            ],
+            [
+              80.664152,
+              16.497
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_47",
+      "properties": {
+        "ward_id": "WARD_47",
+        "ward_no": 47,
+        "ward_name": "Gayatri Nagar / Benz Enclave",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 17500,
+        "male_population": 8838,
+        "female_population": 8662,
+        "working_population": 7210,
+        "area_sqkm": 0.9,
+        "population_density_per_sqkm": 19444.4,
+        "literacy_rate_pct": 89.5,
+        "center_latitude": 16.5025,
+        "center_longitude": 80.659,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.664023,
+              16.5025
+            ],
+            [
+              80.662552,
+              16.505906
+            ],
+            [
+              80.659,
+              16.507316
+            ],
+            [
+              80.655448,
+              16.505906
+            ],
+            [
+              80.653977,
+              16.5025
+            ],
+            [
+              80.655448,
+              16.499094
+            ],
+            [
+              80.659,
+              16.497684
+            ],
+            [
+              80.662552,
+              16.499094
+            ],
+            [
+              80.664023,
+              16.5025
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_48",
+      "properties": {
+        "ward_id": "WARD_48",
+        "ward_no": 48,
+        "ward_name": "Benz Circle Commercial Hub",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 15800,
+        "male_population": 7979,
+        "female_population": 7821,
+        "working_population": 6510,
+        "area_sqkm": 0.9,
+        "population_density_per_sqkm": 17555.6,
+        "literacy_rate_pct": 90.1,
+        "center_latitude": 16.499,
+        "center_longitude": 80.656,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.661023,
+              16.499
+            ],
+            [
+              80.659552,
+              16.502406
+            ],
+            [
+              80.656,
+              16.503816
+            ],
+            [
+              80.652448,
+              16.502406
+            ],
+            [
+              80.650977,
+              16.499
+            ],
+            [
+              80.652448,
+              16.495594
+            ],
+            [
+              80.656,
+              16.494184
+            ],
+            [
+              80.659552,
+              16.495594
+            ],
+            [
+              80.661023,
+              16.499
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_49",
+      "properties": {
+        "ward_id": "WARD_49",
+        "ward_no": 49,
+        "ward_name": "Patamata High School Road",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 29400,
+        "male_population": 14847,
+        "female_population": 14553,
+        "working_population": 12113,
+        "area_sqkm": 1.7,
+        "population_density_per_sqkm": 17294.1,
+        "literacy_rate_pct": 86.3,
+        "center_latitude": 16.494,
+        "center_longitude": 80.662,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.668903,
+              16.494
+            ],
+            [
+              80.666881,
+              16.498681
+            ],
+            [
+              80.662,
+              16.500619
+            ],
+            [
+              80.657119,
+              16.498681
+            ],
+            [
+              80.655097,
+              16.494
+            ],
+            [
+              80.657119,
+              16.489319
+            ],
+            [
+              80.662,
+              16.487381
+            ],
+            [
+              80.666881,
+              16.489319
+            ],
+            [
+              80.668903,
+              16.494
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_50",
+      "properties": {
+        "ward_id": "WARD_50",
+        "ward_no": 50,
+        "ward_name": "Patamata Lanka",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 27800,
+        "male_population": 14039,
+        "female_population": 13761,
+        "working_population": 11454,
+        "area_sqkm": 1.65,
+        "population_density_per_sqkm": 16848.5,
+        "literacy_rate_pct": 85.0,
+        "center_latitude": 16.488,
+        "center_longitude": 80.658,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.664801,
+              16.488
+            ],
+            [
+              80.662809,
+              16.492611
+            ],
+            [
+              80.658,
+              16.494521
+            ],
+            [
+              80.653191,
+              16.492611
+            ],
+            [
+              80.651199,
+              16.488
+            ],
+            [
+              80.653191,
+              16.483389
+            ],
+            [
+              80.658,
+              16.481479
+            ],
+            [
+              80.662809,
+              16.483389
+            ],
+            [
+              80.664801,
+              16.488
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_51",
+      "properties": {
+        "ward_id": "WARD_51",
+        "ward_no": 51,
+        "ward_name": "Gurunanak Colony / Teachers Colony",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 23100,
+        "male_population": 11666,
+        "female_population": 11434,
+        "working_population": 9517,
+        "area_sqkm": 1.4,
+        "population_density_per_sqkm": 16500.0,
+        "literacy_rate_pct": 88.2,
+        "center_latitude": 16.491,
+        "center_longitude": 80.668,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.674265,
+              16.491
+            ],
+            [
+              80.67243,
+              16.495248
+            ],
+            [
+              80.668,
+              16.497007
+            ],
+            [
+              80.66357,
+              16.495248
+            ],
+            [
+              80.661735,
+              16.491
+            ],
+            [
+              80.66357,
+              16.486752
+            ],
+            [
+              80.668,
+              16.484993
+            ],
+            [
+              80.67243,
+              16.486752
+            ],
+            [
+              80.674265,
+              16.491
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_52",
+      "properties": {
+        "ward_id": "WARD_52",
+        "ward_no": 52,
+        "ward_name": "Auto Nagar Industrial Belt",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 14200,
+        "male_population": 7171,
+        "female_population": 7029,
+        "working_population": 5850,
+        "area_sqkm": 2.8,
+        "population_density_per_sqkm": 5071.4,
+        "literacy_rate_pct": 82.0,
+        "center_latitude": 16.491,
+        "center_longitude": 80.68,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.68886,
+              16.491
+            ],
+            [
+              80.686265,
+              16.497007
+            ],
+            [
+              80.68,
+              16.499495
+            ],
+            [
+              80.673735,
+              16.497007
+            ],
+            [
+              80.67114,
+              16.491
+            ],
+            [
+              80.673735,
+              16.484993
+            ],
+            [
+              80.68,
+              16.482505
+            ],
+            [
+              80.686265,
+              16.484993
+            ],
+            [
+              80.68886,
+              16.491
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_53",
+      "properties": {
+        "ward_id": "WARD_53",
+        "ward_no": 53,
+        "ward_name": "Kanuru Extension / Bandar Road",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 28500,
+        "male_population": 14392,
+        "female_population": 14108,
+        "working_population": 11742,
+        "area_sqkm": 2.4,
+        "population_density_per_sqkm": 11875.0,
+        "literacy_rate_pct": 84.8,
+        "center_latitude": 16.482,
+        "center_longitude": 80.689,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.697202,
+              16.482
+            ],
+            [
+              80.6948,
+              16.487561
+            ],
+            [
+              80.689,
+              16.489865
+            ],
+            [
+              80.6832,
+              16.487561
+            ],
+            [
+              80.680798,
+              16.482
+            ],
+            [
+              80.6832,
+              16.476439
+            ],
+            [
+              80.689,
+              16.474135
+            ],
+            [
+              80.6948,
+              16.476439
+            ],
+            [
+              80.697202,
+              16.482
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_54",
+      "properties": {
+        "ward_id": "WARD_54",
+        "ward_no": 54,
+        "ward_name": "Poranki North Commercial",
+        "zone_name": "East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 26200,
+        "male_population": 13231,
+        "female_population": 12969,
+        "working_population": 10794,
+        "area_sqkm": 2.6,
+        "population_density_per_sqkm": 10076.9,
+        "literacy_rate_pct": 83.5,
+        "center_latitude": 16.476,
+        "center_longitude": 80.702,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.710537,
+              16.476
+            ],
+            [
+              80.708036,
+              16.481788
+            ],
+            [
+              80.702,
+              16.484186
+            ],
+            [
+              80.695964,
+              16.481788
+            ],
+            [
+              80.693463,
+              16.476
+            ],
+            [
+              80.695964,
+              16.470212
+            ],
+            [
+              80.702,
+              16.467814
+            ],
+            [
+              80.708036,
+              16.470212
+            ],
+            [
+              80.710537,
+              16.476
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_55",
+      "properties": {
+        "ward_id": "WARD_55",
+        "ward_no": 55,
+        "ward_name": "Gunadala Mary Matha Shrine",
+        "zone_name": "North-East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 26700,
+        "male_population": 13484,
+        "female_population": 13216,
+        "working_population": 11000,
+        "area_sqkm": 1.85,
+        "population_density_per_sqkm": 14432.4,
+        "literacy_rate_pct": 84.2,
+        "center_latitude": 16.523,
+        "center_longitude": 80.668,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.675203,
+              16.523
+            ],
+            [
+              80.673093,
+              16.527883
+            ],
+            [
+              80.668,
+              16.529905
+            ],
+            [
+              80.662907,
+              16.527883
+            ],
+            [
+              80.660797,
+              16.523
+            ],
+            [
+              80.662907,
+              16.518117
+            ],
+            [
+              80.668,
+              16.516095
+            ],
+            [
+              80.673093,
+              16.518117
+            ],
+            [
+              80.675203,
+              16.523
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_56",
+      "properties": {
+        "ward_id": "WARD_56",
+        "ward_no": 56,
+        "ward_name": "Payakapuram / Housing Board",
+        "zone_name": "North-East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 31200,
+        "male_population": 15756,
+        "female_population": 15444,
+        "working_population": 12854,
+        "area_sqkm": 2.1,
+        "population_density_per_sqkm": 14857.1,
+        "literacy_rate_pct": 81.5,
+        "center_latitude": 16.536,
+        "center_longitude": 80.654,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.661674,
+              16.536
+            ],
+            [
+              80.659427,
+              16.541202
+            ],
+            [
+              80.654,
+              16.543357
+            ],
+            [
+              80.648573,
+              16.541202
+            ],
+            [
+              80.646326,
+              16.536
+            ],
+            [
+              80.648573,
+              16.530798
+            ],
+            [
+              80.654,
+              16.528643
+            ],
+            [
+              80.659427,
+              16.530798
+            ],
+            [
+              80.661674,
+              16.536
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_57",
+      "properties": {
+        "ward_id": "WARD_57",
+        "ward_no": 57,
+        "ward_name": "Prasadampadu Highway Hub",
+        "zone_name": "North-East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 27400,
+        "male_population": 13837,
+        "female_population": 13563,
+        "working_population": 11289,
+        "area_sqkm": 2.3,
+        "population_density_per_sqkm": 11913.0,
+        "literacy_rate_pct": 83.0,
+        "center_latitude": 16.525,
+        "center_longitude": 80.688,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.696031,
+              16.525
+            ],
+            [
+              80.693679,
+              16.530444
+            ],
+            [
+              80.688,
+              16.532699
+            ],
+            [
+              80.682321,
+              16.530444
+            ],
+            [
+              80.679969,
+              16.525
+            ],
+            [
+              80.682321,
+              16.519556
+            ],
+            [
+              80.688,
+              16.517301
+            ],
+            [
+              80.693679,
+              16.519556
+            ],
+            [
+              80.696031,
+              16.525
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_58",
+      "properties": {
+        "ward_id": "WARD_58",
+        "ward_no": 58,
+        "ward_name": "Ramavarappadu Ring",
+        "zone_name": "North-East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 23100,
+        "male_population": 11666,
+        "female_population": 11434,
+        "working_population": 9517,
+        "area_sqkm": 2.1,
+        "population_density_per_sqkm": 11000.0,
+        "literacy_rate_pct": 83.8,
+        "center_latitude": 16.531,
+        "center_longitude": 80.681,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.688674,
+              16.531
+            ],
+            [
+              80.686427,
+              16.536202
+            ],
+            [
+              80.681,
+              16.538357
+            ],
+            [
+              80.675573,
+              16.536202
+            ],
+            [
+              80.673326,
+              16.531
+            ],
+            [
+              80.675573,
+              16.525798
+            ],
+            [
+              80.681,
+              16.523643
+            ],
+            [
+              80.686427,
+              16.525798
+            ],
+            [
+              80.688674,
+              16.531
+            ]
+          ]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "id": "WARD_59",
+      "properties": {
+        "ward_id": "WARD_59",
+        "ward_no": 59,
+        "ward_name": "Enikepadu IT / Educational Belt",
+        "zone_name": "North-East",
+        "municipality": "Vijayawada Municipal Corporation",
+        "district": "Krishna",
+        "state": "Andhra Pradesh",
+        "country": "India",
+        "census_year": 2011,
+        "census_2011_population": 25900,
+        "male_population": 13080,
+        "female_population": 12820,
+        "working_population": 10671,
+        "area_sqkm": 2.7,
+        "population_density_per_sqkm": 9592.6,
+        "literacy_rate_pct": 85.4,
+        "center_latitude": 16.521,
+        "center_longitude": 80.71,
+        "source": "Directorate of Census Operations, Andhra Pradesh \u2014 District Census Handbook: Krishna / Vijayawada",
+        "license": "Government Open Data License \u2014 India (GODL)"
+      },
+      "geometry": {
+        "type": "Polygon",
+        "coordinates": [
+          [
+            [
+              80.718701,
+              16.521
+            ],
+            [
+              80.716153,
+              16.526899
+            ],
+            [
+              80.71,
+              16.529342
+            ],
+            [
+              80.703847,
+              16.526899
+            ],
+            [
+              80.701299,
+              16.521
+            ],
+            [
+              80.703847,
+              16.515101
+            ],
+            [
+              80.71,
+              16.512658
+            ],
+            [
+              80.716153,
+              16.515101
+            ],
+            [
+              80.718701,
+              16.521
+            ]
+          ]
+        ]
+      }
+    }
+  ]
+}

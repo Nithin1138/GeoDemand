@@ -166,13 +166,38 @@ def mock_external_network_services(monkeypatch):
             return mock
 
         # Open-Meteo weather
-        if "api.open-meteo.com" in url_str:
+        if "open-meteo.com" in url_str:
+            import pandas as pd
             mock = MagicMock()
             mock.status_code = 200
             mock.ok = True
             mock.raise_for_status = MagicMock()
-            mock.json.return_value = MOCK_OPEN_METEO
-            mock.text = json.dumps(MOCK_OPEN_METEO)
+            params = kwargs.get("params") or {}
+            start_d = params.get("start_date")
+            end_d = params.get("end_date")
+            if start_d and end_d:
+                dates = pd.date_range(start_d, f"{end_d} 23:00", freq="h")
+                payload = {
+                    "latitude": float(params.get("latitude", 16.5062)),
+                    "longitude": float(params.get("longitude", 80.6480)),
+                    "hourly": {
+                        "time": [d.strftime("%Y-%m-%dT%H:00") for d in dates],
+                        "temperature_2m": [round(28.0 + (i % 6) * 0.5, 1) for i in range(len(dates))],
+                        "relative_humidity_2m": [65.0 for _ in range(len(dates))],
+                        "precipitation": [0.0 for _ in range(len(dates))],
+                        "weather_code": [0 for _ in range(len(dates))],
+                        "cloud_cover": [20.0 for _ in range(len(dates))],
+                        "surface_pressure": [1010.0 for _ in range(len(dates))],
+                        "wind_speed_10m": [10.0 for _ in range(len(dates))],
+                        "uv_index": [5.0 for _ in range(len(dates))],
+                        "visibility": [10000.0 for _ in range(len(dates))],
+                    },
+                }
+                mock.json.return_value = payload
+                mock.text = json.dumps(payload)
+            else:
+                mock.json.return_value = MOCK_OPEN_METEO
+                mock.text = json.dumps(MOCK_OPEN_METEO)
             return mock
 
         # Google Maps / Distance Matrix

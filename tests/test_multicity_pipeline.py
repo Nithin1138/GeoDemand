@@ -129,3 +129,24 @@ def test_city_onboarding_guide(pipeline):
     assert "Standard Operating Procedure: City Onboarding Protocol" in guide
     assert "MultiCityRegistry" in guide
     assert "H3 Spatial Index" in guide
+
+
+def test_city_feature_store_prematerialization(pipeline, tmp_path):
+    """Verify multi-city feature store generation produces canonical 45 columns with zero nulls."""
+    out_file = tmp_path / "test_hyd_feature_store.parquet"
+    df = pipeline.generate_city_feature_store(
+        city_id="hyderabad",
+        n_vendors=5,
+        start_date="2025-01-01",
+        end_date="2025-01-03",
+        output_file=out_file,
+        seed=42,
+    )
+    assert out_file.exists()
+    assert len(df) == 5 * 3 * 13  # 5 vendors * 3 days * 13 hours = 195 rows
+    assert df.shape[1] == 45
+    assert "expected_customer_count" in df.columns
+    assert "temperature" in df.columns
+    assert "vendor_category" in df.columns
+    assert df.isnull().sum().sum() == 0
+

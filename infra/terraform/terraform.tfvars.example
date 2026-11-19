@@ -1,0 +1,28 @@
+# ==============================================================================
+# GeoDemand AI — Production Terraform Variables Example
+# ==============================================================================
+aws_region             = "ap-south-1"
+environment            = "production"
+vpc_cidr               = "10.0.0.0/16"
+availability_zones     = ["ap-south-1a", "ap-south-1b"]
+public_subnet_cidrs    = ["10.0.1.0/24", "10.0.2.0/24"]
+private_subnet_cidrs   = ["10.0.11.0/24", "10.0.12.0/24"]
+domain_name            = "geodemand.ai"
+
+# Database Configuration (PostgreSQL 16 + PostGIS)
+db_instance_class           = "db.t4g.xlarge"
+db_allocated_storage_gb     = 100
+db_max_allocated_storage_gb = 500
+db_username                 = "geodemand_admin"
+db_password                 = "SpecifyStrongSecretPasswordHere"
+
+# Redis Configuration
+redis_node_type        = "cache.t4g.medium"
+
+# ECS Fargate App Sizing
+ecs_app_cpu            = 2048
+ecs_app_memory         = 4096
+ecs_app_desired_count  = 2
+ecs_app_min_count      = 2
+ecs_app_max_count      = 10
+

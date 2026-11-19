@@ -16,6 +16,7 @@ Dashboard served at:
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import sys
 import uuid
@@ -246,6 +247,10 @@ OPENAPI_TAGS = [
         "name": "Notifications",
         "description": "Notification trigger service, impending-rain alerts, event alerts, demand spikes, and multi-channel delivery (FCM, WhatsApp).",
     },
+    {
+        "name": "Telemetry",
+        "description": "Live POS transaction ingestion, spatial mapping (H3 Res 8), deduplication, and telemetry ground truth (Phase 11.1).",
+    },
 ]
 
 app = FastAPI(
@@ -377,6 +382,7 @@ async def geodemand_api_error_handler(request: Request, exc: GeoDemandAPIError):
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
     cid = get_correlation_id()
+    logger.error("422 Validation error on %s: %s", request.url.path, exc.errors())
     err_resp = StandardErrorResponse(
         error=ErrorCode.VALIDATION_ERROR.value,
         message="Request payload validation failed.",
@@ -560,7 +566,17 @@ from api.schemas import (
     NotificationTriggerCheckResponse,
     NotificationDispatchRequest,
     NotificationDispatchResponse,
+    TelemetryIngestResponse,
+    TelemetryBatchIngestResponse,
 )
+from src.ingestion.schema import (
+    TransactionRecord,
+    TransactionStatus,
+    PaymentMethod,
+    TransactionLocation,
+)
+from src.ingestion.validator import TransactionIngestionPipeline, IngestionResult
+from src.data.actuals_aggregator import ActualsAggregator
 from notifications.notification_engine import notification_service
 from notifications.models import (
     NotificationPreferences,
@@ -589,6 +605,11 @@ from src.ingestion.event_broker import (
     BrokerSizingProfile,
 )
 
+# Initialize singleton telemetry pipeline and actuals aggregator (Phase 11.1)
+telemetry_pipeline = TransactionIngestionPipeline()
+actuals_aggregator = ActualsAggregator(default_city="Vijayawada")
+
+
 
 
 
@@ -605,7 +626,41 @@ async def dashboard():
     return JSONResponse({"message": "GeoDemand AI v2.1 — POST /v1/recommendations/live to begin"})
 
 
+@app.get("/manifest.json", include_in_schema=False)
+async def pwa_manifest():
+    manifest_path = DASHBOARD_DIR / "manifest.json"
+    if manifest_path.exists():
+        return FileResponse(str(manifest_path), media_type="application/manifest+json")
+    return JSONResponse({"error": "manifest.json not found"}, status_code=404)
+
+
+@app.get("/sw.js", include_in_schema=False)
+async def pwa_service_worker():
+    sw_path = DASHBOARD_DIR / "sw.js"
+    if sw_path.exists():
+        return FileResponse(str(sw_path), media_type="application/javascript")
+    return JSONResponse({"error": "sw.js not found"}, status_code=404)
+
+
+@app.get("/style.css", include_in_schema=False)
+async def style_css():
+    css_path = DASHBOARD_DIR / "style.css"
+    if css_path.exists():
+        return FileResponse(str(css_path), media_type="text/css")
+    return JSONResponse({"error": "style.css not found"}, status_code=404)
+
+
+@app.get("/app.js", include_in_schema=False)
+async def app_js():
+    js_path = DASHBOARD_DIR / "app.js"
+    if js_path.exists():
+        return FileResponse(str(js_path), media_type="application/javascript")
+    return JSONResponse({"error": "app.js not found"}, status_code=404)
+
+
 @app.get("/v1/system/ping", response_model=PingResponse, tags=["System"], summary="Operational liveness ping")
+@app.get("/v1/system/health", response_model=PingResponse, tags=["System"], summary="Operational health check")
+@app.get("/health", response_model=PingResponse, tags=["System"], include_in_schema=False)
 async def ping():
     return {"status": "ok", "service": "GeoDemand AI", "version": "2.1.0",
             "timestamp": datetime.now(timezone.utc).isoformat()}
@@ -801,6 +856,160 @@ async def publish_test_event(
         }
 
 
+# ---------------------------------------------------------------------------
+# Telemetry Ingestion Endpoints (Phase 11.1)
+# ---------------------------------------------------------------------------
+
+@app.post(
+    "/v1/telemetry/transactions",
+    response_model=TelemetryIngestResponse,
+    tags=["Telemetry"],
+    summary="Ingest POS transaction telemetry event (Phase 11.1)",
+)
+async def ingest_transaction(
+    record: TransactionRecord,
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Ingests live or batch Point-of-Sale (POS) transaction telemetry:
+    - Performs validation & data sanitization
+    - Detects duplicate transaction IDs and delayed events
+    - Enriches spatial coordinates to Uber H3 Resolution 8
+    - Forwards to the real-time event broker gateway
+    """
+    res: IngestionResult = telemetry_pipeline.ingest_transaction(record)
+    if res.is_duplicate:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={
+                "message": "Duplicate transaction ID rejected",
+                "transaction_id": record.transaction_id,
+                "errors": res.errors,
+            },
+        )
+    if not res.success:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail={"message": "Transaction validation failed", "errors": res.errors},
+        )
+
+    # Forward valid record to event broker
+    if res.record is not None:
+        event_gateway.publish_transaction(res.record, idempotency_key=f"pos:{res.record.transaction_id}")
+
+    h3_id = res.record.location.h3_cell_id if (res.record and res.record.location) else None
+    ingest_ts = (
+        res.record.ingestion_timestamp.isoformat()
+        if (res.record and res.record.ingestion_timestamp)
+        else datetime.now(timezone.utc).isoformat()
+    )
+
+    return TelemetryIngestResponse(
+        status=res.status_code,
+        transaction_id=record.transaction_id,
+        vendor_id=record.vendor_id,
+        h3_cell_id=h3_id,
+        event_timestamp=record.event_timestamp.isoformat(),
+        ingestion_timestamp=ingest_ts,
+        is_duplicate=res.is_duplicate,
+        is_delayed=res.is_delayed,
+        is_cancelled=res.is_cancelled,
+        is_correction=res.is_correction,
+        warnings=res.warnings,
+        errors=res.errors,
+    )
+
+
+@app.post(
+    "/v1/telemetry/transactions/batch",
+    response_model=TelemetryBatchIngestResponse,
+    tags=["Telemetry"],
+    summary="Batch ingest POS transaction telemetry events (Phase 11.1)",
+)
+async def ingest_transactions_batch(
+    records: List[TransactionRecord],
+    api_key: str = Depends(verify_api_key),
+):
+    """
+    Batch processes multiple POS transaction telemetry events:
+    - Deduplicates and resolves spatial cells
+    - Dispatches to event broker
+    - Returns batch metrics breakdown
+    """
+    results: List[TelemetryIngestResponse] = []
+    success_count = 0
+    duplicate_count = 0
+    delayed_count = 0
+    error_count = 0
+
+    for r in records:
+        res = telemetry_pipeline.ingest_transaction(r)
+        h3_id = res.record.location.h3_cell_id if (res.record and res.record.location) else None
+        ingest_ts = (
+            res.record.ingestion_timestamp.isoformat()
+            if (res.record and res.record.ingestion_timestamp)
+            else datetime.now(timezone.utc).isoformat()
+        )
+
+        if res.success:
+            success_count += 1
+            if res.record:
+                event_gateway.publish_transaction(res.record, idempotency_key=f"pos:{res.record.transaction_id}")
+        else:
+            error_count += 1
+        if res.is_duplicate:
+            duplicate_count += 1
+        if res.is_delayed:
+            delayed_count += 1
+
+        results.append(
+            TelemetryIngestResponse(
+                status=res.status_code,
+                transaction_id=r.transaction_id,
+                vendor_id=r.vendor_id,
+                h3_cell_id=h3_id,
+                event_timestamp=r.event_timestamp.isoformat(),
+                ingestion_timestamp=ingest_ts,
+                is_duplicate=res.is_duplicate,
+                is_delayed=res.is_delayed,
+                is_cancelled=res.is_cancelled,
+                is_correction=res.is_correction,
+                warnings=res.warnings,
+                errors=res.errors,
+            )
+        )
+
+    return TelemetryBatchIngestResponse(
+        status="PROCESSED",
+        total_received=len(records),
+        successful_ingestions=success_count,
+        duplicates=duplicate_count,
+        delayed=delayed_count,
+        errors=error_count,
+        results=results,
+    )
+
+
+@app.get(
+    "/v1/telemetry/health",
+    tags=["Telemetry"],
+    summary="Telemetry pipeline and ground truth health status",
+)
+async def get_telemetry_health():
+    """Returns telemetry pipeline state, seen transaction volume, and configuration."""
+    return {
+        "status": "HEALTHY",
+        "seen_transactions_count": len(telemetry_pipeline._seen_transaction_ids),
+        "cancelled_transactions_count": len(telemetry_pipeline._cancelled_transaction_ids),
+        "corrections_count": len(telemetry_pipeline._corrections_map),
+        "max_delay_hours": telemetry_pipeline.max_delay_hours,
+        "h3_resolution": telemetry_pipeline.h3_resolution,
+        "default_city": actuals_aggregator.default_city,
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+    }
+
+
+
 @app.get("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (GET)")
 @app.post("/v1/routing/route", response_model=StreetRouteResponse, tags=["Routing"], summary="Road routing coordinates (POST)")
 async def get_street_route(origin_lat: float, origin_lng: float, dest_lat: float, dest_lng: float):
@@ -838,20 +1047,38 @@ async def shift_plan(req: ShiftPlanRequest, api_key: str = Depends(verify_api_ke
     candidates = rec_res.get("recommendations", [])
 
     optimizer = ShiftOptimizer()
-    plan = optimizer.optimize_shift(
-        origin_lat=req.latitude,
-        origin_lng=req.longitude,
-        candidates=candidates,
-        vendor_category=req.vendor_category,
-        shift_start_time=req.shift_start_time,
-        shift_duration_hours=req.shift_duration_hours,
-        max_relocation_stops=req.max_relocation_stops,
-        min_dwell_time_minutes=req.min_dwell_time_minutes,
-        setup_time_minutes=req.setup_time_minutes,
-        teardown_time_minutes=req.teardown_time_minutes,
-        average_order_value=req.average_order_value,
-        fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
-    )
+    try:
+        asyncio.get_running_loop()
+        plan = await asyncio.to_thread(
+            optimizer.optimize_shift,
+            origin_lat=req.latitude,
+            origin_lng=req.longitude,
+            candidates=candidates,
+            vendor_category=req.vendor_category,
+            shift_start_time=req.shift_start_time,
+            shift_duration_hours=req.shift_duration_hours,
+            max_relocation_stops=req.max_relocation_stops,
+            min_dwell_time_minutes=req.min_dwell_time_minutes,
+            setup_time_minutes=req.setup_time_minutes,
+            teardown_time_minutes=req.teardown_time_minutes,
+            average_order_value=req.average_order_value,
+            fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+        )
+    except RuntimeError:
+        plan = optimizer.optimize_shift(
+            origin_lat=req.latitude,
+            origin_lng=req.longitude,
+            candidates=candidates,
+            vendor_category=req.vendor_category,
+            shift_start_time=req.shift_start_time,
+            shift_duration_hours=req.shift_duration_hours,
+            max_relocation_stops=req.max_relocation_stops,
+            min_dwell_time_minutes=req.min_dwell_time_minutes,
+            setup_time_minutes=req.setup_time_minutes,
+            teardown_time_minutes=req.teardown_time_minutes,
+            average_order_value=req.average_order_value,
+            fuel_price_per_litre=req.fuel_price_inr or FUEL_PRICE_INR_PER_LITRE,
+        )
 
     api_response_cache.set(cache_key, plan, ttl_seconds=60)
     return plan
@@ -1089,6 +1316,7 @@ async def update_notification_preferences(
         channels=channels_enum or [NotificationChannel.FCM, NotificationChannel.WHATSAPP],
         fcm_token=req.fcm_token,
         whatsapp_phone=req.whatsapp_phone,
+        telegram_chat_id=req.telegram_chat_id,
         alert_impending_rain=req.alert_impending_rain,
         alert_event_demand=req.alert_event_demand,
         alert_demand_spike=req.alert_demand_spike,
@@ -1763,10 +1991,17 @@ async def recommendations_live(req: RecommendationRequest, api_key: str = Depend
             "_freshness": freshness,
         }
 
-    # Parallel evaluation across thread pool ensures sub-2-second response times
-    max_workers = min(12, max(1, len(candidates_raw)))
-    with ThreadPoolExecutor(max_workers=max_workers) as executor:
-        raw_eval_results = list(executor.map(_eval_candidate, candidates_raw))
+    # Parallel evaluation offloaded from async event loop to keep server 100% responsive
+    def _run_parallel_eval():
+        max_workers = min(12, max(1, len(candidates_raw)))
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            return list(executor.map(_eval_candidate, candidates_raw))
+
+    try:
+        asyncio.get_running_loop()
+        raw_eval_results = await asyncio.to_thread(_run_parallel_eval)
+    except RuntimeError:
+        raw_eval_results = _run_parallel_eval()
 
     candidate_results = []
     global_freshness = None

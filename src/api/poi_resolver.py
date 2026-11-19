@@ -259,7 +259,9 @@ class POIResolver:
 
     def _get_area_name(self, lat: float, lng: float) -> str:
         """Helper to get Vijayawada micro-neighborhood name based on lat/lng bbox."""
-        if 16.495 <= lat <= 16.515 and 80.640 <= lng <= 80.665:
+        if 16.470 <= lat <= 16.515 and 80.480 <= lng <= 80.525:
+            return "Amaravati / Ainavolu University Zone"
+        elif 16.495 <= lat <= 16.515 and 80.640 <= lng <= 80.665:
             return "Benz Circle / Labbipet"
         elif 16.505 <= lat <= 16.525 and 80.620 <= lng <= 80.645:
             return "Governorpet / MG Road"

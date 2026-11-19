@@ -154,7 +154,7 @@ class HERETrafficProvider(TrafficProvider):
                     "locationReferencing": "shape",
                     "apiKey": self.api_key,
                 },
-                timeout=8,
+                timeout=3.0,
             )
             resp.raise_for_status()
             data = resp.json()

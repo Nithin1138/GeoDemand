@@ -1,0 +1,39 @@
+{
+  "name": "GeoDemand AI — Mobile Vendor Intelligence",
+  "short_name": "GeoDemand",
+  "description": "Spatial decision intelligence, demand forecasting, and shift optimization for mobile street vendors in Indian cities.",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#0c1f1a",
+  "theme_color": "#153e35",
+  "orientation": "portrait-primary",
+  "categories": ["business", "navigation", "productivity"],
+  "icons": [
+    {
+      "src": "/static/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/static/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Find Recommendations",
+      "url": "/#explore",
+      "description": "Locate high-demand vendor relocation zones"
+    },
+    {
+      "name": "Shift Route Planner",
+      "url": "/#shiftPlanner",
+      "description": "Plan multi-stop daily itineraries"
+    }
+  ]
+}
+

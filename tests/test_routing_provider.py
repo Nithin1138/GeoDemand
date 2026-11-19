@@ -303,3 +303,48 @@ def test_routing_provider_factory():
     prov = RoutingProviderFactory.get_provider("osrm")
     assert isinstance(prov, OSRMRoutingProvider)
     assert prov.source_name == "osrm"
+
+
+def test_prune_artificial_uturns_initial_loop():
+    """Verify OSRMRoutingProvider prunes artificial initial U-turn loop from dual-carriageway medians."""
+    mock_osrm_data = {
+        "routes": [
+            {
+                "distance": 1889.0,
+                "duration": 193.1,
+                "geometry": {
+                    "coordinates": [
+                        [80.648033, 16.506214],
+                        [80.648085, 16.506102],
+                        [80.650175, 16.507605],
+                        [80.64809, 16.505977],
+                        [80.64794, 16.505968],
+                    ]
+                },
+                "legs": [
+                    {
+                        "steps": [
+                            {"maneuver": {"type": "depart", "location": [80.648033, 16.506214]}, "distance": 15.0, "duration": 3.0},
+                            {"maneuver": {"type": "turn", "modifier": "left", "location": [80.648085, 16.506102]}, "distance": 300.0, "duration": 30.0},
+                            {"maneuver": {"type": "continue", "modifier": "uturn", "location": [80.650175, 16.507605]}, "distance": 300.0, "duration": 30.0},
+                            {"maneuver": {"type": "roundabout", "modifier": "slight left", "location": [80.64809, 16.505977]}, "distance": 50.0, "duration": 5.0},
+                            {"maneuver": {"type": "exit roundabout", "modifier": "left", "location": [80.64794, 16.505968]}, "distance": 1200.0, "duration": 120.0},
+                        ]
+                    }
+                ],
+            }
+        ]
+    }
+    raw_coords = [[pt[1], pt[0]] for pt in mock_osrm_data["routes"][0]["geometry"]["coordinates"]]
+    pruned, dist_saved, dur_saved = OSRMRoutingProvider._prune_artificial_uturns(
+        mock_osrm_data, 16.5062, 80.6480, 16.505968, 80.64794, raw_coords
+    )
+
+    # Must prune the 600m redundant loop
+    assert dist_saved >= 600.0
+    assert dur_saved >= 60.0
+    assert len(pruned) < len(raw_coords)
+    # The first coordinate after origin must now jump directly to the roundabout
+    assert pruned[0] == [16.5062, 80.6480]
+    assert abs(pruned[1][0] - 16.505977) < 1e-4
+

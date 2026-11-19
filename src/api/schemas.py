@@ -12,10 +12,11 @@ Formal data contract definitions for all GeoDemand AI live API endpoints:
 
 from __future__ import annotations
 
+import math
 from datetime import datetime
 from enum import Enum
 from typing import Any, Dict, List, Optional
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 
 from config.settings import (
     DEFAULT_AOV_INR,
@@ -260,8 +261,8 @@ class ShiftPlanRequest(BaseModel):
     """Multi-stop daily shift planning and VRPTW optimization request."""
     model_config = ConfigDict(extra="ignore")
 
-    latitude: float = Field(..., ge=-90.0, le=90.0, json_schema_extra={"example": 16.5062})
-    longitude: float = Field(..., ge=-180.0, le=180.0, json_schema_extra={"example": 80.6480})
+    latitude: float = Field(16.5062, ge=-90.0, le=90.0, json_schema_extra={"example": 16.5062})
+    longitude: float = Field(80.6480, ge=-180.0, le=180.0, json_schema_extra={"example": 80.6480})
     vendor_category: str = Field("food", json_schema_extra={"example": "food"})
     shift_start_time: Optional[datetime] = Field(
         None,
@@ -322,6 +323,102 @@ class ShiftPlanRequest(BaseModel):
         description="Optional override for fuel price in INR per liter",
         json_schema_extra={"example": 102.5},
     )
+
+    @model_validator(mode="before")
+    @classmethod
+    def sanitize_shift_request(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            # Fallback coordinates if missing or null or non-finite
+            try:
+                lat = float(data.get("latitude") if data.get("latitude") is not None else 16.5062)
+                if not (-90.0 <= lat <= 90.0) or math.isnan(lat):
+                    lat = 16.5062
+            except (ValueError, TypeError):
+                lat = 16.5062
+            data["latitude"] = lat
+
+            try:
+                lng = float(data.get("longitude") if data.get("longitude") is not None else 80.6480)
+                if not (-180.0 <= lng <= 180.0) or math.isnan(lng):
+                    lng = 80.6480
+            except (ValueError, TypeError):
+                lng = 80.6480
+            data["longitude"] = lng
+
+            # Category
+            cat = str(data.get("vendor_category") or "food").strip().lower()
+            data["vendor_category"] = cat if cat else "food"
+
+            # Duration clamp
+            try:
+                dur = float(data.get("shift_duration_hours") if data.get("shift_duration_hours") is not None else 8.0)
+                dur = max(4.0, min(14.0, dur))
+            except (ValueError, TypeError):
+                dur = 8.0
+            data["shift_duration_hours"] = dur
+
+            # Stops clamp
+            try:
+                stops = int(data.get("max_relocation_stops") if data.get("max_relocation_stops") is not None else 3)
+                stops = max(1, min(5, stops))
+            except (ValueError, TypeError):
+                stops = 3
+            data["max_relocation_stops"] = stops
+
+            # Dwell / setup / teardown
+            try:
+                dwell = int(data.get("min_dwell_time_minutes") if data.get("min_dwell_time_minutes") is not None else 90)
+                dwell = max(30, min(240, dwell))
+            except (ValueError, TypeError):
+                dwell = 90
+            data["min_dwell_time_minutes"] = dwell
+
+            try:
+                setup = int(data.get("setup_time_minutes") if data.get("setup_time_minutes") is not None else 15)
+                setup = max(0, min(60, setup))
+            except (ValueError, TypeError):
+                setup = 15
+            data["setup_time_minutes"] = setup
+
+            try:
+                td = int(data.get("teardown_time_minutes") if data.get("teardown_time_minutes") is not None else 15)
+                td = max(0, min(60, td))
+            except (ValueError, TypeError):
+                td = 15
+            data["teardown_time_minutes"] = td
+
+            # search_radius_km
+            try:
+                rad = float(data.get("search_radius_km") if data.get("search_radius_km") is not None else 4.0)
+                rad = max(0.5, min(10.0, rad))
+            except (ValueError, TypeError):
+                rad = 4.0
+            data["search_radius_km"] = rad
+
+            # average_order_value & fuel_price_inr
+            if "average_order_value" in data and data["average_order_value"] is not None:
+                try:
+                    aov = float(data["average_order_value"])
+                    data["average_order_value"] = aov if aov > 0 else None
+                except (ValueError, TypeError):
+                    data["average_order_value"] = None
+            if "fuel_price_inr" in data and data["fuel_price_inr"] is not None:
+                try:
+                    fp = float(data["fuel_price_inr"])
+                    data["fuel_price_inr"] = fp if fp > 0 else None
+                except (ValueError, TypeError):
+                    data["fuel_price_inr"] = None
+
+            # shift_start_time
+            st = data.get("shift_start_time")
+            if not st or (isinstance(st, str) and not st.strip()):
+                data["shift_start_time"] = None
+            elif isinstance(st, str):
+                try:
+                    datetime.fromisoformat(st.replace("Z", "+00:00"))
+                except Exception:
+                    data["shift_start_time"] = None
+        return data
 
 
 # ===========================================================================
@@ -619,6 +716,7 @@ class ShiftStopItem(BaseModel):
     departure_formatted: str = Field(..., description="Human-readable departure time")
     travel_to_next_stop_minutes: int = Field(..., description="Travel duration to next stop in minutes")
     travel_to_next_stop_km: float = Field(..., description="Road distance to next stop in km")
+    travel_to_next_stop_geometry: Optional[List[List[float]]] = Field(default_factory=list, description="Street coordinates [[lat, lng], ...] for this leg")
     fuel_cost_to_next_inr: float = Field(..., description="Travel fuel expense to next stop in INR")
     expected_hourly_customers: int = Field(..., description="Projected hourly customer count")
     customers_served_at_stop: int = Field(..., description="Total customers served during dwell period")
@@ -872,6 +970,7 @@ class NotificationPreferencesRequest(BaseModel):
     channels: List[str] = Field(default=["FCM", "WHATSAPP"], description="Enabled notification delivery channels ('FCM', 'WHATSAPP', 'TELEGRAM', 'SMS')")
     fcm_token: Optional[str] = Field(default=None, description="Device FCM registration token")
     whatsapp_phone: Optional[str] = Field(default=None, description="WhatsApp contact phone number")
+    telegram_chat_id: Optional[str] = Field(default=None, description="Telegram user ID or chat ID for bot notifications")
     alert_impending_rain: bool = Field(default=True, description="Enable impending rain warnings")
     alert_event_demand: bool = Field(default=True, description="Enable nearby event demand surge alerts")
     alert_demand_spike: bool = Field(default=True, description="Enable general customer demand spike alerts")
@@ -922,6 +1021,38 @@ class NotificationDispatchResponse(BaseModel):
     notification_id: str = Field(..., description="Unique notification identifier")
     vendor_id: str = Field(..., description="Target vendor identifier")
     records: List[Dict[str, Any]] = Field(..., description="Delivery records by channel")
+
+
+# ===========================================================================
+# Telemetry Ingestion Schemas (Phase 11.1)
+# ===========================================================================
+
+class TelemetryIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: str = Field(..., description="Ingestion status code (e.g., ACCEPTED, DUPLICATE, DELAYED)")
+    transaction_id: str = Field(..., description="Unique transaction ID")
+    vendor_id: str = Field(..., description="Vendor identifier")
+    h3_cell_id: Optional[str] = Field(None, description="Assigned H3 Res-8 spatial cell")
+    event_timestamp: str = Field(..., description="ISO 8601 transaction occurrence timestamp")
+    ingestion_timestamp: str = Field(..., description="ISO 8601 pipeline receipt timestamp")
+    is_duplicate: bool = Field(False, description="Flag indicating previously recorded transaction ID")
+    is_delayed: bool = Field(False, description="Flag indicating event arrived past maximum threshold")
+    is_cancelled: bool = Field(False, description="Flag indicating order cancellation")
+    is_correction: bool = Field(False, description="Flag indicating corrective update")
+    warnings: List[str] = Field(default_factory=list, description="Non-fatal data hygiene warnings")
+    errors: List[str] = Field(default_factory=list, description="Validation failure details")
+
+
+class TelemetryBatchIngestResponse(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    status: str = Field("PROCESSED", description="Batch processing summary status")
+    total_received: int = Field(..., description="Total records in batch request")
+    successful_ingestions: int = Field(..., description="Number of successfully ingested records")
+    duplicates: int = Field(..., description="Number of duplicate records detected")
+    delayed: int = Field(..., description="Number of delayed records flagged")
+    errors: int = Field(..., description="Number of records with errors")
+    results: List[TelemetryIngestResponse] = Field(..., description="Per-record ingestion outcomes")
+
 
 
 

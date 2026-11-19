@@ -81,8 +81,11 @@ def build_weather_hourly(
     operating_hours: range = range(0, 24), seed: int = 2026,
 ) -> pd.DataFrame:
     client = OpenMeteoClient()
-    daily = client.get_historical_weather(lat, lng, start_date, end_date)
-    hourly = _expand_daily_to_hourly(daily, operating_hours, seed)
+    res = client.get_historical_weather(lat, lng, start_date, end_date)
+    # If client returned complete hourly data, return directly
+    if "temperature" in res.columns and "weather_condition" in res.columns:
+        return res
+    hourly = _expand_daily_to_hourly(res, operating_hours, seed)
     return hourly
 
 

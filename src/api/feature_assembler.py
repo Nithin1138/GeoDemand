@@ -2,16 +2,15 @@
 Feature assembler for live inference.
 
 Single responsibility: given a candidate H3 cell, a vendor profile, and
-current real-world context, assemble the EXACT same 41-column feature
+current real-world context, assemble the EXACT same 45-column feature
 vector that the model was trained on (feature_store.parquet schema).
 
-Schema contract (must match feature_store.py column sets):
+Schema contract (must match CANONICAL_FEATURE_COLUMNS):
   - Static spatial features (17 cols)
   - Weather features (9 cols)
-  - Calendar features (8 cols)
-  - Dynamic: competition_score, event_importance (2 cols)
-  - Vendor: vendor_category, inventory_capacity, preparation_time, average_order_value (4 cols)
-  Total trainable: 40 features + expected_customer_count (target, excluded at inference)
+  - Calendar features (13 cols)
+  - Dynamic & Vendor features (6 cols)
+  Total trainable: 45 features (excluding expected_customer_count target at inference)
 
 The assembler also returns a `data_freshness` dict for every feature group,
 which the API surfaces in the recommendation response and dashboard.
@@ -193,6 +192,46 @@ class FeatureAssembler:
                     source = "real_live_poi"
             except Exception as e:
                 logger.debug(f"Live POI discovery error for {h3_cell}: {e}")
+
+        # 1b. Verified OSM POI Spatial Enhancement (POIResolver)
+        try:
+            from api.poi_resolver import POIResolver
+            resolver = POIResolver.get()
+            local_pois = resolver._h3_index.get(h3_cell, [])
+            if local_pois:
+                for p in local_pois:
+                    cat = p.get("category", "")
+                    name_l = p.get("name", "").lower()
+                    amenity_l = p.get("amenity", "").lower()
+                    is_uni = "university" in amenity_l or "university" in name_l or "campus" in name_l
+
+                    if cat == "college":
+                        # Universities / colleges create substantial student and faculty footfall
+                        feat["college_count"] = feat.get("college_count", 0.0) + (3.0 if is_uni else 1.5)
+                        feat["commercial_ratio"] = max(feat.get("commercial_ratio", 0.0), 0.35 if is_uni else 0.25)
+                        feat["building_density"] = max(feat.get("building_density", 0.5), 3.0 if is_uni else 2.0)
+                        feat["population_density"] = max(feat.get("population_density", 4000.0), 12000.0 if is_uni else 8000.0)
+                        feat["foot_traffic_proxy"] = max(feat.get("foot_traffic_proxy", 20.0), 85.0 if is_uni else 60.0)
+                        source = "real_osm_poi"
+                    elif cat == "hospital":
+                        feat["hospital_count"] = feat.get("hospital_count", 0.0) + 1.5
+                        feat["commercial_ratio"] = max(feat.get("commercial_ratio", 0.0), 0.30)
+                        source = "real_osm_poi"
+                    elif cat == "mall":
+                        feat["mall_count"] = feat.get("mall_count", 0.0) + 1.5
+                        feat["commercial_ratio"] = max(feat.get("commercial_ratio", 0.0), 0.40)
+                        source = "real_osm_poi"
+                    elif cat == "transit":
+                        feat["bus_stop_count"] = feat.get("bus_stop_count", 0.0) + 1.0
+                        source = "real_osm_poi"
+                    elif cat == "park":
+                        feat["park_count"] = feat.get("park_count", 0.0) + 1.0
+                        source = "real_osm_poi"
+                    elif cat == "school":
+                        feat["school_count"] = feat.get("school_count", 0.0) + 1.0
+                        source = "real_osm_poi"
+        except Exception as e:
+            logger.debug(f"OSM POI resolver discovery error for {h3_cell}: {e}")
 
         # 2. Road Accessibility & Density via OSRM
         try:

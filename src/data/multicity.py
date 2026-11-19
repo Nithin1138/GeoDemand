@@ -14,11 +14,18 @@ Removes single-city assumptions and introduces a unified multi-city architecture
 from __future__ import annotations
 
 import logging
+import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 import numpy as np
 import pandas as pd
+
+ROOT_DIR = Path(__file__).resolve().parent.parent.parent
+if str(ROOT_DIR) not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR))
+if str(ROOT_DIR / "src") not in sys.path:
+    sys.path.insert(0, str(ROOT_DIR / "src"))
 
 try:
     import h3
@@ -217,8 +224,86 @@ class MultiCityPipeline:
         df["school_count"] = np.round(rng.poisson(8 * density_scale, len(df))).astype(int)
         df["park_count"] = np.round(rng.poisson(3, len(df))).astype(int)
         df["bus_stop_count"] = np.round(rng.poisson(6 * density_scale, len(df))).astype(int)
+        df["railway_station_count"] = np.round(rng.poisson(1 * density_scale, len(df))).astype(int)
+        metro_lambda = 2.5 * density_scale if city_id in ("bengaluru", "hyderabad") else 0.0
+        df["metro_station_count"] = np.round(rng.poisson(metro_lambda, len(df))).astype(int)
+        df["parking_count"] = np.round(rng.poisson(5 * density_scale, len(df))).astype(int)
+        df["building_density"] = np.round(rng.uniform(0.3, 0.85, len(df)) * min(1.0, density_scale), 3)
+
+        res_r = rng.uniform(0.35, 0.65, len(df))
+        comm_r = rng.uniform(0.20, 0.45, len(df))
+        ind_r = rng.uniform(0.05, 0.20, len(df))
+        tot_r = res_r + comm_r + ind_r
+        df["residential_ratio"] = np.round(res_r / tot_r, 3)
+        df["commercial_ratio"] = np.round(comm_r / tot_r, 3)
+        df["industrial_ratio"] = np.round(1.0 - (df["residential_ratio"] + df["commercial_ratio"]), 3)
+
         df["source"] = f"multicity:{city_id}_static_features"
         return df
+
+    def generate_city_feature_store(
+        self,
+        city_id: str,
+        n_vendors: int = 50,
+        start_date: str = "2025-01-01",
+        end_date: str = "2025-01-31",
+        output_file: Optional[Path] = None,
+        seed: int = 2026,
+    ) -> pd.DataFrame:
+        """
+        Builds a canonical 45-column feature store partition for any registered city (Tasks 6, 7).
+        """
+        city = self.registry.get_city(city_id)
+        logger.info(f"Generating feature store for city: {city.city_name} ({start_date} to {end_date})")
+
+        # 1. Spatial Grid & Static Features
+        h3_cells = self.generate_h3_grid(city_id)
+        static_features = self.generate_city_static_features(city_id, h3_cells)
+        cell_ids = h3_cells["h3_cell_id"].tolist()
+
+        # 2. Dynamic Calendar & Weather
+        from src.data.calendar_dataset import build_calendar
+        from src.data.weather import build_weather_hourly
+        from src.data.events import build_events
+        from src.data.competition import build_competition
+        from src.data.vendor_profiles import build_vendor_profiles
+        from src.simulation.market_simulation_v2 import generate_historical_transactions
+        from src.features.feature_store import build_feature_store
+
+        cal = build_calendar(start_date, end_date)
+        weather = build_weather_hourly(city.center_lat, city.center_lng, start_date, end_date, seed=seed)
+        vendors = build_vendor_profiles(cell_ids, n_vendors=n_vendors, seed=seed)
+        events_df = build_events(cell_ids, start_date, end_date, seed=seed)
+        comp = build_competition(cell_ids, vendors, pd.date_range(start_date, end_date))
+
+        # 3. Market Simulation
+        tx = generate_historical_transactions(
+            h3_cells=h3_cells,
+            static_features=static_features,
+            weather_hourly=weather,
+            calendar=cal,
+            events=events_df,
+            competition=comp,
+            vendor_profiles=vendors,
+            seed=seed,
+        )
+
+        # 4. Feature Store Assembly
+        fs = build_feature_store(
+            historical_transactions=tx,
+            static_features=static_features,
+            weather_hourly=weather,
+            calendar=cal,
+            competition=comp,
+            events=events_df,
+            vendor_profiles=vendors,
+        )
+
+        target_path = output_file or (Path("data/processed") / f"feature_store_{city_id}.parquet")
+        target_path.parent.mkdir(parents=True, exist_ok=True)
+        fs.to_parquet(target_path, index=False)
+        logger.info(f"Saved {len(fs):,} feature rows for {city.city_name} to {target_path}")
+        return fs
 
     def get_city_onboarding_guide(self) -> str:
         """
@@ -240,5 +325,30 @@ class MultiCityPipeline:
             "5. Configure Historical Weather:\n"
             "   - Pull Open-Meteo archive using city centroid.\n"
             "6. Build and Partition Feature Store:\n"
-            "   - Generate `data/processed/{city_id}/feature_store.parquet`.\n"
+            "   - Run `MultiCityPipeline.generate_city_feature_store(city_id)`.\n"
+            "   - Output saved to `data/processed/feature_store_{city_id}.parquet`.\n"
         )
+
+
+if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Multi-City Feature Store Pre-Materialization CLI")
+    parser.add_argument("--city", type=str, default="all", help="Target city ID (hyderabad, bengaluru, visakhapatnam, or all)")
+    parser.add_argument("--vendors", type=int, default=50, help="Number of vendors per city")
+    parser.add_argument("--start", type=str, default="2025-01-01", help="Start date YYYY-MM-DD")
+    parser.add_argument("--end", type=str, default="2025-01-31", help="End date YYYY-MM-DD")
+    args = parser.parse_args()
+
+    pipeline = MultiCityPipeline()
+    targets = ["hyderabad", "bengaluru", "visakhapatnam"] if args.city == "all" else [args.city.lower()]
+
+    for c in targets:
+        print(f"\n--- Pre-materializing feature store for {c.upper()} ---")
+        df = pipeline.generate_city_feature_store(
+            city_id=c,
+            n_vendors=args.vendors,
+            start_date=args.start,
+            end_date=args.end,
+        )
+        print(f"Complete: {c} -> {len(df):,} rows with {df.shape[1]} columns. Zero nulls: {df.isnull().sum().sum() == 0}")
+

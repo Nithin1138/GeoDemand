@@ -1,0 +1,69 @@
+groups:
+  - name: geodemand_production_alerts
+    rules:
+      # API High Latency Alert (P95 > 500ms for 2 minutes)
+      - alert: APIHighLatency
+        expr: histogram_quantile(0.95, sum(rate(http_request_duration_seconds_bucket[5m])) by (le)) > 0.5
+        for: 2m
+        labels:
+          severity: warning
+          tier: api
+        annotations:
+          summary: "GeoDemand API P95 latency exceeds 500ms threshold"
+          description: "API P95 latency is currently at {{ $value }}s on endpoint {{ $labels.handler }}"
+
+      # API 5XX Error Rate Spike (> 2% for 2 minutes)
+      - alert: APIHighErrorRate
+        expr: sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])) > 0.02
+        for: 2m
+        labels:
+          severity: critical
+          tier: api
+        annotations:
+          summary: "GeoDemand API 5XX error rate is above 2%"
+          description: "Production API error rate is currently {{ $value | humanizePercentage }}"
+
+      # Single-Location Recommendation Latency SLA Breach (> 150ms for 3 minutes)
+      - alert: RecommendationLatencySLABreach
+        expr: histogram_quantile(0.95, sum(rate(geodemand_recommendation_duration_seconds_bucket[5m])) by (le)) > 0.150
+        for: 3m
+        labels:
+          severity: warning
+          tier: ml
+        annotations:
+          summary: "Single-location recommendation latency exceeded SLA target of 150ms"
+          description: "Recommendation inference latency is at {{ $value }}s"
+
+      # Shift Optimization Latency SLA Breach (> 1.5s for 3 minutes)
+      - alert: ShiftOptimizationLatencySLABreach
+        expr: histogram_quantile(0.95, sum(rate(geodemand_shift_optimization_duration_seconds_bucket[5m])) by (le)) > 1.500
+        for: 3m
+        labels:
+          severity: warning
+          tier: optimization
+        annotations:
+          summary: "Shift optimization solver latency exceeded SLA target of 1.5s"
+          description: "VRPTW solver execution latency is at {{ $value }}s"
+
+      # Feature Drift PSI Alert (PSI > 0.20 Significant Drift)
+      - alert: FeatureDriftDetected
+        expr: geodemand_model_drift_psi > 0.20
+        for: 5m
+        labels:
+          severity: warning
+          tier: mlops
+        annotations:
+          summary: "Model feature distribution drift detected (PSI > 0.20)"
+          description: "Feature drift PSI has reached {{ $value }}. Automated continuous training evaluation recommended."
+
+      # Dead-Letter Queue Backlog Alert (> 10 unhandled dead letters)
+      - alert: DLQBacklogSpike
+        expr: geodemand_webhook_dlq_size > 10
+        for: 5m
+        labels:
+          severity: warning
+          tier: ingestion
+        annotations:
+          summary: "Dead-Letter Queue has unrecovered payment or messaging events"
+          description: "DLQ queue contains {{ $value }} unrecovered events"
+

@@ -210,8 +210,8 @@ class OSRMRoutingProvider(RoutingProvider):
         "https://routing.openstreetmap.de/routed-car",
     ]
 
-    def __init__(self):
-        self._base = OSRM_PUBLIC_URL
+    def __init__(self, base_url: Optional[str] = None):
+        self._base = base_url or os.environ.get("OSRM_URL") or OSRM_PUBLIC_URL
         self._cache: dict = {}
         self._cache_ttl = 300  # 5 minutes
         self._consecutive_failures = 0
@@ -252,7 +252,7 @@ class OSRMRoutingProvider(RoutingProvider):
         origin_lng: float,
         dest_lat: float,
         dest_lng: float,
-        timeout_s: float = 4.0,
+        timeout_s: float = 2.0,
     ) -> dict:
         if not validate_coordinates(origin_lat, origin_lng, dest_lat, dest_lng):
             raise ValueError(
@@ -360,17 +360,64 @@ class OSRMRoutingProvider(RoutingProvider):
             for base in self.OSRM_MIRRORS:
                 try:
                     url = f"{base.rstrip('/')}/route/v1/driving/{origin_lng},{origin_lat};{dest_lng},{dest_lat}"
-                    resp = requests.get(url, params={"overview": "full", "geometries": "geojson"}, timeout=timeout_s)
+                    resp = requests.get(
+                        url,
+                        params={"overview": "full", "geometries": "geojson", "steps": "true"},
+                        timeout=timeout_s,
+                    )
                     resp.raise_for_status()
                     data = resp.json()
                     if data.get("code") == "Ok" and data.get("routes"):
                         route = data["routes"][0]
                         coords = [[pt[1], pt[0]] for pt in route["geometry"]["coordinates"]]
+
+                        # Check destination reachability:
+                        # If destination waypoint snapped > 200m away, or if last coordinate is > 250m from destination,
+                        # the route is truncated into an inaccessible dead-end.
+                        dest_waypoint_dist = 0.0
+                        if len(data.get("waypoints", [])) > 1:
+                            dest_waypoint_dist = float(data["waypoints"][1].get("distance", 0.0))
+
+                        dist_to_dest_m = (
+                            math.hypot(coords[-1][0] - dest_lat, coords[-1][1] - dest_lng) * 111000
+                            if coords else 9999.0
+                        )
+
+                        if dest_waypoint_dist > 250.0 or dist_to_dest_m > 300.0:
+                            # OSRM could not connect to destination (e.g. stopped at an unreachable dead-end)
+                            # Generate a complete navigable street grid corridor to destination instead of a broken stub
+                            coords = self._generate_street_grid_waypoints(origin_lat, origin_lng, dest_lat, dest_lng)
+                            fb = self._haversine_fallback(origin_lat, origin_lng, dest_lat, dest_lng, time.time())
+                            return {
+                                "code": "Ok",
+                                "coordinates": coords,
+                                "distance_km": fb["distance_km"],
+                                "duration_min": round(fb["duration_min"]),
+                                "is_routable": True,
+                                "source": "navigable_grid_corridor",
+                            }
+
+                        # Prune artificial U-turn loops caused by one-way alleys or divided highway medians
+                        coords, dist_saved_m, dur_saved_s = self._prune_artificial_uturns(
+                            data, origin_lat, origin_lng, dest_lat, dest_lng, coords
+                        )
+                        adj_dist_m = max(100.0, float(route["distance"]) - dist_saved_m)
+                        adj_dur_s = max(30.0, float(route["duration"]) - dur_saved_s)
+
+                        # Smooth start and terminal connections so route always touches origin and destination pins
+                        if coords:
+                            d_orig = math.hypot(coords[0][0] - origin_lat, coords[0][1] - origin_lng) * 111000
+                            if 15.0 < d_orig < 200.0:
+                                coords = [[origin_lat, origin_lng]] + coords
+                            d_dest = math.hypot(coords[-1][0] - dest_lat, coords[-1][1] - dest_lng) * 111000
+                            if 15.0 < d_dest < 200.0:
+                                coords = coords + [[dest_lat, dest_lng]]
+
                         return {
                             "code": "Ok",
                             "coordinates": coords,
-                            "distance_km": round(route["distance"] / 1000, 2),
-                            "duration_min": max(1, round(route["duration"] / 60)),
+                            "distance_km": round(adj_dist_m / 1000, 2),
+                            "duration_min": max(1, round(adj_dur_s / 60)),
                             "is_routable": True,
                             "source": "osrm_street_network",
                         }
@@ -388,6 +435,94 @@ class OSRMRoutingProvider(RoutingProvider):
             "is_routable": True,
             "source": "grid_road_interpolation",
         }
+
+    @staticmethod
+    def _prune_artificial_uturns(
+        data: dict,
+        origin_lat: float,
+        origin_lng: float,
+        dest_lat: float,
+        dest_lng: float,
+        coords: list[list[float]],
+    ) -> tuple[list[list[float]], float, float]:
+        """
+        Prunes artificial initial or terminal U-turn loops caused by strict dual-carriageway
+        one-way tagging when origin or destination is in an alleyway or roadside stall.
+        """
+        dist_saved_m = 0.0
+        dur_saved_s = 0.0
+        if not data or not data.get("routes") or not coords:
+            return coords, dist_saved_m, dur_saved_s
+
+        route = data["routes"][0]
+        legs = route.get("legs", [])
+        if not legs:
+            return coords, dist_saved_m, dur_saved_s
+
+        steps = legs[0].get("steps", [])
+        if len(steps) < 3:
+            return coords, dist_saved_m, dur_saved_s
+
+        # 1. Prune initial U-turn loop (steps 1 or 2)
+        uturn_start_idx = -1
+        for i in range(1, min(4, len(steps))):
+            m = steps[i].get("maneuver", {})
+            if m.get("modifier") == "uturn" or m.get("type") == "uturn":
+                uturn_start_idx = i
+                break
+
+        if uturn_start_idx != -1 and uturn_start_idx + 1 < len(steps):
+            next_step = steps[uturn_start_idx + 1]
+            next_loc = next_step.get("maneuver", {}).get("location")
+            if next_loc:
+                post_lat, post_lng = next_loc[1], next_loc[0]
+                d_origin = math.hypot(post_lat - origin_lat, post_lng - origin_lng) * 111000
+                if d_origin < 120.0:
+                    best_idx = 0
+                    min_d = float("inf")
+                    for idx, pt in enumerate(coords):
+                        d = math.hypot(pt[0] - post_lat, pt[1] - post_lng)
+                        if d < min_d:
+                            min_d = d
+                            best_idx = idx
+
+                    if best_idx > 0:
+                        for s in steps[:uturn_start_idx + 1]:
+                            dist_saved_m += float(s.get("distance", 0.0))
+                            dur_saved_s += float(s.get("duration", 0.0))
+                        coords = [[origin_lat, origin_lng]] + coords[best_idx:]
+
+        # 2. Prune terminal U-turn loop (near destination)
+        if len(steps) >= 4:
+            dest_uturn_idx = -1
+            for j in range(len(steps) - 3, len(steps) - 1):
+                m = steps[j].get("maneuver", {})
+                if m.get("modifier") == "uturn" or m.get("type") == "uturn":
+                    dest_uturn_idx = j
+                    break
+
+            if dest_uturn_idx != -1 and dest_uturn_idx > 0:
+                pre_step = steps[dest_uturn_idx - 1]
+                pre_loc = pre_step.get("maneuver", {}).get("location")
+                if pre_loc:
+                    pre_lat, pre_lng = pre_loc[1], pre_loc[0]
+                    d_dest = math.hypot(pre_lat - dest_lat, pre_lng - dest_lng) * 111000
+                    if d_dest < 120.0:
+                        best_dest_idx = len(coords) - 1
+                        min_d = float("inf")
+                        for idx in range(len(coords) - 1, -1, -1):
+                            pt = coords[idx]
+                            d = math.hypot(pt[0] - pre_lat, pt[1] - pre_lng)
+                            if d < min_d:
+                                min_d = d
+                                best_dest_idx = idx
+                        if best_dest_idx < len(coords) - 1:
+                            for s in steps[dest_uturn_idx:]:
+                                dist_saved_m += float(s.get("distance", 0.0))
+                                dur_saved_s += float(s.get("duration", 0.0))
+                            coords = coords[:best_dest_idx + 1] + [[dest_lat, dest_lng]]
+
+        return coords, dist_saved_m, dur_saved_s
 
     def _generate_street_grid_waypoints(
         self, lat1: float, lng1: float, lat2: float, lng2: float
