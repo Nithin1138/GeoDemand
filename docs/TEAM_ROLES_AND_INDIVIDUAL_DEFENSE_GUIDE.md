@@ -30,13 +30,28 @@ $$\mathbf{Net\ Profit} = \mathcal{R} - \mathcal{C}_{\text{ingr}} - \mathcal{C}_{
 - **Automated Verification:** **723 / 723 automated tests passing** across CI/CD (`ci.yml` and `ml-ci.yml`).
 - **Conference Submission:** Submitted to **IICTDS 2026** on Microsoft CMT under **Paper ID: 380**.
 
+
+
+
+
+### Section C: Panel Trap Scenarios & Attack Deflections
+- Trap 1: "Is this your own code or did you just clone a repository?" 
+
+Proof via Git history, 723 custom unit tests, and domain-specific formulations.
+- Trap 2: "711K rows of simulated data is fake; how can you trust it?" 
+
+ 100% real spatial/weather substrate, calibrated vendor profiles, and live PostGIS continuous retraining.
+- Trap 3: "Isn't this just Google Maps directions for a food cart?" 
+
+Google Maps tells you how to drive; GeoDemand AI solves where, when, how long to stay, and how to maximize profit.
+
 ---
 
 # SECTION B: INDIVIDUAL MEMBER DEEP-DIVE & QUESTION BANKS
 
 ---
 
-## 🟢 MEMBER 1: KODURU PUJITHA (23BCE20090)
+## 🟢 MEMBER 1:  R SAI NAGA ALEKHYA (23BCE20084)
 **Primary Domain:** Data Engineering, Spatial Discretization, External APIs, Ingestion Gateway & Market Simulation
 
 ### What Pujitha Owns & Built:
@@ -49,7 +64,7 @@ $$\mathbf{Net\ Profit} = \mathcal{R} - \mathcal{C}_{\text{ingr}} - \mathcal{C}_{
 4. **Unified Feature Store:** Joined all static, dynamic, and temporal layers into `feature_store.parquet` (711,750 rows, 45 features, 0 nulls, frozen under SHA-256 manifest `v5c24f1f918f5`).
 5. **Real-Time Telemetry Gateway:** Engineered `POST /v1/telemetry/transactions` with strict Pydantic v2 validation and PostGIS relational storage.
 
-### Pujitha's Viva Voce Questions & Answers:
+### Viva Voce Questions & Answers:
 
 #### Q1: "Why did you choose Uber H3 Resolution 8 instead of standard lat/long coordinates or square grid cells?"
 > **Answer:** *"Square grids distort distances because diagonal neighbors are 1.414 times further than orthogonal neighbors. Uber H3 hexagons have identical centroid-to-edge distances in all 6 directions, which eliminates directional bias. We chose Resolution 8 because an H3 Res-8 cell has an area of 0.737 km² and an edge of ~461 meters, which corresponds precisely to the 5-minute walking radius of a street customer looking for food or tea."*
@@ -62,7 +77,7 @@ $$\mathbf{Net\ Profit} = \mathcal{R} - \mathcal{C}_{\text{ingr}} - \mathcal{C}_{
 
 ---
 
-## 🔵 MEMBER 2: R SAI NAGA ALEKHYA (23BCE20084)
+## 🔵 MEMBER 2: CHITTIMALA SHINNI BABU (23BCE20080)
 **Primary Domain:** Machine Learning, Forecasting, Quantile Heads, Model Explainability (SHAP), MLflow & MLOps
 
 ### What Alekhya Owns & Built:
@@ -73,7 +88,7 @@ $$\mathbf{Net\ Profit} = \mathcal{R} - \mathcal{C}_{\text{ingr}} - \mathcal{C}_{
 5. **Multi-Horizon Forecasting:** Engineered forward forecasting sequences for $H \in \{1, 2, 4, 8\}\text{ hours}$ using lag and rolling temporal features.
 6. **MLOps & Continuous Retraining:** Configured MLflow experiment tracking, Kolmogorov-Smirnov (KS) data drift detection, and automated retraining pipelines (`continuous-training.yml`).
 
-### Alekhya's Viva Voce Questions & Answers:
+### Viva Voce Questions & Answers:
 
 #### Q1: "Why did you select LightGBM over deep learning models like LSTMs or Transformers?"
 > **Answer:** *"For tabular spatio-temporal datasets with tabular categorical features (like vendor category, menu type, weekday), gradient-boosted decision trees consistently outperform deep neural networks in accuracy while requiring a fraction of the compute. Most importantly, LightGBM executes in 0.34 ms per cell, whereas an LSTM takes 20–40 ms. This allows us to score all 817 candidate city cells in under 50 milliseconds on standard CPU hardware."*
@@ -86,7 +101,8 @@ $$\mathbf{Net\ Profit} = \mathcal{R} - \mathcal{C}_{\text{ingr}} - \mathcal{C}_{
 
 ---
 
-## 🟣 MEMBER 3: CHITTIMALA SHINNI BABU (23BCE20080)
+## 🟣 MEMBER 3:KODURU PUJITHA (23BCE20090)
+
 **Primary Domain:** Backend Engineering, Decision Intelligence, OR-Tools VRPTW Shift Routing & Notification Engine
 
 ### What Shinni Babu Owns & Built:
@@ -147,3 +163,9 @@ $$\mathbf{Net\ Profit} = \mathcal{R} - \mathcal{C}_{\text{ingr}} - \mathcal{C}_{
 ### Trap 3: "Isn't a food cart routing problem just standard Google Maps directions?"
 **How Member 3 & Member 4 Respond:**
 > *"Google Maps only tells you how to drive between point A and point B after you already know where you want to go. It has zero awareness of customer demand, food preparation times, inventory capacities, or competitor crowding. GeoDemand AI solves the inverse, much harder problem: determining WHERE the vendor should go, WHEN they should arrive, HOW LONG they should stay, and WHAT route maximizes their net profit."*
+
+
+
+
+
+
