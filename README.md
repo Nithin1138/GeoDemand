@@ -283,7 +283,6 @@ curl -X POST "http://localhost:8000/v1/recommendations/live" \
 
 For comprehensive technical, algorithmic, and examination details:
 - 📘 [Master Technical Project Compendium](docs/GEODEMAND_AI_MASTER_PROJECT_COMPENDIUM.md) — 13-chapter complete architectural and Q&A bible.
-- 👥 [Team Roles & Individual Viva Defense Guide](docs/TEAM_ROLES_AND_INDIVIDUAL_DEFENSE_GUIDE.md) — Individual member question banks, viva defense strategies, and trap deflections.
 - 🚀 [Commercial Launch & Operational Playbook](docs/COMMERCIAL_LAUNCH_GUIDE.md) — 100% production runbook.
 
 ---
